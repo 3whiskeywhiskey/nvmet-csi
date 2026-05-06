@@ -765,13 +765,13 @@ func (s *MockRDSServer) handleDiskPrintDetail(command string) (string, int) {
 			i := 0
 			for _, vol := range s.volumes {
 				if strings.Contains(vol.Slot, pattern) {
-					output.WriteString(fmt.Sprintf("%2d %s\n", i, s.formatDiskDetail(vol)))
+					fmt.Fprintf(&output, "%2d %s\n", i, s.formatDiskDetail(vol))
 					i++
 				}
 			}
 			for _, snap := range s.snapshots {
 				if strings.Contains(snap.Slot, pattern) {
-					output.WriteString(fmt.Sprintf("%2d %s\n", i, s.formatSnapshotDetail(snap)))
+					fmt.Fprintf(&output, "%2d %s\n", i, s.formatSnapshotDetail(snap))
 					i++
 				}
 			}
@@ -806,11 +806,11 @@ func (s *MockRDSServer) handleDiskPrintDetail(command string) (string, int) {
 	i := 0
 	for _, vol := range s.volumes {
 		// RouterOS formats list output with line numbers
-		output.WriteString(fmt.Sprintf("%2d %s\n", i, s.formatDiskDetail(vol)))
+		fmt.Fprintf(&output, "%2d %s\n", i, s.formatDiskDetail(vol))
 		i++
 	}
 	for _, snap := range s.snapshots {
-		output.WriteString(fmt.Sprintf("%2d %s\n", i, s.formatSnapshotDetail(snap)))
+		fmt.Fprintf(&output, "%2d %s\n", i, s.formatSnapshotDetail(snap))
 		i++
 	}
 	return output.String(), 0
@@ -865,7 +865,7 @@ func (s *MockRDSServer) handleFilePrintDetail(command string) (string, int) {
 	// Always include the directory entry first (if pattern matches)
 	if strings.Contains(pattern, "/") {
 		dirPath := "/" + pattern
-		output.WriteString(fmt.Sprintf(" %d   name=%s type=directory\n", i, dirPath))
+		fmt.Fprintf(&output, " %d   name=%s type=directory\n", i, dirPath)
 		output.WriteString("     last-modified=2025-11-11 16:47:07\n\n")
 		i++
 	}
@@ -880,9 +880,9 @@ func (s *MockRDSServer) handleFilePrintDetail(command string) (string, int) {
 		// Format size with units (matching RouterOS format)
 		sizeStr := formatSizeWithUnits(file.SizeBytes)
 
-		output.WriteString(fmt.Sprintf(" %d   name=%s\n", i, strings.TrimPrefix(path, "/")))
-		output.WriteString(fmt.Sprintf("     type=%s file size=%s last-modified=%s\n\n",
-			file.Type, sizeStr, file.CreatedAt))
+		fmt.Fprintf(&output, " %d   name=%s\n", i, strings.TrimPrefix(path, "/"))
+		fmt.Fprintf(&output, "     type=%s file size=%s last-modified=%s\n\n",
+			file.Type, sizeStr, file.CreatedAt)
 		i++
 	}
 

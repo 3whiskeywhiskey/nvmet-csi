@@ -20,6 +20,7 @@ func TestNewConnectionManager(t *testing.T) {
 
 	if cm == nil {
 		t.Fatal("NewConnectionManager returned nil")
+		return
 	}
 
 	if cm.client != mockClient {
@@ -339,11 +340,11 @@ func TestReconnect_ManualFailure(t *testing.T) {
 func TestOnReconnectCallback(t *testing.T) {
 	mockClient := NewMockClient()
 
-	callbackCalled := false
+	callbackCalled := make(chan struct{})
 	cm, err := NewConnectionManager(ConnectionManagerConfig{
 		Client: mockClient,
 		OnReconnect: func() {
-			callbackCalled = true
+			close(callbackCalled)
 		},
 	})
 	if err != nil {
@@ -360,10 +361,9 @@ func TestOnReconnectCallback(t *testing.T) {
 	// Trigger reconnection
 	cm.attemptReconnection(ctx)
 
-	// Give callback goroutine time to execute
-	time.Sleep(100 * time.Millisecond)
-
-	if !callbackCalled {
+	select {
+	case <-callbackCalled:
+	case <-ctx.Done():
 		t.Error("expected OnReconnect callback to be called")
 	}
 }

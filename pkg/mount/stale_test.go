@@ -336,6 +336,7 @@ func TestNewStaleMountChecker(t *testing.T) {
 
 	if checker == nil {
 		t.Fatal("Expected non-nil checker")
+		return
 	}
 
 	if checker.resolver == nil {
