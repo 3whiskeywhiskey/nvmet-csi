@@ -16,6 +16,14 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NIX_BUILDER_REMOTE: nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_BUILDER_STORE: ssh-ng://nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_CONFIG: |
+    builders = @/etc/nix/machines
+    builders-use-substitutes = true
+    download-attempts = 10
+    fallback = true
+    max-jobs = 0
   REGISTRY: gitea.whiskey.works
   IMAGE_NAME: whiskey-works/nvmet-csi
 
@@ -41,30 +49,52 @@ jobs:
           fi
           git checkout --detach FETCH_HEAD
 
+      - name: Refresh remote Nix builder certificate
+        run: |
+          if command -v refresh-nix-builder-ssh-cert >/dev/null 2>&1; then
+            refresh-nix-builder-ssh-cert
+          else
+            echo "refresh-nix-builder-ssh-cert is unavailable; runner image or Flux manifest is stale" >&2
+            exit 1
+          fi
+
+          builder_host="${NIX_BUILDER_HOST:-${NIX_BUILDER_REMOTE#*@}}"
+          ssh_dir="/root/.ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          ssh-keygen -R "$builder_host" -f "$ssh_dir/known_hosts" >/dev/null 2>&1 || true
+          ssh-keyscan -T 10 "$builder_host" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
+
+      - name: Smoke remote Nix builder
+        run: |
+          ssh -o BatchMode=yes "$NIX_BUILDER_REMOTE" true
+          nix store ping --store "$NIX_BUILDER_STORE"
+
       - name: Install dependencies
         run: |
           cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
-          nix develop -c go mod download
+          nix develop .#agent -c go mod download
 
       - name: Run all tests
         run: |
           cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
           echo "Running verification..."
-          nix develop -c make verify
+          nix develop .#agent -c make verify
 
           echo "Running sanity tests..."
-          nix develop -c go test -v -race -timeout 15m ./test/sanity/...
+          nix develop .#agent -c go test -v -race -timeout 15m ./test/sanity/...
 
           echo "Running stress tests..."
-          nix develop -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
+          nix develop .#agent -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
 
           echo "All tests passed"
 
       - name: Check coverage
         run: |
           cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
-          nix develop -c make test-coverage
-          COVERAGE="$(nix develop -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
+          nix develop .#agent -c make test-coverage
+          COVERAGE="$(nix develop .#agent -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
           echo "Coverage: ${COVERAGE}%"
 
           if (( $(echo "$COVERAGE < 60" | bc -l) )); then
@@ -94,6 +124,28 @@ jobs:
             git checkout --detach "${GITHUB_SHA}"
           fi
 
+      - name: Refresh remote Nix builder certificate
+        run: |
+          if command -v refresh-nix-builder-ssh-cert >/dev/null 2>&1; then
+            refresh-nix-builder-ssh-cert
+          else
+            echo "refresh-nix-builder-ssh-cert is unavailable; runner image or Flux manifest is stale" >&2
+            exit 1
+          fi
+
+          builder_host="${NIX_BUILDER_HOST:-${NIX_BUILDER_REMOTE#*@}}"
+          ssh_dir="/root/.ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          ssh-keygen -R "$builder_host" -f "$ssh_dir/known_hosts" >/dev/null 2>&1 || true
+          ssh-keyscan -T 10 "$builder_host" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
+
+      - name: Smoke remote Nix builder
+        run: |
+          ssh -o BatchMode=yes "$NIX_BUILDER_REMOTE" true
+          nix store ping --store "$NIX_BUILDER_STORE"
+
       - name: Get version info
         id: version
         run: |
@@ -116,7 +168,7 @@ jobs:
       - name: Build release binaries
         run: |
           cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
-          nix develop -c make build-all
+          nix develop .#agent -c make build-all
           echo "Release binaries built"
           ls -lh bin/
 

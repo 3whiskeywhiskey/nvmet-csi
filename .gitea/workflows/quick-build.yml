@@ -14,6 +14,14 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NIX_BUILDER_REMOTE: nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_BUILDER_STORE: ssh-ng://nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_CONFIG: |
+    builders = @/etc/nix/machines
+    builders-use-substitutes = true
+    download-attempts = 10
+    fallback = true
+    max-jobs = 0
   REGISTRY: gitea.whiskey.works
   IMAGE_NAME: whiskey-works/nvmet-csi
 
@@ -35,17 +43,39 @@ jobs:
           git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
 
+      - name: Refresh remote Nix builder certificate
+        run: |
+          if command -v refresh-nix-builder-ssh-cert >/dev/null 2>&1; then
+            refresh-nix-builder-ssh-cert
+          else
+            echo "refresh-nix-builder-ssh-cert is unavailable; runner image or Flux manifest is stale" >&2
+            exit 1
+          fi
+
+          builder_host="${NIX_BUILDER_HOST:-${NIX_BUILDER_REMOTE#*@}}"
+          ssh_dir="/root/.ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          ssh-keygen -R "$builder_host" -f "$ssh_dir/known_hosts" >/dev/null 2>&1 || true
+          ssh-keyscan -T 10 "$builder_host" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
+
+      - name: Smoke remote Nix builder
+        run: |
+          ssh -o BatchMode=yes "$NIX_BUILDER_REMOTE" true
+          nix store ping --store "$NIX_BUILDER_STORE"
+
       - name: Verify build environment
         run: |
           cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
-          nix develop -c go version
-          nix develop -c make --version
+          nix develop .#agent -c go version
+          nix develop .#agent -c make --version
           echo "Build environment ready"
 
       - name: Build binary
         run: |
           cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
-          nix develop -c make build-local
+          nix develop .#agent -c make build-local
 
       - name: Verify binary
         run: |

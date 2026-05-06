@@ -17,13 +17,19 @@
   in {
     devShells = forEachSystem (system: let
       pkgs = import nixpkgs {inherit system;};
-    in {
-      default = pkgs.mkShell {
+      agentShell = pkgs.mkShell {
         name = "nvmet-csi-dev";
 
         packages = with pkgs; [
+          bash
           bc
+          coreutils
+          findutils
+          gawk
+          gcc
           git
+          gnugrep
+          gnused
           go_1_25
           golangci-lint
           gotools
@@ -35,6 +41,9 @@
           export PATH="$GOPATH/bin:$PATH"
         '';
       };
+    in {
+      default = agentShell;
+      agent = agentShell;
     });
   };
 }

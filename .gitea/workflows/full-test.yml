@@ -20,10 +20,18 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NIX_BUILDER_REMOTE: nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_BUILDER_STORE: ssh-ng://nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_CONFIG: |
+    builders = @/etc/nix/machines
+    builders-use-substitutes = true
+    download-attempts = 10
+    fallback = true
+    max-jobs = 0
 
 jobs:
-  verify-and-test:
-    name: Code Quality & Unit Tests
+  ci:
+    name: Full Test Suite
     runs-on:
       - nix-ephemeral
     steps:
@@ -39,25 +47,49 @@ jobs:
           git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout --detach FETCH_HEAD
 
-      - name: Install dependencies
+      - name: Refresh remote Nix builder certificate
+        run: |
+          if command -v refresh-nix-builder-ssh-cert >/dev/null 2>&1; then
+            refresh-nix-builder-ssh-cert
+          else
+            echo "refresh-nix-builder-ssh-cert is unavailable; runner image or Flux manifest is stale" >&2
+            exit 1
+          fi
+
+          builder_host="${NIX_BUILDER_HOST:-${NIX_BUILDER_REMOTE#*@}}"
+          ssh_dir="/root/.ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          ssh-keygen -R "$builder_host" -f "$ssh_dir/known_hosts" >/dev/null 2>&1 || true
+          ssh-keyscan -T 10 "$builder_host" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
+
+      - name: Smoke remote Nix builder
+        run: |
+          ssh -o BatchMode=yes "$NIX_BUILDER_REMOTE" true
+          nix store ping --store "$NIX_BUILDER_STORE"
+
+      - name: Show toolchain
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          nix develop -c go mod download
+          nix develop .#agent -c go version
+          nix develop .#agent -c golangci-lint version
+          nix develop .#agent -c make --version
 
       - name: Run verification
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          nix develop -c make verify
+          nix develop .#agent -c make verify
 
       - name: Generate coverage report
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          nix develop -c make test-coverage
+          nix develop .#agent -c make test-coverage
 
       - name: Check coverage threshold
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          COVERAGE="$(nix develop -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
+          COVERAGE="$(nix develop .#agent -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
           echo "Coverage: ${COVERAGE}%"
 
           if (( $(echo "$COVERAGE < 65" | bc -l) )); then
@@ -67,106 +99,20 @@ jobs:
 
           echo "::notice::Coverage ${COVERAGE}% meets 65% threshold"
 
-  sanity-tests:
-    name: CSI Sanity Tests
-    runs-on:
-      - nix-ephemeral
-    steps:
-      - name: Checkout code
-        run: |
-          repo_dir="/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          rm -rf "${repo_dir}"
-          mkdir -p "${repo_dir}"
-          cd "${repo_dir}"
-          git init .
-          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
-
-      - name: Install dependencies
-        run: |
-          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          nix develop -c go mod download
-
       - name: Run CSI sanity tests
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
           echo "Running CSI sanity tests with 15 minute timeout..."
-          nix develop -c bash -lc 'go test -v -race -timeout 15m ./test/sanity/... 2>&1 | tee sanity-output.log'
-
-  e2e-tests:
-    name: E2E Tests
-    runs-on:
-      - nix-ephemeral
-    steps:
-      - name: Checkout code
-        run: |
-          repo_dir="/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          rm -rf "${repo_dir}"
-          mkdir -p "${repo_dir}"
-          cd "${repo_dir}"
-          git init .
-          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
+          nix develop .#agent -c bash -lc 'go test -v -race -timeout 15m ./test/sanity/... 2>&1 | tee sanity-output.log'
 
       - name: Run E2E tests
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          nix develop -c make e2e-test
-
-  mock-stress-tests:
-    name: Mock RDS Stress Tests
-    runs-on:
-      - nix-ephemeral
-    steps:
-      - name: Checkout code
-        run: |
-          repo_dir="/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          rm -rf "${repo_dir}"
-          mkdir -p "${repo_dir}"
-          cd "${repo_dir}"
-          git init .
-          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
-          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
-          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
-          git checkout --detach FETCH_HEAD
+          nix develop .#agent -c make e2e-test
 
       - name: Run mock stress tests
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
           echo "Running concurrent stress tests..."
-          nix develop -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
+          nix develop .#agent -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
           echo "Mock stress tests passed"
-
-  test-summary:
-    name: Test Summary
-    runs-on:
-      - nix-ephemeral
-    needs: [verify-and-test, sanity-tests, e2e-tests, mock-stress-tests]
-    if: always()
-    steps:
-      - name: Generate summary
-        run: |
-          echo "Test Results Summary"
-          echo ""
-          echo "| Test Suite | Status |"
-          echo "|------------|--------|"
-          echo "| Code Quality & Unit Tests | ${{ needs.verify-and-test.result }} |"
-          echo "| CSI Sanity Tests | ${{ needs.sanity-tests.result }} |"
-          echo "| E2E Tests | ${{ needs.e2e-tests.result }} |"
-          echo "| Mock Stress Tests | ${{ needs.mock-stress-tests.result }} |"
-          echo ""
-
-          if [ "${{ needs.verify-and-test.result }}" = "success" ] && \
-             [ "${{ needs.sanity-tests.result }}" = "success" ] && \
-             [ "${{ needs.e2e-tests.result }}" = "success" ] && \
-             [ "${{ needs.mock-stress-tests.result }}" = "success" ]; then
-            echo "All tests passed! Ready for review."
-            exit 0
-          else
-            echo "Some tests failed. Please review the logs."
-            exit 1
-          fi
