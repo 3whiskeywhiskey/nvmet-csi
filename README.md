@@ -286,7 +286,9 @@ For detailed installation instructions, see [Kubernetes Setup Guide](docs/kubern
 - **[Hardware Validation Guide](docs/HARDWARE_VALIDATION.md)** - Step-by-step test procedures for production RDS hardware
 - **[Kubernetes Setup Guide](docs/kubernetes-setup.md)** - Complete deployment guide
 - **[Capabilities & Comparison](docs/CAPABILITIES.md)** - Feature comparison with AWS EBS CSI and Longhorn
+- [Design](DESIGN.md) - Refactor stance, migration map, and backend contract sketch
 - [Architecture](docs/architecture.md) - System design and component interactions
+- [RouterOS RDS Hardening Notes](docs/routeros-rds-hardening.md) - Fragility, churn, and refactor safety requirements
 - [RDS Commands Reference](docs/rds-commands.md) - RouterOS CLI commands used
 - [CI/CD Pipeline](docs/ci-cd.md) - Automated builds, releases, and versioning
 - [Development Guide](CLAUDE.md) - Development notes and context

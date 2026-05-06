@@ -19,6 +19,18 @@ This is a **Kubernetes CSI (Container Storage Interface) driver** for MikroTik R
 - MikroTik RouterOS 7.1+ with ROSE Data Server
 - Production use case: KubeVirt VMs on NVMe/TCP storage
 
+## Critical RDS Safety Notes
+
+RDS is load-bearing shared infrastructure for routing, MinIO, and NVMe/TCP
+storage. Do not reboot RDS, repeatedly restart MinIO, or perform manual
+Kubernetes node mount surgery unless the operator explicitly approves it.
+
+During the `rds-csi` to `nvmet-csi` refactor, treat RouterOS/RDS as fragile:
+avoid add/remove storms, prefer observe-before-mutate reconciliation, rate-limit
+RouterOS storage mutations, and make stale attachment/session remediation
+explicit and auditable. See `docs/routeros-rds-hardening.md` before changing
+controller, attachment, reconciler, RDS, or backend abstraction code.
+
 ## Essential Commands
 
 ### Build and Development
