@@ -1,8 +1,7 @@
 name: Release
 
-# Full test suite + build for tagged releases
-# Triggered by tag push or manual dispatch
-# Pure shell commands - no JavaScript actions (act_runner k8s has no Node.js)
+# Full test suite + build for tagged releases.
+# Runs on the nix-ephemeral act_runner; this repository brings its own flake.
 
 on:
   push:
@@ -16,53 +15,56 @@ on:
         type: string
 
 env:
-  REGISTRY: git.whiskey.works
-  IMAGE_NAME: whiskey/rds-csi
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  REGISTRY: gitea.whiskey.works
+  IMAGE_NAME: whiskey-works/nvmet-csi
 
 jobs:
   full-test:
     name: Run Full Test Suite
-    runs-on: golang
+    runs-on:
+      - nix-ephemeral
     steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make bc
-
       - name: Checkout code
         run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
+          repo_dir="/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
+          rm -rf "${repo_dir}"
+          mkdir -p "${repo_dir}"
+          cd "${repo_dir}"
+          git init .
+          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            git clone --branch ${{ github.event.inputs.tag }} ${{ github.server_url }}/${{ github.repository }}.git .
+            git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "refs/tags/${{ github.event.inputs.tag }}"
           else
-            git clone ${{ github.server_url }}/${{ github.repository }}.git .
-            git checkout ${{ github.sha }}
+            git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
           fi
+          git checkout --detach FETCH_HEAD
 
       - name: Install dependencies
         run: |
-          go mod download
-          make install-tools
+          cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
+          nix develop -c go mod download
 
       - name: Run all tests
         run: |
+          cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
           echo "Running verification..."
-          make verify
-
-          echo "Running unit tests..."
-          make test
+          nix develop -c make verify
 
           echo "Running sanity tests..."
-          go test -v -race -timeout 15m ./test/sanity/...
+          nix develop -c go test -v -race -timeout 15m ./test/sanity/...
 
           echo "Running stress tests..."
-          go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
+          nix develop -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
 
           echo "All tests passed"
 
       - name: Check coverage
         run: |
-          make test-coverage
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
+          nix develop -c make test-coverage
+          COVERAGE="$(nix develop -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
           echo "Coverage: ${COVERAGE}%"
 
           if (( $(echo "$COVERAGE < 60" | bc -l) )); then
@@ -72,52 +74,57 @@ jobs:
 
   build-release:
     name: Build Release Binary
-    runs-on: golang
+    runs-on:
+      - nix-ephemeral
     needs: full-test
     steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make
-
       - name: Checkout code
         run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone ${{ github.server_url }}/${{ github.repository }}.git .
-          git fetch --tags
+          repo_dir="/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          rm -rf "${repo_dir}"
+          mkdir -p "${repo_dir}"
+          cd "${repo_dir}"
+          git init .
+          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --tags --depth=100 origin
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            git checkout ${{ github.event.inputs.tag }}
+            git checkout --detach "${{ github.event.inputs.tag }}"
           else
-            git checkout ${{ github.sha }}
+            git checkout --detach "${GITHUB_SHA}"
           fi
 
       - name: Get version info
         id: version
         run: |
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.tag }}"
           else
-            VERSION="${{ github.ref_name }}"
+            VERSION="${GITHUB_REF_NAME}"
           fi
 
-          GIT_COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
-          echo "date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "commit=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
 
           echo "Building release ${VERSION} (commit: ${GIT_COMMIT})"
 
       - name: Build release binaries
         run: |
-          make build-all
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          nix develop -c make build-all
           echo "Release binaries built"
           ls -lh bin/
 
       - name: Create release notes
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION}^ 2>/dev/null || echo "")
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          VERSION="${{ steps.version.outputs.version }}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || echo "")"
 
           cat > release-notes.md <<EOF
           ## Release ${VERSION}
@@ -132,7 +139,7 @@ jobs:
             echo "" >> release-notes.md
             echo "### Changes since ${PREV_TAG}" >> release-notes.md
             echo "" >> release-notes.md
-            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%an)" --no-merges >> release-notes.md
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%an)" --no-merges >> release-notes.md
           fi
 
           echo "--- Release Notes ---"
@@ -140,6 +147,7 @@ jobs:
 
       - name: Release summary
         run: |
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
           echo "Release ${{ steps.version.outputs.version }}"
           echo ""
           echo "Tests passed"

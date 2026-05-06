@@ -1,8 +1,7 @@
 name: Quick Build
 
-# Fast build on push to main branches - NO TESTS
-# Goal: <2 minutes for rapid feedback
-# Pure shell commands - no JavaScript actions (act_runner k8s has no Node.js)
+# Fast build on push to main branches.
+# Runs on the nix-ephemeral act_runner; this repository brings its own flake.
 
 on:
   push:
@@ -14,41 +13,43 @@ on:
       - '.github/**'
 
 env:
-  REGISTRY: git.whiskey.works
-  IMAGE_NAME: whiskey/rds-csi
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  REGISTRY: gitea.whiskey.works
+  IMAGE_NAME: whiskey-works/nvmet-csi
 
 jobs:
   quick-build:
-    name: Build Binary Only (Fast)
-    runs-on: golang
+    name: Build Binary Only
+    runs-on:
+      - nix-ephemeral
     steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make
-
       - name: Checkout code
         run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone --depth=1 --branch ${{ github.ref_name }} ${{ github.server_url }}/${{ github.repository }}.git .
+          repo_dir="/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          rm -rf "${repo_dir}"
+          mkdir -p "${repo_dir}"
+          cd "${repo_dir}"
+          git init .
+          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
 
       - name: Verify build environment
         run: |
-          go version
-          make --version
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          nix develop -c go version
+          nix develop -c make --version
           echo "Build environment ready"
 
       - name: Build binary
-        run: make build-local
+        run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          nix develop -c make build-local
 
       - name: Verify binary
         run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
           ls -lh bin/
           ./bin/rds-csi-plugin-* --version || true
           echo "Binary built successfully"
-
-      - name: Build summary
-        run: |
-          echo "Quick build complete!"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          ls -lh bin/ | grep rds-csi-plugin
