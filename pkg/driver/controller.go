@@ -17,6 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
 )
@@ -101,63 +102,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 	klog.V(4).Infof("Using volume ID: %s (from volume name: %s)", volumeID, req.GetName())
 
-	// Check if volume already exists (idempotency)
-	existingVolume, err := cs.driver.rdsClient.GetVolume(volumeID)
-	if err == nil {
-		// Volume already exists, verify it matches requirements
-		klog.V(2).Infof("Volume %s already exists (idempotent)", volumeID)
-
-		// CSI spec requires checking capacity matches for idempotent CreateVolume
-		// If capacity differs, return AlreadyExists error
-		if existingVolume.FileSizeBytes != requiredBytes {
-			return nil, status.Errorf(codes.AlreadyExists,
-				"volume %s already exists with different capacity (existing: %d bytes, requested: %d bytes)",
-				volumeID, existingVolume.FileSizeBytes, requiredBytes)
-		}
-
-		// Get parameters from StorageClass for response context
-		params := req.GetParameters()
-
-		// Parse NVMe connection parameters from StorageClass
-		nvmeParams, err := ParseNVMEConnectionParams(params)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid NVMe connection parameters: %v", err)
-		}
-
-		// Parse migration timeout
-		migrationTimeout := ParseMigrationTimeout(params)
-
-		return &csi.CreateVolumeResponse{
-			Volume: &csi.Volume{
-				VolumeId:      volumeID,
-				CapacityBytes: existingVolume.FileSizeBytes,
-				VolumeContext: map[string]string{
-					"rdsAddress":              cs.getRDSAddress(params),
-					"nvmeAddress":             cs.getNVMEAddress(params),
-					"nvmePort":                fmt.Sprintf("%d", existingVolume.NVMETCPPort),
-					"nqn":                     existingVolume.NVMETCPNQN,
-					"volumePath":              existingVolume.FilePath,
-					"ctrlLossTmo":             fmt.Sprintf("%d", nvmeParams.CtrlLossTmo),
-					"reconnectDelay":          fmt.Sprintf("%d", nvmeParams.ReconnectDelay),
-					"keepAliveTmo":            fmt.Sprintf("%d", nvmeParams.KeepAliveTmo),
-					"migrationTimeoutSeconds": fmt.Sprintf("%.0f", migrationTimeout.Seconds()),
-				},
-			},
-		}, nil
-	}
-
-	// Volume doesn't exist - check for volume content source (snapshot restore)
-	if contentSource := req.GetVolumeContentSource(); contentSource != nil {
-		if snapshotSource := contentSource.GetSnapshot(); snapshotSource != nil {
-			return cs.createVolumeFromSnapshot(ctx, req, volumeID, snapshotSource.GetSnapshotId(), requiredBytes)
-		}
-		// Volume clone (not yet supported)
-		if contentSource.GetVolume() != nil {
-			return nil, status.Error(codes.InvalidArgument, "volume cloning is not supported, use snapshot restore instead")
-		}
-	}
-
-	// No content source - create new empty volume
 	// Get parameters from StorageClass
 	params := req.GetParameters()
 	volumeBasePath := defaultVolumeBasePath
@@ -210,19 +154,35 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		NVMETCPNQN:    nqn,
 	}
 
+	plan, err := reconciler.BuildEnsureVolumePlan(cs.driver.rdsClient, createOpts)
+	if err != nil {
+		return nil, createVolumeStatusError(err)
+	}
+	klog.V(3).Infof("CreateVolume plan for %s: action=%s reason=%q", volumeID, plan.Action, plan.Reason)
+
+	if contentSource := req.GetVolumeContentSource(); contentSource != nil && plan.Action == reconciler.VolumeActionCreate {
+		if snapshotSource := contentSource.GetSnapshot(); snapshotSource != nil {
+			return cs.createVolumeFromSnapshot(ctx, req, volumeID, snapshotSource.GetSnapshotId(), requiredBytes)
+		}
+		if contentSource.GetVolume() != nil {
+			return nil, status.Error(codes.InvalidArgument, "volume cloning is not supported, use snapshot restore instead")
+		}
+	}
+
+	if plan.Action == reconciler.VolumeActionNoop && plan.Actual != nil {
+		klog.V(2).Infof("Volume %s already matches desired state (idempotent)", volumeID)
+		return cs.createVolumeResponse(volumeID, plan.Actual.FileSizeBytes, params, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.FilePath), nil
+	}
+
+	if plan.Action == reconciler.VolumeActionConflict {
+		return nil, status.Errorf(codes.FailedPrecondition, "unsafe volume reconciliation for %s: %s", volumeID, plan.Reason)
+	}
+
 	startTime := time.Now()
-	if err := cs.driver.rdsClient.CreateVolume(createOpts); err != nil {
+	if _, err := reconciler.ApplyVolumePlan(ctx, cs.driver.rdsClient, plan, reconciler.VolumeApplyOptions{}); err != nil {
 		// Log volume create failure
 		secLogger.LogVolumeCreate(volumeID, req.GetName(), security.OutcomeFailure, err, time.Since(startTime))
-
-		// Map errors to appropriate gRPC codes
-		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
-		}
-		if stderrors.Is(err, utils.ErrResourceExhausted) {
-			return nil, status.Errorf(codes.ResourceExhausted, "insufficient storage on RDS: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to create volume on RDS: %v", err)
+		return nil, createVolumeStatusError(err)
 	}
 
 	// RDS layer already logged "Created volume X" at V(2) - no duplicate needed
@@ -232,10 +192,14 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	secLogger.LogVolumeCreate(volumeID, req.GetName(), security.OutcomeSuccess, nil, time.Since(startTime))
 
 	// Return volume information
+	return cs.createVolumeResponse(volumeID, requiredBytes, params, nvmeParams, migrationTimeout, nvmePort, nqn, filePath), nil
+}
+
+func (cs *ControllerServer) createVolumeResponse(volumeID string, capacityBytes int64, params map[string]string, nvmeParams NVMEConnectionParams, migrationTimeout time.Duration, nvmePort int, nqn, filePath string) *csi.CreateVolumeResponse {
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      volumeID,
-			CapacityBytes: requiredBytes,
+			CapacityBytes: capacityBytes,
 			VolumeContext: map[string]string{
 				"rdsAddress":              cs.getRDSAddress(params),
 				"nvmeAddress":             cs.getNVMEAddress(params),
@@ -248,7 +212,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				"migrationTimeoutSeconds": fmt.Sprintf("%.0f", migrationTimeout.Seconds()),
 			},
 		},
-	}, nil
+	}
 }
 
 // createVolumeFromSnapshot handles CreateVolume with a snapshot source (restore workflow)
@@ -377,31 +341,20 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Error(codes.Internal, "RDS client not initialized")
 	}
 
-	// Safety check: verify volume exists before attempting deletion
-	// This helps catch force-deletion scenarios where the volume might still be in use
-	volume, err := cs.driver.rdsClient.GetVolume(volumeID)
+	plan, err := reconciler.BuildDeleteVolumePlan(cs.driver.rdsClient, volumeID)
 	if err != nil {
-		// Check if this is a connection error (should be retried)
-		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
-		}
+		return nil, deleteVolumeStatusError(err)
+	}
+	klog.V(3).Infof("DeleteVolume plan for %s: action=%s reason=%q", volumeID, plan.Action, plan.Reason)
 
-		// Check if this is a VolumeNotFoundError (idempotent case)
-		// Check both the typed error and the sentinel error
-		var notFoundErr *rds.VolumeNotFoundError
-		if stderrors.As(err, &notFoundErr) || stderrors.Is(err, utils.ErrVolumeNotFound) {
-			klog.V(4).Infof("Volume %s not found on RDS, assuming already deleted", volumeID)
-			return &csi.DeleteVolumeResponse{}, nil
-		}
-
-		// For other errors (like GetVolume failures), return the error
-		// Don't treat all errors as "volume not found" - could mask real problems
-		return nil, status.Errorf(codes.Internal, "failed to verify volume existence: %v", err)
+	if plan.Action == reconciler.VolumeActionNoop {
+		klog.V(4).Infof("Volume %s not found on RDS, assuming already deleted", volumeID)
+		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	// Log volume details for audit trail
 	klog.V(4).Infof("Deleting volume %s (path=%s, size=%d bytes, nvme_export=%v)",
-		volumeID, volume.FilePath, volume.FileSizeBytes, volume.NVMETCPExport)
+		volumeID, plan.Actual.FilePath, plan.Actual.FileSizeBytes, plan.Actual.NVMETCPExport)
 
 	// Log volume delete request
 	secLogger := security.GetLogger()
@@ -409,17 +362,12 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// Delete volume from RDS (idempotent)
 	startTime := time.Now()
-	if err := cs.driver.rdsClient.DeleteVolume(volumeID); err != nil {
+	if _, err := reconciler.ApplyVolumePlan(ctx, cs.driver.rdsClient, plan, reconciler.VolumeApplyOptions{}); err != nil {
 		klog.Errorf("Failed to delete volume %s: %v", volumeID, err)
 
 		// Log volume delete failure
 		secLogger.LogVolumeDelete(volumeID, "", security.OutcomeFailure, err, time.Since(startTime))
-
-		// Map errors to appropriate gRPC codes
-		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to delete volume: %v", err)
+		return nil, deleteVolumeStatusError(err)
 	}
 
 	// RDS layer already logged "Deleted volume X" at V(2) - no duplicate needed
@@ -429,6 +377,23 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	secLogger.LogVolumeDelete(volumeID, "", security.OutcomeSuccess, nil, time.Since(startTime))
 
 	return &csi.DeleteVolumeResponse{}, nil
+}
+
+func createVolumeStatusError(err error) error {
+	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+		return status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+	}
+	if stderrors.Is(err, utils.ErrResourceExhausted) {
+		return status.Errorf(codes.ResourceExhausted, "insufficient storage on RDS: %v", err)
+	}
+	return status.Errorf(codes.Internal, "failed to create volume on RDS: %v", err)
+}
+
+func deleteVolumeStatusError(err error) error {
+	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+		return status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+	}
+	return status.Errorf(codes.Internal, "failed to verify volume existence: %v", err)
 }
 
 // ValidateVolumeCapabilities validates that the requested capabilities are supported

@@ -281,6 +281,163 @@ func TestDeleteVolumeValidation(t *testing.T) {
 	}
 }
 
+func TestCreateVolume_PlannerIdempotentNoMutation(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+	nqn, err := utils.VolumeIDToNQN(testVolumeID1)
+	if err != nil {
+		t.Fatalf("generate nqn: %v", err)
+	}
+	filePath, err := utils.VolumeIDToFilePath(testVolumeID1, defaultVolumeBasePath)
+	if err != nil {
+		t.Fatalf("generate file path: %v", err)
+	}
+
+	mockRDS.AddVolume(&rds.VolumeInfo{
+		Slot:          testVolumeID1,
+		Type:          "file",
+		FilePath:      filePath,
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPExport: true,
+		NVMETCPPort:   defaultNVMETCPPort,
+		NVMETCPNQN:    nqn,
+		Status:        "ready",
+	})
+
+	resp, err := cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID1, 1*1024*1024*1024))
+	if err != nil {
+		t.Fatalf("CreateVolume failed: %v", err)
+	}
+	if resp.GetVolume().GetCapacityBytes() != 1*1024*1024*1024 {
+		t.Fatalf("capacity = %d, want 1GiB", resp.GetVolume().GetCapacityBytes())
+	}
+	if mockRDS.MutationCount("create_volume") != 0 {
+		t.Fatalf("create_volume mutations = %d, want 0", mockRDS.MutationCount("create_volume"))
+	}
+	if mockRDS.MutationCount("resize_volume") != 0 {
+		t.Fatalf("resize_volume mutations = %d, want 0", mockRDS.MutationCount("resize_volume"))
+	}
+}
+
+func TestCreateVolume_PlannerResizesSmallerExistingVolume(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+	nqn, err := utils.VolumeIDToNQN(testVolumeID2)
+	if err != nil {
+		t.Fatalf("generate nqn: %v", err)
+	}
+	filePath, err := utils.VolumeIDToFilePath(testVolumeID2, defaultVolumeBasePath)
+	if err != nil {
+		t.Fatalf("generate file path: %v", err)
+	}
+
+	mockRDS.AddVolume(&rds.VolumeInfo{
+		Slot:          testVolumeID2,
+		Type:          "file",
+		FilePath:      filePath,
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPExport: true,
+		NVMETCPPort:   defaultNVMETCPPort,
+		NVMETCPNQN:    nqn,
+		Status:        "ready",
+	})
+
+	resp, err := cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID2, 2*1024*1024*1024))
+	if err != nil {
+		t.Fatalf("CreateVolume failed: %v", err)
+	}
+	if resp.GetVolume().GetCapacityBytes() != 2*1024*1024*1024 {
+		t.Fatalf("capacity = %d, want 2GiB", resp.GetVolume().GetCapacityBytes())
+	}
+	if mockRDS.MutationCount("create_volume") != 0 {
+		t.Fatalf("create_volume mutations = %d, want 0", mockRDS.MutationCount("create_volume"))
+	}
+	if mockRDS.MutationCount("resize_volume") != 1 {
+		t.Fatalf("resize_volume mutations = %d, want 1", mockRDS.MutationCount("resize_volume"))
+	}
+
+	volume, err := mockRDS.GetVolume(testVolumeID2)
+	if err != nil {
+		t.Fatalf("GetVolume failed: %v", err)
+	}
+	if volume.FileSizeBytes != 2*1024*1024*1024 {
+		t.Fatalf("stored size = %d, want 2GiB", volume.FileSizeBytes)
+	}
+}
+
+func TestCreateVolume_PlannerConflictFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+	nqn, err := utils.VolumeIDToNQN(testVolumeID3)
+	if err != nil {
+		t.Fatalf("generate nqn: %v", err)
+	}
+
+	mockRDS.AddVolume(&rds.VolumeInfo{
+		Slot:          testVolumeID3,
+		Type:          "file",
+		FilePath:      "/storage-pool/metal-csi/unexpected.img",
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPExport: true,
+		NVMETCPPort:   defaultNVMETCPPort,
+		NVMETCPNQN:    nqn,
+		Status:        "ready",
+	})
+
+	_, err = cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID3, 1*1024*1024*1024))
+	if err == nil {
+		t.Fatal("expected conflict error")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %T %v", err, err)
+	}
+	if st.Code() != codes.FailedPrecondition {
+		t.Fatalf("code = %v, want FailedPrecondition", st.Code())
+	}
+	if !strings.Contains(st.Message(), "backing file path differs") {
+		t.Fatalf("message = %q, want backing file path conflict", st.Message())
+	}
+	if mockRDS.MutationCount("create_volume") != 0 {
+		t.Fatalf("create_volume mutations = %d, want 0", mockRDS.MutationCount("create_volume"))
+	}
+	if mockRDS.MutationCount("resize_volume") != 0 {
+		t.Fatalf("resize_volume mutations = %d, want 0", mockRDS.MutationCount("resize_volume"))
+	}
+}
+
+func TestDeleteVolume_PlannerMissingVolumeNoMutation(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+
+	_, err := cs.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: testVolumeID4})
+	if err != nil {
+		t.Fatalf("DeleteVolume failed: %v", err)
+	}
+	if mockRDS.MutationCount("delete_volume") != 0 {
+		t.Fatalf("delete_volume mutations = %d, want 0", mockRDS.MutationCount("delete_volume"))
+	}
+}
+
+func testCreateVolumeRequest(name string, size int64) *csi.CreateVolumeRequest {
+	return &csi.CreateVolumeRequest{
+		Name: name,
+		VolumeCapabilities: []*csi.VolumeCapability{
+			{
+				AccessMode: &csi.VolumeCapability_AccessMode{
+					Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+				},
+				AccessType: &csi.VolumeCapability_Mount{
+					Mount: &csi.VolumeCapability_MountVolume{},
+				},
+			},
+		},
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: size,
+		},
+	}
+}
+
 func TestUnimplementedMethods(t *testing.T) {
 	cs := &ControllerServer{
 		driver: &Driver{},

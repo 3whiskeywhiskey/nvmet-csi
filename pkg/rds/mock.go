@@ -11,6 +11,7 @@ type MockClient struct {
 	mu             sync.RWMutex
 	volumes        map[string]*VolumeInfo
 	snapshots      map[string]*SnapshotInfo
+	mutationCounts map[string]int
 	address        string
 	connected      bool                   // Connection state (for testing connection manager)
 	nextError      error                  // Error to return on next operation
@@ -22,10 +23,11 @@ type MockClient struct {
 // NewMockClient creates a new MockClient for testing
 func NewMockClient() *MockClient {
 	return &MockClient{
-		volumes:   make(map[string]*VolumeInfo),
-		snapshots: make(map[string]*SnapshotInfo),
-		address:   "mock-rds-server",
-		connected: true, // Default to connected
+		volumes:        make(map[string]*VolumeInfo),
+		snapshots:      make(map[string]*SnapshotInfo),
+		mutationCounts: make(map[string]int),
+		address:        "mock-rds-server",
+		connected:      true, // Default to connected
 	}
 }
 
@@ -84,6 +86,13 @@ func (m *MockClient) ClearError() {
 	defer m.mu.Unlock()
 	m.nextError = nil
 	m.persistentErr = nil
+}
+
+// MutationCount returns how many times a mutating operation was attempted.
+func (m *MockClient) MutationCount(operation string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.mutationCounts[operation]
 }
 
 // SetConnected sets the connection state (test helper)
@@ -154,6 +163,7 @@ func (m *MockClient) CreateVolume(opts CreateVolumeOptions) error {
 	if err := m.checkError(); err != nil {
 		return err
 	}
+	m.mutationCounts["create_volume"]++
 
 	if _, exists := m.volumes[opts.Slot]; exists {
 		return fmt.Errorf("volume %s already exists", opts.Slot)
@@ -181,6 +191,7 @@ func (m *MockClient) DeleteVolume(slot string) error {
 	if err := m.checkError(); err != nil {
 		return err
 	}
+	m.mutationCounts["delete_volume"]++
 
 	if _, exists := m.volumes[slot]; !exists {
 		// Idempotent - not an error if doesn't exist
@@ -200,6 +211,7 @@ func (m *MockClient) ResizeVolume(slot string, newSizeBytes int64) error {
 	if err := m.checkError(); err != nil {
 		return err
 	}
+	m.mutationCounts["resize_volume"]++
 
 	vol, exists := m.volumes[slot]
 	if !exists {
@@ -281,6 +293,7 @@ func (m *MockClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, 
 	if err := m.checkError(); err != nil {
 		return nil, err
 	}
+	m.mutationCounts["create_snapshot"]++
 
 	// Verify source volume exists
 	if _, exists := m.volumes[opts.SourceVolume]; !exists {
@@ -330,6 +343,7 @@ func (m *MockClient) DeleteSnapshot(snapshotID string) error {
 	if err := m.checkError(); err != nil {
 		return err
 	}
+	m.mutationCounts["delete_snapshot"]++
 
 	// Idempotent - not an error if doesn't exist
 	delete(m.snapshots, snapshotID)
@@ -382,6 +396,7 @@ func (m *MockClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolu
 	if err := m.checkError(); err != nil {
 		return err
 	}
+	m.mutationCounts["restore_snapshot"]++
 
 	// Verify snapshot exists
 	if _, exists := m.snapshots[snapshotID]; !exists {
