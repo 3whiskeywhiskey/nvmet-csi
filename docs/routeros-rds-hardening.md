@@ -57,9 +57,12 @@ The suspect trigger class is rapid or unnecessary RouterOS storage mutations:
 - RouterOS auto-mount or filesystem scanning of PVC backing disks.
 
 The `mount=no` hypothesis needs serious testing: PVC backing disks may need to
-be configured so RouterOS does not try to mount or scan them. If RouterOS is
-performing filesystem work on file-backed PVC disks, disabling mount behavior
-could reduce kernel interaction and lower crash risk.
+be configured so RouterOS does not try to mount or scan them. The driver now
+emits `mount=no` for new file-backed disk objects it creates (`CreateVolume`,
+snapshot disk creation, and snapshot restore). If RouterOS is performing
+filesystem work on file-backed PVC disks, disabling mount behavior could reduce
+kernel interaction and lower crash risk. This is a creation-time mitigation; it
+does not rewrite existing RouterOS disk objects.
 
 ## Operational Guardrails
 
@@ -169,8 +172,8 @@ The refactor should add test coverage before live RDS validation:
 - dry-run reconciler mode that returns planned mutations without applying them;
 - regression test proving stale attachment cleanup does not delete/recreate the
   backing RouterOS disk;
-- regression test for `mount=no` command shape once the RouterOS behavior is
-  confirmed;
+- regression test for `mount=no` command shape on every driver-owned
+  `/disk add type=file` path;
 - tests proving monitoring failures cannot trigger storage mutations.
 
 ## Issue Mapping
@@ -203,4 +206,5 @@ Keep this document in view while executing these issues:
 4. In issue `#8`, implement an RDS mutation limiter and command recorder before
    moving more logic behind the backend.
 5. In issue `#18`, test and document `mount=no` behavior in a controlled
-   maintenance window before applying it broadly.
+   maintenance window, including `/disk print detail where slot=<pvc>` before
+   and after new PVC creation.

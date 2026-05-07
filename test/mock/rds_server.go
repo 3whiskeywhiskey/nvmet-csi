@@ -46,6 +46,7 @@ type MockVolume struct {
 	Slot          string
 	FilePath      string
 	FileSizeBytes int64
+	Mount         bool
 	NVMETCPPort   int
 	NVMETCPNQN    string
 	Exported      bool
@@ -67,6 +68,7 @@ type MockSnapshot struct {
 	SourceVolume  string    // Source volume slot (pvc-<uuid>) — for CSI tracking
 	FilePath      string    // Backing file path (e.g., /storage-pool/metal-csi/snap-xxx.img)
 	FileSizeBytes int64     // Size copied from source volume
+	Mount         bool      // RouterOS disk mount setting
 	CreatedAt     time.Time // Creation timestamp
 }
 
@@ -225,6 +227,7 @@ func (s *MockRDSServer) CreateOrphanedVolume(slot, filePath string, sizeBytes in
 		Slot:          slot,
 		FilePath:      filePath,
 		FileSizeBytes: sizeBytes,
+		Mount:         true,
 		NVMETCPPort:   4420,
 		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", slot),
 		Exported:      true,
@@ -460,6 +463,7 @@ func (s *MockRDSServer) handleDiskAdd(command string) (string, int) {
 	slot := extractParam(command, "slot")
 	filePath := extractParam(command, "file-path")
 	fileSizeStr := extractParam(command, "file-size")
+	mountParam := extractParam(command, "mount")
 	nvmePortStr := extractParam(command, "nvme-tcp-server-port")
 	nqn := extractParam(command, "nvme-tcp-server-nqn")
 
@@ -496,6 +500,7 @@ func (s *MockRDSServer) handleDiskAdd(command string) (string, int) {
 		Slot:          slot,
 		FilePath:      filePath,
 		FileSizeBytes: fileSize,
+		Mount:         mountParam != "no",
 		NVMETCPPort:   nvmePort,
 		NVMETCPNQN:    nqn,
 		Exported:      true,
@@ -581,6 +586,7 @@ func (s *MockRDSServer) handleDiskAddCopyFrom(command string) (string, int) {
 		}
 
 		nvmePortStr := extractParam(command, "nvme-tcp-server-port")
+		mountParam := extractParam(command, "mount")
 		nqn := extractParam(command, "nvme-tcp-server-nqn")
 
 		var nvmePort int
@@ -598,6 +604,7 @@ func (s *MockRDSServer) handleDiskAddCopyFrom(command string) (string, int) {
 			Slot:          slot,
 			FilePath:      filePath,
 			FileSizeBytes: fileSize,
+			Mount:         mountParam != "no",
 			NVMETCPPort:   nvmePort,
 			NVMETCPNQN:    nqn,
 			Exported:      true,
@@ -623,6 +630,7 @@ func (s *MockRDSServer) handleDiskAddCopyFrom(command string) (string, int) {
 		SourceVolume:  sourceSlot,
 		FilePath:      filePath,
 		FileSizeBytes: sourceSize,
+		Mount:         extractParam(command, "mount") != "no",
 		CreatedAt:     time.Now(),
 	}
 
@@ -821,10 +829,14 @@ func (s *MockRDSServer) formatDiskDetail(vol *MockVolume) string {
 	if vol.Exported {
 		exported = "yes"
 	}
+	mount := "no"
+	if vol.Mount {
+		mount = "yes"
+	}
 
 	// Format as RouterOS key="value" pairs on a single line
-	return fmt.Sprintf(`slot="%s" type="file" file-path="%s" file-size=%d nvme-tcp-export=%s nvme-tcp-server-port=%d nvme-tcp-server-nqn="%s" status="ready"`,
-		vol.Slot, vol.FilePath, vol.FileSizeBytes, exported, vol.NVMETCPPort, vol.NVMETCPNQN)
+	return fmt.Sprintf(`slot="%s" type="file" file-path="%s" file-size=%d mount=%s nvme-tcp-export=%s nvme-tcp-server-port=%d nvme-tcp-server-nqn="%s" status="ready"`,
+		vol.Slot, vol.FilePath, vol.FileSizeBytes, mount, exported, vol.NVMETCPPort, vol.NVMETCPNQN)
 }
 
 // formatSnapshotDetail formats a snapshot disk entry for /disk print detail output.
@@ -837,8 +849,12 @@ func (s *MockRDSServer) formatSnapshotDetail(snap *MockSnapshot) string {
 	// Format creation time as RouterOS month/day/year format with lowercase month abbreviation.
 	// parseRouterOSTime expects e.g. "jan/02/2026 14:30:00" — title-cases the month internally.
 	creationTime := strings.ToLower(snap.CreatedAt.Format("Jan/02/2006 15:04:05"))
-	return fmt.Sprintf(`slot="%s" type="file" file-path="%s" file-size=%d source-volume="%s" creation-time=%s status="ready"`,
-		snap.Slot, snap.FilePath, snap.FileSizeBytes, snap.SourceVolume, creationTime)
+	mount := "no"
+	if snap.Mount {
+		mount = "yes"
+	}
+	return fmt.Sprintf(`slot="%s" type="file" file-path="%s" file-size=%d mount=%s source-volume="%s" creation-time=%s status="ready"`,
+		snap.Slot, snap.FilePath, snap.FileSizeBytes, mount, snap.SourceVolume, creationTime)
 }
 
 func (s *MockRDSServer) handleFilePrintDetail(command string) (string, int) {

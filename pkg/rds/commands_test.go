@@ -80,6 +80,10 @@ func TestParseVolumeInfo(t *testing.T) {
 		t.Errorf("Expected path /storage-pool/test.img, got %s", volume.FilePath)
 	}
 
+	if !volume.Mount {
+		t.Error("Expected mount-filesystem=yes to parse as Mount=true")
+	}
+
 	// file-size=50.0GiB = 50 * 1024^3 bytes = 53687091200
 	expectedSize := int64(50 * 1024 * 1024 * 1024)
 	if volume.FileSizeBytes != expectedSize {
@@ -101,6 +105,15 @@ func TestParseVolumeInfo(t *testing.T) {
 	// Status should be "ready" for file-type volumes with nvme-tcp-export=yes
 	if volume.Status != "ready" {
 		t.Errorf("Expected status ready, got %s", volume.Status)
+	}
+}
+
+func TestRouterOSMountParam(t *testing.T) {
+	if got := routerOSMountParam(false); got != "mount=no" {
+		t.Fatalf("routerOSMountParam(false) = %q, want mount=no", got)
+	}
+	if got := routerOSMountParam(true); got != "mount=yes" {
+		t.Fatalf("routerOSMountParam(true) = %q, want mount=yes", got)
 	}
 }
 
