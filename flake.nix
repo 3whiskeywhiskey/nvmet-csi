@@ -34,6 +34,7 @@
           golangci-lint
           gotools
           gnumake
+          kubernetes-helm
         ];
 
         shellHook = ''
