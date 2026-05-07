@@ -13,10 +13,31 @@ metadata:
     {{- include "rds-csi.labels" $ | nindent 4 }}
 provisioner: rds.csi.srvlab.io
 parameters:
+  {{- if $sc.backend }}
+  backend: {{ $sc.backend | quote }}
+  {{- end }}
+  {{- if $sc.executor }}
+  executor: {{ $sc.executor | quote }}
+  {{- end }}
   csi.storage.k8s.io/fstype: {{ $sc.fsType | default "ext4" | quote }}
-  nvmeAddress: {{ $sc.nvmeAddress | default $.Values.rds.storageIP | quote }}
+  nvmeAddress: {{ $sc.nvmeAddress | default $sc.targetAddress | default $.Values.rds.storageIP | quote }}
   nvmePort: {{ $sc.nvmePort | default (printf "%d" (int $.Values.rds.nvmePort)) | quote }}
   volumePath: {{ $sc.volumePath | default $.Values.rds.basePath | quote }}
+  {{- if $sc.targetAddress }}
+  targetAddress: {{ $sc.targetAddress | quote }}
+  {{- end }}
+  {{- if $sc.zfsPool }}
+  zfsPool: {{ $sc.zfsPool | quote }}
+  {{- end }}
+  {{- if $sc.sshTarget }}
+  sshTarget: {{ $sc.sshTarget | quote }}
+  {{- end }}
+  {{- if $sc.deviceRoot }}
+  deviceRoot: {{ $sc.deviceRoot | quote }}
+  {{- end }}
+  {{- if $sc.configFSRoot }}
+  configFSRoot: {{ $sc.configFSRoot | quote }}
+  {{- end }}
 volumeBindingMode: {{ $sc.volumeBindingMode | default "WaitForFirstConsumer" }}
 reclaimPolicy: {{ $sc.reclaimPolicy | default "Delete" }}
 allowVolumeExpansion: {{ $sc.allowVolumeExpansion | default true }}

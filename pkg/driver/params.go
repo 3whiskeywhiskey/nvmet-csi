@@ -15,6 +15,12 @@ const (
 	paramBackend  = "backend"
 	paramExecutor = "executor"
 
+	paramZFSPool      = "zfsPool"
+	paramTargetAddr   = "targetAddress"
+	paramSSHTarget    = "sshTarget"
+	paramDeviceRoot   = "deviceRoot"
+	paramConfigFSRoot = "configFSRoot"
+
 	// paramCtrlLossTmo is the controller loss timeout parameter key
 	// Value: integer seconds, -1 for unlimited, 0 for kernel default
 	paramCtrlLossTmo = "ctrlLossTmo"
@@ -29,8 +35,13 @@ const (
 )
 
 type BackendSelection struct {
-	Type     string
-	Executor string
+	Type         string
+	Executor     string
+	ZFSPool      string
+	TargetAddr   string
+	SSHTarget    string
+	DeviceRoot   string
+	ConfigFSRoot string
 }
 
 func DefaultBackendSelection() BackendSelection {
@@ -48,6 +59,24 @@ func ParseBackendSelection(params map[string]string) (BackendSelection, error) {
 	if value, ok := params[paramExecutor]; ok && value != "" {
 		selection.Executor = value
 	}
+	if value, ok := params[paramZFSPool]; ok && value != "" {
+		selection.ZFSPool = value
+	}
+	if value, ok := params[paramTargetAddr]; ok && value != "" {
+		selection.TargetAddr = value
+	}
+	if value, ok := params[paramNVMEAddress]; ok && value != "" {
+		selection.TargetAddr = value
+	}
+	if value, ok := params[paramSSHTarget]; ok && value != "" {
+		selection.SSHTarget = value
+	}
+	if value, ok := params[paramDeviceRoot]; ok && value != "" {
+		selection.DeviceRoot = value
+	}
+	if value, ok := params[paramConfigFSRoot]; ok && value != "" {
+		selection.ConfigFSRoot = value
+	}
 
 	switch selection.Type {
 	case backend.TypeRouterOSRDS:
@@ -60,11 +89,43 @@ func ParseBackendSelection(params map[string]string) (BackendSelection, error) {
 		default:
 			return selection, fmt.Errorf("%s backend requires %s to be %q or %q", backend.TypeLinuxZOLNVMET, paramExecutor, backend.ExecutorLocal, backend.ExecutorSSH)
 		}
+		if selection.ZFSPool == "" {
+			return selection, fmt.Errorf("%s backend requires %s", backend.TypeLinuxZOLNVMET, paramZFSPool)
+		}
+		if selection.TargetAddr == "" {
+			return selection, fmt.Errorf("%s backend requires %s or %s", backend.TypeLinuxZOLNVMET, paramTargetAddr, paramNVMEAddress)
+		}
+		if selection.Executor == backend.ExecutorSSH && selection.SSHTarget == "" {
+			return selection, fmt.Errorf("%s backend with %s=%s requires %s", backend.TypeLinuxZOLNVMET, paramExecutor, backend.ExecutorSSH, paramSSHTarget)
+		}
 	default:
 		return selection, fmt.Errorf("unsupported %s %q", paramBackend, selection.Type)
 	}
 
 	return selection, nil
+}
+
+func (s BackendSelection) volumeContext() map[string]string {
+	out := map[string]string{
+		paramBackend:  s.Type,
+		paramExecutor: s.Executor,
+	}
+	if s.ZFSPool != "" {
+		out[paramZFSPool] = s.ZFSPool
+	}
+	if s.TargetAddr != "" {
+		out[paramTargetAddr] = s.TargetAddr
+	}
+	if s.SSHTarget != "" {
+		out[paramSSHTarget] = s.SSHTarget
+	}
+	if s.DeviceRoot != "" {
+		out[paramDeviceRoot] = s.DeviceRoot
+	}
+	if s.ConfigFSRoot != "" {
+		out[paramConfigFSRoot] = s.ConfigFSRoot
+	}
+	return out
 }
 
 // NVMEConnectionParams holds parsed NVMe connection parameters from StorageClass

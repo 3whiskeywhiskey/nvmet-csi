@@ -1,0 +1,38 @@
+---
+# Linux ZoL + kernel nvmet StorageClass for a controller scheduled directly on
+# the ZoL host.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nvmet-zol-r740xd-local
+provisioner: rds.csi.srvlab.io
+parameters:
+  backend: linux-zol-nvmet
+  executor: local
+  zfsPool: tank/nvmet
+  targetAddress: "10.42.0.10"
+  nvmeAddress: "10.42.0.10"
+  nvmePort: "4420"
+  csi.storage.k8s.io/fstype: ext4
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+---
+# Linux ZoL + kernel nvmet StorageClass using SSH to configure a remote ZoL host.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nvmet-zol-r740xd-ssh
+provisioner: rds.csi.srvlab.io
+parameters:
+  backend: linux-zol-nvmet
+  executor: ssh
+  sshTarget: storage@r740xd
+  zfsPool: tank/nvmet
+  targetAddress: "10.42.0.10"
+  nvmeAddress: "10.42.0.10"
+  nvmePort: "4420"
+  csi.storage.k8s.io/fstype: ext4
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true

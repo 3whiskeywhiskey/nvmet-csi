@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -12,6 +13,7 @@ import (
 
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
 	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	linuxzolbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/linuxzol"
 	routerosbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/routeros"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
@@ -52,7 +54,16 @@ type Driver struct {
 
 	// Controller storage backend. RDS is currently adapted through this generic
 	// interface; ZoL/nvmet backends will plug in here without changing node code.
-	backend storagebackend.Backend
+	backend    storagebackend.Backend
+	backendsMu sync.Mutex
+	backends   map[string]storagebackend.Backend
+
+	// backendFactory is injectable for controller tests. Production uses
+	// Driver.newBackendForSelection.
+	backendFactory func(BackendSelection) (storagebackend.Backend, error)
+
+	volumeBackendMu         sync.Mutex
+	volumeBackendSelections map[string]BackendSelection
 
 	// NVMe connector (interface allows different implementations: real, mock)
 	nvmeConnector nvme.Connector
@@ -182,16 +193,19 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	}
 
 	driver := &Driver{
-		name:             config.DriverName,
-		version:          config.Version,
-		nodeID:           config.NodeID,
-		k8sClient:        config.K8sClient,
-		metrics:          config.Metrics,
-		managedNQNPrefix: config.ManagedNQNPrefix,
+		name:                    config.DriverName,
+		version:                 config.Version,
+		nodeID:                  config.NodeID,
+		k8sClient:               config.K8sClient,
+		metrics:                 config.Metrics,
+		managedNQNPrefix:        config.ManagedNQNPrefix,
+		backends:                map[string]storagebackend.Backend{},
+		volumeBackendSelections: map[string]BackendSelection{},
 	}
 
-	// Initialize RDS client if controller is enabled
-	if config.EnableController {
+	// Initialize RDS client if controller is enabled and an RDS address is
+	// configured. Linux-only controller deployments intentionally omit this.
+	if config.EnableController && config.RDSAddress != "" {
 		rdsClient, err := rds.NewClient(rds.ClientConfig{
 			Address:            config.RDSAddress,
 			Port:               config.RDSPort,
@@ -228,6 +242,8 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		driver.rdsClient = rdsClient
 		driver.backend = routerosbackend.New(rdsClient)
 		klog.Infof("Connected to RDS at %s:%d", config.RDSAddress, config.RDSPort)
+	} else if config.EnableController {
+		klog.Info("RouterOS/RDS backend not initialized (no RDS address configured)")
 	}
 
 	// Initialize attachment manager if controller is enabled
@@ -698,6 +714,30 @@ func (d *Driver) controllerBackend() storagebackend.Backend {
 		return d.backend
 	}
 	return nil
+}
+
+func (d *Driver) newBackendForSelection(selection BackendSelection) (storagebackend.Backend, error) {
+	switch selection.Type {
+	case storagebackend.TypeRouterOSRDS:
+		backend := d.controllerBackend()
+		if backend == nil {
+			return nil, fmt.Errorf("RouterOS/RDS backend is not initialized")
+		}
+		return backend, nil
+	case storagebackend.TypeLinuxZOLNVMET:
+		return linuxzolbackend.NewCommandBackend(linuxzolbackend.CommandBackendOptions{
+			Config: linuxzolbackend.Config{
+				Pool:         selection.ZFSPool,
+				Address:      selection.TargetAddr,
+				DeviceRoot:   selection.DeviceRoot,
+				ConfigFSRoot: selection.ConfigFSRoot,
+			},
+			Executor:  selection.Executor,
+			SSHTarget: selection.SSHTarget,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported backend %q", selection.Type)
+	}
 }
 
 // SetNVMEConnector sets the NVMe connector (for testing)
