@@ -113,6 +113,9 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `rds.secretName` | Kubernetes Secret containing RDS credentials | `rds-csi-secret` |
 | `rds.insecureSkipVerify` | Skip SSH host key verification (INSECURE - testing only) | `false` |
 | `rds.nqnPrefix` | NQN prefix for CSI-managed volumes | `nqn.2000-02.com.mikrotik:pvc-` |
+| `rds.mutationGuard.minInterval` | Minimum spacing between mutating RDS operations | `250ms` |
+| `rds.mutationGuard.burst` | Maximum RDS mutations allowed to burst | `1` |
+| `rds.mutationGuard.timeout` | Maximum wait for a mutation guard token | `30s` |
 
 ### Controller Settings
 

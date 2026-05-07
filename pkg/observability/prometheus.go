@@ -90,6 +90,9 @@ type Metrics struct {
 	rdsConnectionState   *prometheus.GaugeVec
 	rdsReconnectTotal    *prometheus.CounterVec
 	rdsReconnectDuration prometheus.Histogram
+	rdsMutationTotal     *prometheus.CounterVec
+	rdsMutationDuration  *prometheus.HistogramVec
+	rdsMutationWait      *prometheus.HistogramVec
 
 	// RDS monitoring callbacks (SSH + SNMP)
 	rdsDiskMetricsFunc     func() (*DiskHealthSnapshot, error)     // Callback for RDS disk performance metrics (SSH)
@@ -292,6 +295,38 @@ func NewMetrics() *Metrics {
 			Help:      "Duration of successful RDS reconnections in seconds",
 			Buckets:   []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
 		}),
+
+		rdsMutationTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "mutations_total",
+				Help:      "Total guarded RDS mutation attempts by operation, status, and dry-run mode",
+			},
+			[]string{"operation", "status", "dry_run"},
+		),
+
+		rdsMutationDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "mutation_duration_seconds",
+				Help:      "Duration of guarded RDS mutations in seconds",
+				Buckets:   []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+			},
+			[]string{"operation"},
+		),
+
+		rdsMutationWait: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "mutation_rate_limit_wait_seconds",
+				Help:      "Time spent waiting for the RDS mutation rate limiter",
+				Buckets:   []float64{0, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
+			},
+			[]string{"operation"},
+		),
 	}
 
 	// Register all metrics with the custom registry
@@ -318,6 +353,9 @@ func NewMetrics() *Metrics {
 		m.rdsConnectionState,
 		m.rdsReconnectTotal,
 		m.rdsReconnectDuration,
+		m.rdsMutationTotal,
+		m.rdsMutationDuration,
+		m.rdsMutationWait,
 	)
 
 	return m
@@ -714,4 +752,24 @@ func (m *Metrics) RecordReconnectAttempt(status string, duration time.Duration) 
 	if status == "success" {
 		m.rdsReconnectDuration.Observe(duration.Seconds())
 	}
+}
+
+// RecordRDSMutation records a guarded RouterOS/RDS mutation attempt.
+func (m *Metrics) RecordRDSMutation(operation string, err error, dryRun bool, duration time.Duration) {
+	status := "success"
+	if err != nil {
+		status = "failure"
+	}
+	dryRunLabel := "false"
+	if dryRun {
+		dryRunLabel = "true"
+	}
+
+	m.rdsMutationTotal.WithLabelValues(operation, status, dryRunLabel).Inc()
+	m.rdsMutationDuration.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordRDSMutationRateLimitWait records wait time before a guarded RDS mutation.
+func (m *Metrics) RecordRDSMutationRateLimitWait(operation string, duration time.Duration) {
+	m.rdsMutationWait.WithLabelValues(operation).Observe(duration.Seconds())
 }

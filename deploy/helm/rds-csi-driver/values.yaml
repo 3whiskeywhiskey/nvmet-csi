@@ -40,6 +40,15 @@ rds:
   # NQN prefix for CSI-managed volumes (safety filter)
   nqnPrefix: "nqn.2000-02.com.mikrotik:pvc-"
 
+  # Mutation guardrails for RouterOS/RDS control-plane changes
+  mutationGuard:
+    # Minimum spacing between mutating RDS operations. Set to 0s to disable.
+    minInterval: 250ms
+    # Maximum number of mutations allowed to burst through the guard.
+    burst: 1
+    # Maximum time to wait for a mutation guard token.
+    timeout: 30s
+
 # Controller Deployment configuration
 controller:
   # Number of controller replicas (must be 1 - no leader election for HA)

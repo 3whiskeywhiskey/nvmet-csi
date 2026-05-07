@@ -343,6 +343,7 @@ func TestNewOrphanCleaner(t *testing.T) {
 
 	if cleaner == nil {
 		t.Fatal("NewOrphanCleaner returned nil")
+		return
 	}
 	if cleaner.connector != mockConnector {
 		t.Error("OrphanCleaner has wrong connector")

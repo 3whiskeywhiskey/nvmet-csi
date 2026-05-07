@@ -51,6 +51,9 @@ spec:
             - "-rds-key-file=/etc/rds-csi/rds-private-key"
             - "-rds-host-key=/etc/rds-csi/rds-host-key"
             - "-rds-volume-base-path={{ .Values.rds.basePath }}"
+            - "-rds-mutation-min-interval={{ .Values.rds.mutationGuard.minInterval }}"
+            - "-rds-mutation-burst={{ .Values.rds.mutationGuard.burst }}"
+            - "-rds-mutation-timeout={{ .Values.rds.mutationGuard.timeout }}"
             - "-v={{ .Values.controller.logLevel }}"
             {{- if .Values.monitoring.enabled }}
             - "-metrics-address=:{{ .Values.monitoring.port }}"

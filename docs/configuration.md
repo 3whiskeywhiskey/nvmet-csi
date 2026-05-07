@@ -21,6 +21,9 @@ data:
   rds-port: "22"
   rds-user: "metal-csi"
   rds-volume-base-path: "/storage-pool/metal-csi"
+  rds-mutation-min-interval: "250ms"
+  rds-mutation-burst: "1"
+  rds-mutation-timeout: "30s"
   nqn-prefix: "nqn.2000-02.com.mikrotik:pvc-"
 ```
 
@@ -126,6 +129,21 @@ args:
 - **orphan-dry-run:** Log orphans without deleting (default: true, set false to enable cleanup)
 
 See [docs/orphan-reconciler.md](orphan-reconciler.md) for details.
+
+## RDS Mutation Guardrails
+
+The controller rate-limits mutating RouterOS/RDS operations before they reach the RDS client. This is intended to reduce add/remove storms during node drains, reschedules, and retry loops.
+
+```yaml
+args:
+  - "-rds-mutation-min-interval=250ms"
+  - "-rds-mutation-burst=1"
+  - "-rds-mutation-timeout=30s"
+```
+
+- **rds-mutation-min-interval:** Minimum spacing between mutating RDS operations. Set to `0s` to disable.
+- **rds-mutation-burst:** Number of mutations allowed through immediately.
+- **rds-mutation-timeout:** Maximum time a mutation can wait for the guard before failing.
 
 ## Attachment Reconciler Settings
 

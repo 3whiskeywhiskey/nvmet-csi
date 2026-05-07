@@ -62,6 +62,25 @@
         "nqnPrefix": {
           "type": "string",
           "description": "NQN prefix for CSI-managed volumes"
+        },
+        "mutationGuard": {
+          "type": "object",
+          "description": "Mutation guardrails for RouterOS/RDS control-plane changes",
+          "properties": {
+            "minInterval": {
+              "type": "string",
+              "description": "Minimum spacing between mutating RDS operations"
+            },
+            "burst": {
+              "type": "integer",
+              "description": "Maximum RDS mutations allowed to burst",
+              "minimum": 1
+            },
+            "timeout": {
+              "type": "string",
+              "description": "Maximum time to wait for the mutation guard"
+            }
+          }
         }
       }
     },
