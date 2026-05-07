@@ -465,6 +465,93 @@ func TestDeleteVolume_PlannerMissingVolumeNoMutation(t *testing.T) {
 	}
 }
 
+func TestControllerExpandVolume_UsesPlannerResize(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+	nqn, err := utils.VolumeIDToNQN(testVolumeID1)
+	if err != nil {
+		t.Fatalf("VolumeIDToNQN() error = %v", err)
+	}
+	mockRDS.AddVolume(&rds.VolumeInfo{
+		Slot:          testVolumeID1,
+		Type:          "file",
+		FilePath:      "/storage-pool/metal-csi/" + testVolumeID1 + ".img",
+		FileSizeBytes: 10 << 30,
+		NVMETCPExport: true,
+		NVMETCPPort:   defaultNVMETCPPort,
+		NVMETCPNQN:    nqn,
+		Status:        "ready",
+	})
+
+	resp, err := cs.ControllerExpandVolume(ctx, &csi.ControllerExpandVolumeRequest{
+		VolumeId: testVolumeID1,
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 12 << 30,
+		},
+	})
+	if err != nil {
+		t.Fatalf("ControllerExpandVolume() error = %v", err)
+	}
+	if resp.GetCapacityBytes() != 12<<30 {
+		t.Fatalf("capacity = %d, want %d", resp.GetCapacityBytes(), int64(12<<30))
+	}
+	if got := mockRDS.MutationCount("resize_volume"); got != 1 {
+		t.Fatalf("resize_volume mutations = %d, want 1", got)
+	}
+	if got := mockRDS.MutationCount("create_volume"); got != 0 {
+		t.Fatalf("create_volume mutations = %d, want 0", got)
+	}
+	volume, err := mockRDS.GetVolume(testVolumeID1)
+	if err != nil {
+		t.Fatalf("GetVolume() error = %v", err)
+	}
+	if volume.FileSizeBytes != 12<<30 {
+		t.Fatalf("volume size = %d, want %d", volume.FileSizeBytes, int64(12<<30))
+	}
+}
+
+func TestControllerExpandVolume_PlannerConflictNoMutation(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+	nqn, err := utils.VolumeIDToNQN(testVolumeID2)
+	if err != nil {
+		t.Fatalf("VolumeIDToNQN() error = %v", err)
+	}
+	mockRDS.AddVolume(&rds.VolumeInfo{
+		Slot:          testVolumeID2,
+		Type:          "file",
+		FilePath:      "/storage-pool/metal-csi/" + testVolumeID2 + ".img",
+		FileSizeBytes: 10 << 30,
+		NVMETCPExport: false,
+		NVMETCPPort:   defaultNVMETCPPort,
+		NVMETCPNQN:    nqn,
+		Status:        "ready",
+	})
+
+	_, err = cs.ControllerExpandVolume(ctx, &csi.ControllerExpandVolumeRequest{
+		VolumeId: testVolumeID2,
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 12 << 30,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected planner conflict")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %T %v", err, err)
+	}
+	if st.Code() != codes.FailedPrecondition {
+		t.Fatalf("code = %v, want FailedPrecondition", st.Code())
+	}
+	if !strings.Contains(st.Message(), "NVMe/TCP export is disabled") {
+		t.Fatalf("message = %q, want export-disabled conflict", st.Message())
+	}
+	if got := mockRDS.MutationCount("resize_volume"); got != 0 {
+		t.Fatalf("resize_volume mutations = %d, want 0", got)
+	}
+}
+
 func testCreateVolumeRequest(name string, size int64) *csi.CreateVolumeRequest {
 	return &csi.CreateVolumeRequest{
 		Name: name,
