@@ -91,6 +91,11 @@ func isVolumeNotFound(err error) bool {
 	return errors.As(err, &notFound) || errors.Is(err, utils.ErrVolumeNotFound)
 }
 
+func isSnapshotNotFound(err error) bool {
+	var notFound *SnapshotNotFoundError
+	return errors.As(err, &notFound)
+}
+
 func volumeMatchesCreateOptions(actual *VolumeInfo, desired CreateVolumeOptions) bool {
 	if actual == nil {
 		return false
@@ -858,14 +863,29 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 		return nil, fmt.Errorf("base path is required for snapshot file placement")
 	}
 
+	unlock := c.volumeLocks.lock(opts.Name)
+	defer unlock()
+
+	// Build snapshot file path: <basePath>/<snapshot-name>.img
+	snapFilePath := fmt.Sprintf("%s/%s.img", opts.BasePath, opts.Name)
+
+	existing, exists, err := c.observeSnapshotForCreate(opts.Name)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		if snapshotMatchesCreateOptions(existing, opts, snapFilePath) {
+			klog.V(3).Infof("Snapshot %s already exists with requested state, skipping create", opts.Name)
+			return populateSnapshotDefaults(existing, opts.SourceVolume, 0), nil
+		}
+		return nil, fmt.Errorf("snapshot %s already exists with different state: %s", opts.Name, createSnapshotConflictReason(existing, opts, snapFilePath))
+	}
+
 	// Get source volume info to verify it exists and determine file size
 	sourceVol, err := c.GetVolume(opts.SourceVolume)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source volume %s: %w", opts.SourceVolume, err)
 	}
-
-	// Build snapshot file path: <basePath>/<snapshot-name>.img
-	snapFilePath := fmt.Sprintf("%s/%s.img", opts.BasePath, opts.Name)
 
 	// Build /disk add copy-from command.
 	// - Reference source by slot name using [find slot=<name>] (slot is unique and validated).
@@ -890,19 +910,66 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 		return nil, fmt.Errorf("snapshot creation verification failed: %w", err)
 	}
 
-	// Ensure SourceVolume is populated (RDS may not echo it back)
-	if snapshot.SourceVolume == "" {
-		snapshot.SourceVolume = opts.SourceVolume
-	}
-
-	// Ensure FileSizeBytes is populated (use source volume size as ground truth)
-	if snapshot.FileSizeBytes == 0 {
-		snapshot.FileSizeBytes = sourceVol.FileSizeBytes
-	}
+	snapshot = populateSnapshotDefaults(snapshot, opts.SourceVolume, sourceVol.FileSizeBytes)
 
 	klog.V(2).Infof("Created snapshot %s from volume %s", opts.Name, opts.SourceVolume)
 	klog.V(4).Infof("Created snapshot %s (source=%s, file=%s, size=%d)", opts.Name, opts.SourceVolume, snapFilePath, snapshot.FileSizeBytes)
 	return snapshot, nil
+}
+
+func (c *sshClient) observeSnapshotForCreate(snapshotID string) (*SnapshotInfo, bool, error) {
+	existing, err := c.GetSnapshot(snapshotID)
+	if err == nil {
+		return existing, true, nil
+	}
+	if isSnapshotNotFound(err) {
+		return nil, false, nil
+	}
+	return nil, false, fmt.Errorf("failed to observe existing snapshot %s before create: %w", snapshotID, err)
+}
+
+func snapshotMatchesCreateOptions(actual *SnapshotInfo, desired CreateSnapshotOptions, desiredFilePath string) bool {
+	if actual == nil {
+		return false
+	}
+	if actual.Name != "" && actual.Name != desired.Name {
+		return false
+	}
+	if actual.FilePath != "" && actual.FilePath != desiredFilePath {
+		return false
+	}
+	if actual.SourceVolume != "" && actual.SourceVolume != desired.SourceVolume {
+		return false
+	}
+	return true
+}
+
+func createSnapshotConflictReason(actual *SnapshotInfo, desired CreateSnapshotOptions, desiredFilePath string) string {
+	switch {
+	case actual == nil:
+		return "existing snapshot details unavailable"
+	case actual.Name != "" && actual.Name != desired.Name:
+		return fmt.Sprintf("name differs (existing: %q, requested: %q)", actual.Name, desired.Name)
+	case actual.FilePath != "" && actual.FilePath != desiredFilePath:
+		return fmt.Sprintf("file path differs (existing: %q, requested: %q)", actual.FilePath, desiredFilePath)
+	case actual.SourceVolume != "" && actual.SourceVolume != desired.SourceVolume:
+		return fmt.Sprintf("source volume differs (existing: %q, requested: %q)", actual.SourceVolume, desired.SourceVolume)
+	default:
+		return "unknown difference"
+	}
+}
+
+func populateSnapshotDefaults(snapshot *SnapshotInfo, sourceVolume string, sourceSizeBytes int64) *SnapshotInfo {
+	if snapshot == nil {
+		return nil
+	}
+	if snapshot.SourceVolume == "" {
+		snapshot.SourceVolume = sourceVolume
+	}
+	if snapshot.FileSizeBytes == 0 {
+		snapshot.FileSizeBytes = sourceSizeBytes
+	}
+	return snapshot
 }
 
 // DeleteSnapshot removes a snapshot disk entry and its backing file from RDS.
@@ -914,11 +981,13 @@ func (c *sshClient) DeleteSnapshot(snapshotID string) error {
 		return err
 	}
 
+	unlock := c.volumeLocks.lock(snapshotID)
+	defer unlock()
+
 	// Get snapshot info to find the backing file path (for file cleanup)
 	snapshot, err := c.GetSnapshot(snapshotID)
 	if err != nil {
-		var notFoundErr *SnapshotNotFoundError
-		if errors.As(err, &notFoundErr) {
+		if isSnapshotNotFound(err) {
 			klog.V(4).Infof("Snapshot %s already deleted (not found)", snapshotID)
 			return nil // Idempotent: not found = success
 		}
@@ -1019,6 +1088,8 @@ func (c *sshClient) ListSnapshots() ([]SnapshotInfo, error) {
 // RestoreSnapshot creates a new NVMe-exported volume from a snapshot using /disk add copy-from.
 // The restored volume is an independent writable copy — modifying it does not affect the snapshot.
 func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolumeOptions) error {
+	newVolumeOpts = normalizeCreateVolumeOptions(newVolumeOpts)
+
 	// Validate snapshot ID
 	if err := utils.ValidateSnapshotID(snapshotID); err != nil {
 		return err
@@ -1029,10 +1100,25 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 		return fmt.Errorf("invalid volume options: %w", err)
 	}
 
+	unlock := c.volumeLocks.lock(newVolumeOpts.Slot)
+	defer unlock()
+
 	// Verify snapshot exists
 	_, err := c.GetSnapshot(snapshotID)
 	if err != nil {
 		return fmt.Errorf("snapshot not found: %w", err)
+	}
+
+	existing, exists, err := c.observeVolumeForCreate(newVolumeOpts.Slot)
+	if err != nil {
+		return err
+	}
+	if exists {
+		if volumeMatchesCreateOptions(existing, newVolumeOpts) {
+			klog.V(3).Infof("Restored volume %s already exists with requested state, skipping restore", newVolumeOpts.Slot)
+			return nil
+		}
+		return fmt.Errorf("restored volume %s already exists with different state: %s", newVolumeOpts.Slot, createVolumeConflictReason(existing, newVolumeOpts))
 	}
 
 	klog.V(4).Infof("Restoring snapshot %s to new volume %s", snapshotID, newVolumeOpts.Slot)

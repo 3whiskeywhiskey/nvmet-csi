@@ -384,6 +384,165 @@ func TestConcurrentSameDelete(t *testing.T) {
 	}
 }
 
+// TestConcurrentSameSnapshotMutations validates idempotency for duplicate snapshot create, restore, and delete calls.
+func TestConcurrentSameSnapshotMutations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping stress test in short mode")
+	}
+
+	setupStressTestBasePaths(t)
+
+	server, err := NewMockRDSServer(0)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:            server.Address(),
+		Port:               server.Port(),
+		User:               "admin",
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	sourceVolumeID := "pvc-11111111-2222-3333-4444-555555555555"
+	if err := client.CreateVolume(rds.CreateVolumeOptions{
+		Slot:          sourceVolumeID,
+		FilePath:      fmt.Sprintf("/storage-pool/test/%s.img", sourceVolumeID),
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPPort:   4420,
+		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", sourceVolumeID),
+	}); err != nil {
+		t.Fatalf("failed to create source volume: %v", err)
+	}
+
+	const numGoroutines = 10
+	snapshotID := "snap-11111111-2222-3333-4444-555555555555-at-1739800000"
+	snapshotOpts := rds.CreateSnapshotOptions{
+		Name:         snapshotID,
+		SourceVolume: sourceVolumeID,
+		BasePath:     "/storage-pool/test",
+	}
+
+	server.ClearCommandHistory()
+	var createWG sync.WaitGroup
+	var createSuccess, createFail atomic.Int32
+	for g := 0; g < numGoroutines; g++ {
+		createWG.Add(1)
+		go func() {
+			defer createWG.Done()
+			if _, err := client.CreateSnapshot(snapshotOpts); err != nil {
+				createFail.Add(1)
+			} else {
+				createSuccess.Add(1)
+			}
+		}()
+	}
+	createWG.Wait()
+
+	if createSuccess.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent snapshot creates to succeed, got %d successes", createSuccess.Load())
+	}
+	if createFail.Load() != 0 {
+		t.Errorf("expected 0 snapshot create failures, got %d", createFail.Load())
+	}
+	snapshotAdds := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk add ") &&
+			strings.Contains(entry.Command, "copy-from=[find slot="+sourceVolumeID+"]") &&
+			strings.Contains(entry.Command, "slot="+snapshotID) {
+			snapshotAdds++
+		}
+	}
+	if snapshotAdds != 1 {
+		t.Errorf("expected exactly 1 /disk add for idempotent concurrent snapshot create, got %d", snapshotAdds)
+	}
+
+	restoreVolumeID := "pvc-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	restoreOpts := rds.CreateVolumeOptions{
+		Slot:          restoreVolumeID,
+		FilePath:      fmt.Sprintf("/storage-pool/test/%s.img", restoreVolumeID),
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", restoreVolumeID),
+	}
+
+	server.ClearCommandHistory()
+	var restoreWG sync.WaitGroup
+	var restoreSuccess, restoreFail atomic.Int32
+	for g := 0; g < numGoroutines; g++ {
+		restoreWG.Add(1)
+		go func() {
+			defer restoreWG.Done()
+			if err := client.RestoreSnapshot(snapshotID, restoreOpts); err != nil {
+				restoreFail.Add(1)
+			} else {
+				restoreSuccess.Add(1)
+			}
+		}()
+	}
+	restoreWG.Wait()
+
+	if restoreSuccess.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent snapshot restores to succeed, got %d successes", restoreSuccess.Load())
+	}
+	if restoreFail.Load() != 0 {
+		t.Errorf("expected 0 snapshot restore failures, got %d", restoreFail.Load())
+	}
+	restoreAdds := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk add ") &&
+			strings.Contains(entry.Command, "copy-from=[find slot="+snapshotID+"]") &&
+			strings.Contains(entry.Command, "slot="+restoreVolumeID) {
+			restoreAdds++
+		}
+	}
+	if restoreAdds != 1 {
+		t.Errorf("expected exactly 1 /disk add for idempotent concurrent snapshot restore, got %d", restoreAdds)
+	}
+
+	server.ClearCommandHistory()
+	var deleteWG sync.WaitGroup
+	var deleteSuccess, deleteFail atomic.Int32
+	for g := 0; g < numGoroutines; g++ {
+		deleteWG.Add(1)
+		go func() {
+			defer deleteWG.Done()
+			if err := client.DeleteSnapshot(snapshotID); err != nil {
+				deleteFail.Add(1)
+			} else {
+				deleteSuccess.Add(1)
+			}
+		}()
+	}
+	deleteWG.Wait()
+
+	if deleteSuccess.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent snapshot deletes to succeed, got %d successes", deleteSuccess.Load())
+	}
+	if deleteFail.Load() != 0 {
+		t.Errorf("expected 0 snapshot delete failures, got %d", deleteFail.Load())
+	}
+	snapshotRemoves := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk remove ") && strings.Contains(entry.Command, "slot="+snapshotID) {
+			snapshotRemoves++
+		}
+	}
+	if snapshotRemoves != 1 {
+		t.Errorf("expected exactly 1 /disk remove for idempotent concurrent snapshot delete, got %d", snapshotRemoves)
+	}
+}
+
 // TestConcurrentCreateDelete validates concurrent create and delete operations
 func TestConcurrentCreateDelete(t *testing.T) {
 	if testing.Short() {
