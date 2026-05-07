@@ -1,0 +1,113 @@
+// Package linuxzol provides a Linux ZFS-on-Linux + kernel nvmet backend.
+//
+// This package is intentionally controller-side only. The CSI node service stays
+// backend-agnostic and consumes the NVMe/TCP target details produced here.
+package linuxzol
+
+import (
+	"fmt"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+)
+
+const (
+	defaultDeviceRoot   = "/dev/zvol"
+	defaultConfigFSRoot = "/sys/kernel/config/nvmet"
+
+	zfsPropVolumeID = "org.nvmet-csi:volume-id"
+	zfsPropNQN      = "org.nvmet-csi:nqn"
+	zfsPropPort     = "org.nvmet-csi:port"
+)
+
+type Config struct {
+	Pool         string
+	Address      string
+	DeviceRoot   string
+	ConfigFSRoot string
+}
+
+func (c Config) withDefaults() Config {
+	if c.DeviceRoot == "" {
+		c.DeviceRoot = defaultDeviceRoot
+	}
+	if c.ConfigFSRoot == "" {
+		c.ConfigFSRoot = defaultConfigFSRoot
+	}
+	return c
+}
+
+func (c Config) validate() error {
+	if c.Pool == "" {
+		return fmt.Errorf("ZFS pool is required")
+	}
+	return nil
+}
+
+func (c Config) datasetFor(volumeID string) string {
+	return c.Pool + "/" + volumeID
+}
+
+func (c Config) devicePathFor(volumeID string) string {
+	return filepath.Join(c.DeviceRoot, c.Pool, volumeID)
+}
+
+func (c Config) subsystemPath(nqn string) string {
+	return filepath.Join(c.ConfigFSRoot, "subsystems", nqn)
+}
+
+func (c Config) namespacePath(nqn string) string {
+	return filepath.Join(c.subsystemPath(nqn), "namespaces", "1")
+}
+
+func (c Config) portPath(port int) string {
+	return filepath.Join(c.ConfigFSRoot, "ports", strconv.Itoa(port))
+}
+
+func (c Config) portSubsystemPath(port int, nqn string) string {
+	return filepath.Join(c.portPath(port), "subsystems", linkNameForNQN(nqn))
+}
+
+func linkNameForNQN(nqn string) string {
+	return strings.NewReplacer("/", "_").Replace(nqn)
+}
+
+type VolumeSpec struct {
+	ID         string
+	Dataset    string
+	DevicePath string
+	SizeBytes  int64
+	NQN        string
+	Port       int
+}
+
+type VolumeState struct {
+	ID         string
+	Dataset    string
+	DevicePath string
+	SizeBytes  int64
+	NQN        string
+	Port       int
+	Exported   bool
+	Status     string
+}
+
+func volumeFromState(state *VolumeState) *backend.Volume {
+	if state == nil {
+		return nil
+	}
+	return &backend.Volume{
+		ID:            state.ID,
+		Path:          state.DevicePath,
+		SizeBytes:     state.SizeBytes,
+		NVMETCPExport: state.Exported,
+		NVMETCPPort:   state.Port,
+		NVMETCPNQN:    state.NQN,
+		Status:        state.Status,
+		Attributes: map[string]string{
+			"linux.zfs.dataset": state.Dataset,
+		},
+	}
+}
