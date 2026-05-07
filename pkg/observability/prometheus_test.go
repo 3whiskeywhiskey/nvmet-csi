@@ -1067,10 +1067,22 @@ func TestRecordRDSCommand(t *testing.T) {
 	}
 }
 
+func TestRecordRDSMutationDecision(t *testing.T) {
+	m := NewMetrics()
+
+	m.RecordRDSMutationDecision("delete_file", "noop", "missing")
+
+	body := scrapeMetrics(t, m)
+	if !strings.Contains(body, `rds_csi_rds_mutation_decisions_total{decision="noop",operation="delete_file",reason="missing"} 1`) {
+		t.Error("expected RDS mutation decision counter")
+	}
+}
+
 func TestNilMetricsRDSObserversDoNotPanic(t *testing.T) {
 	var m *Metrics
 
 	m.RecordRDSMutation("create_volume", nil, false, time.Millisecond)
+	m.RecordRDSMutationDecision("create_volume", "noop", "already_exists")
 	m.RecordRDSMutationRateLimitWait("create_volume", time.Millisecond)
 	m.RecordRDSCommand("disk", "print", "observe", "success", time.Millisecond)
 	m.RecordRDSMutationAudit("create_volume", "vol-a", "success", false, time.Millisecond)

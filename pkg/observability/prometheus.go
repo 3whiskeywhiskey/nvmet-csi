@@ -101,6 +101,7 @@ type Metrics struct {
 	rdsReconnectTotal    *prometheus.CounterVec
 	rdsReconnectDuration prometheus.Histogram
 	rdsMutationTotal     *prometheus.CounterVec
+	rdsMutationDecision  *prometheus.CounterVec
 	rdsMutationDuration  *prometheus.HistogramVec
 	rdsMutationWait      *prometheus.HistogramVec
 	rdsCommandTotal      *prometheus.CounterVec
@@ -321,6 +322,16 @@ func NewMetrics() *Metrics {
 			[]string{"operation", "status", "dry_run"},
 		),
 
+		rdsMutationDecision: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "mutation_decisions_total",
+				Help:      "Total high-level RDS mutation decisions by operation, decision, and reason",
+			},
+			[]string{"operation", "decision", "reason"},
+		),
+
 		rdsMutationDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: namespace,
@@ -392,6 +403,7 @@ func NewMetrics() *Metrics {
 		m.rdsReconnectTotal,
 		m.rdsReconnectDuration,
 		m.rdsMutationTotal,
+		m.rdsMutationDecision,
 		m.rdsMutationDuration,
 		m.rdsMutationWait,
 		m.rdsCommandTotal,
@@ -811,6 +823,15 @@ func (m *Metrics) RecordRDSMutation(operation string, err error, dryRun bool, du
 
 	m.rdsMutationTotal.WithLabelValues(operation, status, dryRunLabel).Inc()
 	m.rdsMutationDuration.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordRDSMutationDecision records a high-level observe-before-mutate decision.
+func (m *Metrics) RecordRDSMutationDecision(operation, decision, reason string) {
+	if m == nil {
+		return
+	}
+
+	m.rdsMutationDecision.WithLabelValues(operation, decision, reason).Inc()
 }
 
 // RecordRDSMutationRateLimitWait records wait time before a guarded RDS mutation.

@@ -33,6 +33,7 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 	if exists {
 		if volumeMatchesCreateOptions(existing, opts) {
 			klog.V(3).Infof("Volume %s already exists with requested state, skipping create", opts.Slot)
+			c.recordMutationDecision("create_volume", "noop", "already_exists")
 			return nil
 		}
 		return fmt.Errorf("volume %s already exists with different state: %s", opts.Slot, createVolumeConflictReason(existing, opts))
@@ -53,6 +54,7 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 	)
 
 	// Execute command with retry
+	c.recordMutationDecision("create_volume", "mutate", "missing")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		return fmt.Errorf("failed to create volume: %w", err)
@@ -170,6 +172,7 @@ func (c *sshClient) ResizeVolume(slot string, newSizeBytes int64) error {
 	// If size is the same, nothing to do
 	if newSizeBytes == currentVolume.FileSizeBytes {
 		klog.V(4).Infof("Volume %s is already at requested size, skipping resize", slot)
+		c.recordMutationDecision("resize_volume", "noop", "already_sized")
 		return nil
 	}
 
@@ -180,6 +183,7 @@ func (c *sshClient) ResizeVolume(slot string, newSizeBytes int64) error {
 	cmd := fmt.Sprintf(`/disk set [find slot=%s] file-size=%s`, slot, sizeStr)
 
 	// Execute command with retry
+	c.recordMutationDecision("resize_volume", "mutate", "size_mismatch")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		return fmt.Errorf("failed to resize volume: %w", err)
@@ -215,6 +219,7 @@ func (c *sshClient) DeleteVolume(slot string) error {
 		// If volume doesn't exist, that's okay (idempotent)
 		if isVolumeNotFound(err) {
 			klog.V(4).Infof("Volume %s already deleted", slot)
+			c.recordMutationDecision("delete_volume", "noop", "missing")
 			return nil
 		}
 		return fmt.Errorf("failed to get volume info before deletion: %w", err)
@@ -225,6 +230,7 @@ func (c *sshClient) DeleteVolume(slot string) error {
 
 	// Step 1: Remove the disk slot
 	cmd := fmt.Sprintf(`/disk remove [find slot=%s]`, slot)
+	c.recordMutationDecision("delete_volume", "mutate", "exists")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		// If volume doesn't exist, that's okay (idempotent)
@@ -414,6 +420,7 @@ func (c *sshClient) DeleteFile(filePath string) error {
 	}
 	if !exists {
 		klog.V(4).Infof("File %s already deleted", normalizedPath)
+		c.recordMutationDecision("delete_file", "noop", "missing")
 		return nil
 	}
 
@@ -424,6 +431,7 @@ func (c *sshClient) DeleteFile(filePath string) error {
 	cmd := fmt.Sprintf(`/file remove [find name="%s"]`, searchPath)
 
 	// Execute command
+	c.recordMutationDecision("delete_file", "mutate", "exists")
 	output, err := c.runCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
@@ -911,6 +919,7 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	if exists {
 		if snapshotMatchesCreateOptions(existing, opts, snapFilePath) {
 			klog.V(3).Infof("Snapshot %s already exists with requested state, skipping create", opts.Name)
+			c.recordMutationDecision("create_snapshot", "noop", "already_exists")
 			return populateSnapshotDefaults(existing, opts.SourceVolume, 0), nil
 		}
 		return nil, fmt.Errorf("snapshot %s already exists with different state: %s", opts.Name, createSnapshotConflictReason(existing, opts, snapFilePath))
@@ -934,6 +943,7 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	)
 
 	// Execute command with retry
+	c.recordMutationDecision("create_snapshot", "mutate", "missing")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot: %w", err)
@@ -1024,6 +1034,7 @@ func (c *sshClient) DeleteSnapshot(snapshotID string) error {
 	if err != nil {
 		if isSnapshotNotFound(err) {
 			klog.V(4).Infof("Snapshot %s already deleted (not found)", snapshotID)
+			c.recordMutationDecision("delete_snapshot", "noop", "missing")
 			return nil // Idempotent: not found = success
 		}
 		return fmt.Errorf("failed to check snapshot existence: %w", err)
@@ -1033,6 +1044,7 @@ func (c *sshClient) DeleteSnapshot(snapshotID string) error {
 
 	// Step 1: Remove the disk entry
 	cmd := fmt.Sprintf(`/disk remove [find slot=%s]`, snapshotID)
+	c.recordMutationDecision("delete_snapshot", "mutate", "exists")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		// Idempotent: treat "no such item" as success
@@ -1151,6 +1163,7 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 	if exists {
 		if volumeMatchesCreateOptions(existing, newVolumeOpts) {
 			klog.V(3).Infof("Restored volume %s already exists with requested state, skipping restore", newVolumeOpts.Slot)
+			c.recordMutationDecision("restore_snapshot", "noop", "already_exists")
 			return nil
 		}
 		return fmt.Errorf("restored volume %s already exists with different state: %s", newVolumeOpts.Slot, createVolumeConflictReason(existing, newVolumeOpts))
@@ -1173,6 +1186,7 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 		newVolumeOpts.NVMETCPNQN,
 	)
 
+	c.recordMutationDecision("restore_snapshot", "mutate", "missing")
 	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		return fmt.Errorf("failed to restore snapshot to new volume: %w", err)
