@@ -6,31 +6,41 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	storagev1listers "k8s.io/client-go/listers/storage/v1"
 )
 
 // createTestListers creates test node and PV listers from a fake clientset
 func createTestListers(clientset *fake.Clientset, objects ...runtime.Object) (nodeLister corev1listers.NodeLister, pvLister corev1listers.PersistentVolumeLister) {
+	nodeLister, pvLister, _ = createTestListersWithVolumeAttachments(clientset, objects...)
+	return nodeLister, pvLister
+}
+
+func createTestListersWithVolumeAttachments(clientset *fake.Clientset, objects ...runtime.Object) (nodeLister corev1listers.NodeLister, pvLister corev1listers.PersistentVolumeLister, vaLister storagev1listers.VolumeAttachmentLister) {
 	for _, obj := range objects {
 		switch v := obj.(type) {
 		case *corev1.Node:
 			clientset.CoreV1().Nodes().Create(context.Background(), v, metav1.CreateOptions{})
 		case *corev1.PersistentVolume:
 			clientset.CoreV1().PersistentVolumes().Create(context.Background(), v, metav1.CreateOptions{})
+		case *storagev1.VolumeAttachment:
+			clientset.StorageV1().VolumeAttachments().Create(context.Background(), v, metav1.CreateOptions{})
 		}
 	}
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeLister = informerFactory.Core().V1().Nodes().Lister()
 	pvLister = informerFactory.Core().V1().PersistentVolumes().Lister()
+	vaLister = informerFactory.Storage().V1().VolumeAttachments().Lister()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
-	return nodeLister, pvLister
+	return nodeLister, pvLister, vaLister
 }
 
 func TestNewAttachmentReconciler_RequiresManager(t *testing.T) {
@@ -603,4 +613,166 @@ func TestTriggerReconcile_AfterStop(t *testing.T) {
 	r.TriggerReconcile()
 
 	// Should not panic
+}
+
+func TestReconciler_StaleVolumeAttachmentRequiresConfirmations(t *testing.T) {
+	ctx := context.Background()
+	volumeID := "pvc-stale-va-confirm"
+	va := testVolumeAttachment("va-stale-confirm", volumeID, "deleted-node", driverName, time.Now().Add(-time.Hour))
+	pv := testPersistentVolume(volumeID)
+	k8sClient := fake.NewSimpleClientset(pv, va)
+	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+
+	r, err := NewAttachmentReconciler(ReconcilerConfig{
+		Manager:                       NewAttachmentManager(nil),
+		K8sClient:                     k8sClient,
+		NodeLister:                    nodeLister,
+		PVLister:                      pvLister,
+		VolumeAttachmentLister:        vaLister,
+		Interval:                      time.Hour,
+		GracePeriod:                   time.Nanosecond,
+		StaleVolumeAttachmentCleanup:  true,
+		StaleVolumeAttachmentDelete:   true,
+		StaleVolumeAttachmentMinConfs: 2,
+	})
+	if err != nil {
+		t.Fatalf("NewAttachmentReconciler failed: %v", err)
+	}
+
+	r.reconcile(ctx)
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("VolumeAttachment should survive first confirmation pass: %v", err)
+	}
+
+	r.reconcile(ctx)
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err == nil {
+		t.Fatal("VolumeAttachment should be deleted after second confirmation pass")
+	}
+}
+
+func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
+	ctx := context.Background()
+	volumeID := "pvc-stale-va-dry-run"
+	va := testVolumeAttachment("va-stale-dry-run", volumeID, "deleted-node", driverName, time.Now().Add(-time.Hour))
+	pv := testPersistentVolume(volumeID)
+	k8sClient := fake.NewSimpleClientset(pv, va)
+	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+
+	r, err := NewAttachmentReconciler(ReconcilerConfig{
+		Manager:                       NewAttachmentManager(nil),
+		K8sClient:                     k8sClient,
+		NodeLister:                    nodeLister,
+		PVLister:                      pvLister,
+		VolumeAttachmentLister:        vaLister,
+		Interval:                      time.Hour,
+		GracePeriod:                   time.Nanosecond,
+		StaleVolumeAttachmentCleanup:  true,
+		StaleVolumeAttachmentDelete:   false,
+		StaleVolumeAttachmentMinConfs: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewAttachmentReconciler failed: %v", err)
+	}
+
+	r.reconcile(ctx)
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("dry-run cleanup should not delete VolumeAttachment: %v", err)
+	}
+}
+
+func TestReconciler_StaleVolumeAttachmentPreservesLiveNode(t *testing.T) {
+	ctx := context.Background()
+	volumeID := "pvc-live-va"
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "live-node"}}
+	va := testVolumeAttachment("va-live-node", volumeID, node.Name, driverName, time.Now().Add(-time.Hour))
+	pv := testPersistentVolume(volumeID)
+	k8sClient := fake.NewSimpleClientset(node, pv, va)
+	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+
+	r, err := NewAttachmentReconciler(ReconcilerConfig{
+		Manager:                       NewAttachmentManager(nil),
+		K8sClient:                     k8sClient,
+		NodeLister:                    nodeLister,
+		PVLister:                      pvLister,
+		VolumeAttachmentLister:        vaLister,
+		Interval:                      time.Hour,
+		GracePeriod:                   time.Nanosecond,
+		StaleVolumeAttachmentCleanup:  true,
+		StaleVolumeAttachmentDelete:   true,
+		StaleVolumeAttachmentMinConfs: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewAttachmentReconciler failed: %v", err)
+	}
+
+	r.reconcile(ctx)
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("VolumeAttachment for live node should be preserved: %v", err)
+	}
+}
+
+func TestReconciler_StaleVolumeAttachmentRequiresPV(t *testing.T) {
+	ctx := context.Background()
+	volumeID := "pvc-missing-pv"
+	va := testVolumeAttachment("va-missing-pv", volumeID, "deleted-node", driverName, time.Now().Add(-time.Hour))
+	k8sClient := fake.NewSimpleClientset(va)
+	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+
+	r, err := NewAttachmentReconciler(ReconcilerConfig{
+		Manager:                       NewAttachmentManager(nil),
+		K8sClient:                     k8sClient,
+		NodeLister:                    nodeLister,
+		PVLister:                      pvLister,
+		VolumeAttachmentLister:        vaLister,
+		Interval:                      time.Hour,
+		GracePeriod:                   time.Nanosecond,
+		StaleVolumeAttachmentCleanup:  true,
+		StaleVolumeAttachmentDelete:   true,
+		StaleVolumeAttachmentMinConfs: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewAttachmentReconciler failed: %v", err)
+	}
+
+	r.reconcile(ctx)
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("VolumeAttachment without PV should be preserved for manual inspection: %v", err)
+	}
+}
+
+func testPersistentVolume(name string) *corev1.PersistentVolume {
+	return &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: corev1.PersistentVolumeSpec{
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				CSI: &corev1.CSIPersistentVolumeSource{
+					Driver:       driverName,
+					VolumeHandle: name,
+				},
+			},
+		},
+	}
+}
+
+func testVolumeAttachment(name, volumeID, nodeID, attacher string, createdAt time.Time) *storagev1.VolumeAttachment {
+	return &storagev1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(createdAt),
+		},
+		Spec: storagev1.VolumeAttachmentSpec{
+			Attacher: attacher,
+			NodeName: nodeID,
+			Source: storagev1.VolumeAttachmentSource{
+				PersistentVolumeName: stringPtr(volumeID),
+			},
+		},
+		Status: storagev1.VolumeAttachmentStatus{
+			Attached: true,
+		},
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

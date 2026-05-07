@@ -110,6 +110,11 @@ spec:
             # - "-orphan-run-on-start=false"
             # - "-orphan-min-confirmations=2"
             # - "-orphan-dry-run=true"
+            # Stale Kubernetes VolumeAttachment cleanup is also disabled by default.
+            # Enable dry-run first to audit stuck attachments before allowing deletion.
+            # - "-enable-stale-volumeattachment-cleanup"
+            # - "-stale-volumeattachment-dry-run=true"
+            # - "-stale-volumeattachment-min-confirmations=2"
             - "-v=5"
             # SECURITY: For testing only, you can skip host key verification with:
             # - "-rds-insecure-skip-verify=true"

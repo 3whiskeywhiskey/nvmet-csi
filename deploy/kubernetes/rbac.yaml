@@ -43,7 +43,7 @@ rules:
   # Access to VolumeAttachments (for external-attacher sidecar)
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "patch"]
+    verbs: ["get", "list", "watch", "patch", "delete"]
 
   # Access to VolumeAttachment status
   - apiGroups: ["storage.k8s.io"]

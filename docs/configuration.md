@@ -157,10 +157,17 @@ The attachment reconciler runs in the controller to track volume attachments dur
 args:
   - "-attachment-grace-period=30s"
   - "-attachment-reconcile-interval=5m"
+  # Optional, disabled by default. Start with dry-run for audit/remediation.
+  # - "-enable-stale-volumeattachment-cleanup"
+  # - "-stale-volumeattachment-dry-run=true"
+  # - "-stale-volumeattachment-min-confirmations=2"
 ```
 
 - **attachment-grace-period:** Grace period for attachment handoff during live migration (default: 30s)
 - **attachment-reconcile-interval:** Interval between reconciliation checks (default: 5m)
+- **enable-stale-volumeattachment-cleanup:** Enable guarded cleanup of stale Kubernetes `VolumeAttachment` objects for deleted nodes (default: false)
+- **stale-volumeattachment-dry-run:** Log planned `VolumeAttachment` deletes without deleting (default: true)
+- **stale-volumeattachment-min-confirmations:** Consecutive reconciliation passes required before deletion (default: 2)
 
 See [docs/kubevirt-migration.md](kubevirt-migration.md) for details.
 

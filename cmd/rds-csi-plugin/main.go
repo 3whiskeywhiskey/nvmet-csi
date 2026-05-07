@@ -60,6 +60,9 @@ var (
 	// Attachment management flags
 	attachmentGracePeriod       = flag.Duration("attachment-grace-period", 30*time.Second, "Grace period for attachment handoff during live migration")
 	attachmentReconcileInterval = flag.Duration("attachment-reconcile-interval", 5*time.Minute, "Interval between attachment reconciliation checks")
+	staleVACleanup              = flag.Bool("enable-stale-volumeattachment-cleanup", false, "Enable stale Kubernetes VolumeAttachment cleanup for deleted nodes")
+	staleVADryRun               = flag.Bool("stale-volumeattachment-dry-run", true, "Dry-run mode for stale VolumeAttachment cleanup")
+	staleVAMinConfirmations     = flag.Int("stale-volumeattachment-min-confirmations", 2, "Consecutive stale VolumeAttachment reconciliation passes required before deletion")
 
 	// VMI serialization flags (kubevirt concurrent operation mitigation)
 	enableVMISerialization = flag.Bool("enable-vmi-serialization", false, "Enable per-VMI operation serialization to mitigate kubevirt concurrency issues")
@@ -148,34 +151,37 @@ func main() {
 
 	// Create driver configuration
 	config := driver.DriverConfig{
-		DriverName:                  *driverName,
-		NodeID:                      *nodeID,
-		RDSAddress:                  *rdsAddress,
-		RDSPort:                     *rdsPort,
-		RDSUser:                     *rdsUser,
-		RDSPrivateKey:               privateKey,
-		RDSHostKey:                  hostKey,
-		RDSInsecureSkipVerify:       *rdsInsecure,
-		RDSVolumeBasePath:           *rdsVolumeBasePath,
-		RDSMutationMinInterval:      *rdsMutationMinInterval,
-		RDSMutationBurst:            *rdsMutationBurst,
-		RDSMutationTimeout:          *rdsMutationTimeout,
-		K8sClient:                   k8sClient,
-		Metrics:                     promMetrics,
-		EnableOrphanReconciler:      *enableOrphanReconciler,
-		OrphanCheckInterval:         *orphanCheckInterval,
-		OrphanGracePeriod:           *orphanGracePeriod,
-		OrphanDryRun:                *orphanDryRun,
-		OrphanRunOnStart:            *orphanRunOnStart,
-		OrphanMinConfirmations:      *orphanMinConfirmations,
-		EnableAttachmentReconciler:  true, // Always enable attachment reconciler in controller mode
-		AttachmentGracePeriod:       *attachmentGracePeriod,
-		AttachmentReconcileInterval: *attachmentReconcileInterval,
-		EnableVMISerialization:      *enableVMISerialization,
-		VMICacheTTL:                 *vmiCacheTTL,
-		ManagedNQNPrefix:            managedNQNPrefix,
-		EnableController:            *controllerMode,
-		EnableNode:                  *nodeMode,
+		DriverName:                    *driverName,
+		NodeID:                        *nodeID,
+		RDSAddress:                    *rdsAddress,
+		RDSPort:                       *rdsPort,
+		RDSUser:                       *rdsUser,
+		RDSPrivateKey:                 privateKey,
+		RDSHostKey:                    hostKey,
+		RDSInsecureSkipVerify:         *rdsInsecure,
+		RDSVolumeBasePath:             *rdsVolumeBasePath,
+		RDSMutationMinInterval:        *rdsMutationMinInterval,
+		RDSMutationBurst:              *rdsMutationBurst,
+		RDSMutationTimeout:            *rdsMutationTimeout,
+		K8sClient:                     k8sClient,
+		Metrics:                       promMetrics,
+		EnableOrphanReconciler:        *enableOrphanReconciler,
+		OrphanCheckInterval:           *orphanCheckInterval,
+		OrphanGracePeriod:             *orphanGracePeriod,
+		OrphanDryRun:                  *orphanDryRun,
+		OrphanRunOnStart:              *orphanRunOnStart,
+		OrphanMinConfirmations:        *orphanMinConfirmations,
+		EnableAttachmentReconciler:    true, // Always enable attachment reconciler in controller mode
+		AttachmentGracePeriod:         *attachmentGracePeriod,
+		AttachmentReconcileInterval:   *attachmentReconcileInterval,
+		StaleVolumeAttachmentCleanup:  *staleVACleanup,
+		StaleVolumeAttachmentDelete:   !*staleVADryRun,
+		StaleVolumeAttachmentMinConfs: *staleVAMinConfirmations,
+		EnableVMISerialization:        *enableVMISerialization,
+		VMICacheTTL:                   *vmiCacheTTL,
+		ManagedNQNPrefix:              managedNQNPrefix,
+		EnableController:              *controllerMode,
+		EnableNode:                    *nodeMode,
 	}
 
 	// Cleanup orphaned NVMe connections on node startup

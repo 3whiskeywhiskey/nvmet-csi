@@ -176,6 +176,8 @@ The refactor should add test coverage before live RDS validation:
   any RouterOS mutation;
 - regression test proving stale attachment cleanup does not delete/recreate the
   backing RouterOS disk;
+- stale `VolumeAttachment` cleanup tests that prove Kubernetes attachment
+  remediation does not touch RouterOS/RDS objects or node mounts;
 - regression test for `mount=no` command shape on every driver-owned
   `/disk add type=file` path;
 - tests proving monitoring failures cannot trigger storage mutations.

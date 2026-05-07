@@ -142,6 +142,9 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `controller.orphanReconciler.dryRun` | Dry-run mode (no actual cleanup) | `true` |
 | `controller.attachmentGracePeriod` | Attachment grace period for live migration | `30s` |
 | `controller.attachmentReconcileInterval` | Attachment reconciliation interval | `5m` |
+| `controller.staleVolumeAttachmentCleanup.enabled` | Enable guarded cleanup of stale `VolumeAttachment` objects for deleted nodes | `false` |
+| `controller.staleVolumeAttachmentCleanup.dryRun` | Log planned stale `VolumeAttachment` deletes without deleting | `true` |
+| `controller.staleVolumeAttachmentCleanup.minConfirmations` | Consecutive reconciliation passes required before deletion | `2` |
 | `controller.vmiSerialization.enabled` | Enable VMI serialization (KubeVirt) | `false` |
 | `controller.vmiSerialization.cacheTTL` | VMI cache TTL | `60s` |
 
