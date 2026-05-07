@@ -170,6 +170,8 @@ The refactor should add test coverage before live RDS validation:
 - churn tests for node drain, node loss, pod reschedule, KubeVirt migration, and
   repeated attach/detach calls;
 - dry-run reconciler mode that returns planned mutations without applying them;
+- orphan inventory tests that expose planned disk/file deletes before applying
+  any RouterOS mutation;
 - regression test proving stale attachment cleanup does not delete/recreate the
   backing RouterOS disk;
 - regression test for `mount=no` command shape on every driver-owned

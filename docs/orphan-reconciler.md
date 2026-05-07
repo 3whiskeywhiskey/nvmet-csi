@@ -21,12 +21,17 @@ The orphan reconciler runs as part of the controller pod and performs the follow
    - Lists all volumes on the RDS server
    - Lists all PVs in Kubernetes managed by this CSI driver
    - Identifies volumes on RDS that don't have a corresponding PV
+   - Builds an observe-only inventory with object counts and planned cleanup actions
 
 2. **Grace Period**: Only considers volumes older than `orphan-grace-period` (default: 5 minutes) to avoid deleting volumes that are currently being provisioned
 
 3. **Cleanup**: For each orphaned volume:
    - **Dry-run mode** (default): Logs the orphaned volume without deleting it
    - **Active mode**: Deletes the orphaned volume from RDS
+
+The inventory step is built before any delete operation is applied. Tests and
+future simulator tooling can inspect the planned mutation list to prove the
+reconciler stays calm before pointing it at live RouterOS/RDS.
 
 ## Configuration
 
