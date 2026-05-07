@@ -68,6 +68,7 @@ help:
 	@echo "  make test-docker         - Run all tests in Docker Compose"
 	@echo "  make lint                - Run linters (golangci-lint)"
 	@echo "  make fmt                 - Format Go code"
+	@echo "  make verify-helm         - Lint and render Helm chart"
 	@echo "  make verify              - Run all verification checks"
 	@echo ""
 	@echo "Utility Commands:"
@@ -320,8 +321,25 @@ vet:
 	@echo "Running go vet..."
 	go vet ./...
 
+.PHONY: verify-helm
+verify-helm:
+	@echo "Verifying Helm chart rendering..."
+	helm lint deploy/helm/rds-csi-driver
+	helm template rds-csi deploy/helm/rds-csi-driver --namespace rds-csi > /tmp/rds-csi-helm-default.yaml
+	@if grep -q -- "-node-orphan-cleanup" /tmp/rds-csi-helm-default.yaml; then \
+		echo "ERROR: node orphan cleanup rendered in default Helm values"; \
+		exit 1; \
+	fi
+	helm template rds-csi deploy/helm/rds-csi-driver --namespace rds-csi \
+		--set node.orphanCleanup.enabled=true \
+		--set node.orphanCleanup.dryRun=false \
+		--set node.orphanCleanup.maxDisconnects=2 > /tmp/rds-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup-dry-run=false" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup-max-disconnects=2" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
+
 .PHONY: verify
-verify: fmt vet lint test
+verify: fmt vet lint test verify-helm
 	@echo "All verification checks passed!"
 
 .PHONY: mod-tidy
