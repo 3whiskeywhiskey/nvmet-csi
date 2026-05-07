@@ -10,11 +10,19 @@ import (
 type recordingMutationObserver struct {
 	mutations []recordedMutation
 	waits     []time.Duration
+	audit     []recordedMutationAudit
 }
 
 type recordedMutation struct {
 	operation string
 	err       error
+	dryRun    bool
+}
+
+type recordedMutationAudit struct {
+	operation string
+	target    string
+	status    string
 	dryRun    bool
 }
 
@@ -28,6 +36,15 @@ func (o *recordingMutationObserver) RecordRDSMutation(operation string, err erro
 
 func (o *recordingMutationObserver) RecordRDSMutationRateLimitWait(operation string, duration time.Duration) {
 	o.waits = append(o.waits, duration)
+}
+
+func (o *recordingMutationObserver) RecordRDSMutationAudit(operation, target, status string, dryRun bool, duration time.Duration) {
+	o.audit = append(o.audit, recordedMutationAudit{
+		operation: operation,
+		target:    target,
+		status:    status,
+		dryRun:    dryRun,
+	})
 }
 
 func TestGuardedClientDryRunDoesNotMutate(t *testing.T) {
@@ -53,6 +70,9 @@ func TestGuardedClientDryRunDoesNotMutate(t *testing.T) {
 	require.Len(t, observer.mutations, 1)
 	require.Equal(t, "create_volume", observer.mutations[0].operation)
 	require.True(t, observer.mutations[0].dryRun)
+	require.Len(t, observer.audit, 1)
+	require.Equal(t, "success", observer.audit[0].status)
+	require.True(t, observer.audit[0].dryRun)
 }
 
 func TestGuardedClientRecordsMutationFailure(t *testing.T) {
@@ -75,6 +95,9 @@ func TestGuardedClientRecordsMutationFailure(t *testing.T) {
 	require.Len(t, observer.mutations, 2)
 	require.NoError(t, observer.mutations[0].err)
 	require.Error(t, observer.mutations[1].err)
+	require.Len(t, observer.audit, 2)
+	require.Equal(t, "success", observer.audit[0].status)
+	require.Equal(t, "failure", observer.audit[1].status)
 }
 
 func TestGuardedClientRateLimitsMutations(t *testing.T) {
