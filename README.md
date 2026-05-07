@@ -289,6 +289,7 @@ For detailed installation instructions, see [Kubernetes Setup Guide](docs/kubern
 - [Design](DESIGN.md) - Refactor stance, migration map, and backend contract sketch
 - [Architecture](docs/architecture.md) - System design and component interactions
 - [RouterOS RDS Hardening Notes](docs/routeros-rds-hardening.md) - Fragility, churn, and refactor safety requirements
+- [nvmet-csi Live Validation Plan](docs/nvmet-csi-live-validation.md) - Side-by-side rollout plan for ZoL and RDS compatibility testing
 - [RDS Commands Reference](docs/rds-commands.md) - RouterOS CLI commands used
 - [CI/CD Pipeline](docs/ci-cd.md) - Automated builds, releases, and versioning
 - [Development Guide](CLAUDE.md) - Development notes and context
