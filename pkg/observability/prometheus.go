@@ -52,6 +52,8 @@ type RDSAuditEvent struct {
 	Operation string
 	Target    string
 	Status    string
+	Decision  string
+	Reason    string
 	DryRun    bool
 	Duration  time.Duration
 }
@@ -826,12 +828,20 @@ func (m *Metrics) RecordRDSMutation(operation string, err error, dryRun bool, du
 }
 
 // RecordRDSMutationDecision records a high-level observe-before-mutate decision.
-func (m *Metrics) RecordRDSMutationDecision(operation, decision, reason string) {
+func (m *Metrics) RecordRDSMutationDecision(operation, target, decision, reason string) {
 	if m == nil {
 		return
 	}
 
 	m.rdsMutationDecision.WithLabelValues(operation, decision, reason).Inc()
+	m.appendRDSAuditEvent(RDSAuditEvent{
+		Timestamp: time.Now(),
+		Operation: operation,
+		Target:    target,
+		Status:    "decision",
+		Decision:  decision,
+		Reason:    reason,
+	})
 }
 
 // RecordRDSMutationRateLimitWait records wait time before a guarded RDS mutation.
@@ -859,17 +869,20 @@ func (m *Metrics) RecordRDSMutationAudit(operation, target, status string, dryRu
 		return
 	}
 
-	m.rdsAuditMu.Lock()
-	defer m.rdsAuditMu.Unlock()
-
-	event := RDSAuditEvent{
+	m.appendRDSAuditEvent(RDSAuditEvent{
 		Timestamp: time.Now(),
 		Operation: operation,
 		Target:    target,
 		Status:    status,
 		DryRun:    dryRun,
 		Duration:  duration,
-	}
+	})
+}
+
+func (m *Metrics) appendRDSAuditEvent(event RDSAuditEvent) {
+	m.rdsAuditMu.Lock()
+	defer m.rdsAuditMu.Unlock()
+
 	if m.rdsAuditLimit <= 0 {
 		m.rdsAuditLimit = 128
 	}

@@ -13,6 +13,7 @@ import (
 
 type recordedMutationDecision struct {
 	operation string
+	target    string
 	decision  string
 	reason    string
 }
@@ -21,9 +22,10 @@ type recordingMutationDecisionObserver struct {
 	decisions []recordedMutationDecision
 }
 
-func (o *recordingMutationDecisionObserver) RecordRDSMutationDecision(operation, decision, reason string) {
+func (o *recordingMutationDecisionObserver) RecordRDSMutationDecision(operation, target, decision, reason string) {
 	o.decisions = append(o.decisions, recordedMutationDecision{
 		operation: operation,
+		target:    target,
 		decision:  decision,
 		reason:    reason,
 	})
@@ -115,8 +117,8 @@ func TestRDSClientRecordsDeleteFileNoopDecision(t *testing.T) {
 		t.Fatalf("decisions len = %d, want 1: %+v", len(observer.decisions), observer.decisions)
 	}
 	decision := observer.decisions[0]
-	if decision.operation != "delete_file" || decision.decision != "noop" || decision.reason != "missing" {
-		t.Fatalf("decision = %+v, want delete_file noop missing", decision)
+	if decision.operation != "delete_file" || decision.target != "/storage-pool/test/missing.img" || decision.decision != "noop" || decision.reason != "missing" {
+		t.Fatalf("decision = %+v, want delete_file /storage-pool/test/missing.img noop missing", decision)
 	}
 	if commandHistoryContains(server.GetCommandHistory(), "/file remove") {
 		t.Fatalf("DeleteFile missing path issued /file remove: %+v", server.GetCommandHistory())

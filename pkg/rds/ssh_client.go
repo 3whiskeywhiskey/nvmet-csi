@@ -239,11 +239,11 @@ func (c *sshClient) runCommand(command string) (string, error) {
 	return output, nil
 }
 
-func (c *sshClient) recordMutationDecision(operation, decision, reason string) {
+func (c *sshClient) recordMutationDecision(operation, target, decision, reason string) {
 	if c.decisionObserver == nil {
 		return
 	}
-	c.decisionObserver.RecordRDSMutationDecision(operation, decision, reason)
+	c.decisionObserver.RecordRDSMutationDecision(operation, target, decision, reason)
 }
 
 // runCommandWithRetry executes a command with retry logic for transient errors
