@@ -80,11 +80,15 @@ func (c *sshClient) observeVolumeForCreate(slot string) (*VolumeInfo, bool, erro
 		return existing, true, nil
 	}
 
-	var notFound *VolumeNotFoundError
-	if errors.As(err, &notFound) || errors.Is(err, utils.ErrVolumeNotFound) {
+	if isVolumeNotFound(err) {
 		return nil, false, nil
 	}
 	return nil, false, fmt.Errorf("failed to observe existing volume %s before create: %w", slot, err)
+}
+
+func isVolumeNotFound(err error) bool {
+	var notFound *VolumeNotFoundError
+	return errors.As(err, &notFound) || errors.Is(err, utils.ErrVolumeNotFound)
 }
 
 func volumeMatchesCreateOptions(actual *VolumeInfo, desired CreateVolumeOptions) bool {
@@ -142,6 +146,9 @@ func (c *sshClient) ResizeVolume(slot string, newSizeBytes int64) error {
 		return fmt.Errorf("new size must be positive")
 	}
 
+	unlock := c.volumeLocks.lock(slot)
+	defer unlock()
+
 	// Get current volume to check it exists and get current size
 	currentVolume, err := c.GetVolume(slot)
 	if err != nil {
@@ -177,6 +184,10 @@ func (c *sshClient) ResizeVolume(slot string, newSizeBytes int64) error {
 	if err != nil {
 		return fmt.Errorf("failed to verify resize: %w", err)
 	}
+	if updatedVolume.FileSizeBytes < newSizeBytes {
+		return fmt.Errorf("resize verification failed for volume %s: current size %d bytes is smaller than requested %d bytes",
+			slot, updatedVolume.FileSizeBytes, newSizeBytes)
+	}
 
 	klog.V(2).Infof("Resized volume %s (%d -> %d bytes)", slot, currentVolume.FileSizeBytes, updatedVolume.FileSizeBytes)
 	return nil
@@ -189,11 +200,14 @@ func (c *sshClient) DeleteVolume(slot string) error {
 		return err
 	}
 
+	unlock := c.volumeLocks.lock(slot)
+	defer unlock()
+
 	// Get volume info first to find the backing file path
 	volume, err := c.GetVolume(slot)
 	if err != nil {
 		// If volume doesn't exist, that's okay (idempotent)
-		if errors.Is(err, utils.ErrVolumeNotFound) {
+		if isVolumeNotFound(err) {
 			klog.V(4).Infof("Volume %s already deleted", slot)
 			return nil
 		}
