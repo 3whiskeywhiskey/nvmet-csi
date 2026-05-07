@@ -28,11 +28,15 @@ The orphan reconciler runs as part of the controller pod and performs the follow
    destructive cleanup is planned. This protects against transient Kubernetes
    API/cache churn and keeps cleanup monotonic during node drains.
 
-3. **Grace Period**: Only considers volumes older than `orphan-grace-period` (default: 5 minutes) to avoid deleting volumes that are currently being provisioned
+3. **Grace Period**: Only considers volumes and files older than `orphan-grace-period` (default: 5 minutes) to avoid deleting objects that are currently being provisioned. File cleanup requires a known RouterOS timestamp; files with unknown age are reported but not deleted.
 
 4. **Cleanup**: For each confirmed orphaned volume:
    - **Dry-run mode** (default): Logs the orphaned volume without deleting it
    - **Active mode**: Deletes the orphaned volume from RDS
+
+File cleanup is limited to CSI-looking image names under `rds-volume-base-path`.
+The reconciler ignores non-`pvc-*.img` files, directory entries, files that
+still have disk objects, and files referenced by active PVs.
 
 The inventory step is built before any delete operation is applied. Tests and
 future simulator tooling can inspect the planned mutation list to prove the

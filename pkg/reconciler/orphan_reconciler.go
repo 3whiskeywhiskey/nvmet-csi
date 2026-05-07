@@ -415,6 +415,10 @@ func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, active
 	// Filter for .img files only
 	orphans := []OrphanedFile{}
 	for _, file := range files {
+		if file.Type != "" && file.Type != "file" {
+			continue
+		}
+
 		// Only check .img files
 		if !strings.HasSuffix(file.Name, ".img") {
 			continue
@@ -428,6 +432,10 @@ func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, active
 
 		// Extract volume ID from file name (e.g., "pvc-xxx.img" -> "pvc-xxx")
 		volumeID := strings.TrimSuffix(file.Name, ".img")
+		if !strings.HasPrefix(volumeID, VolumeIDPrefix) {
+			klog.V(5).Infof("Skipping non-CSI image file: %s (volume ID %s does not start with %q)", file.Path, volumeID, VolumeIDPrefix)
+			continue
+		}
 
 		// Skip if this file is referenced by an active PV
 		if activeVolumeIDs[volumeID] {
@@ -471,6 +479,12 @@ func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile, plannedDel
 		klog.Warningf("Orphaned file detected: %s (path=%s, size=%d bytes, created=%v)",
 			orphan.FileName, orphan.FilePath, orphan.SizeBytes, orphan.CreatedAt)
 
+		if !orphanOldEnough(orphan.CreatedAt, time.Now(), r.config.GracePeriod) {
+			klog.Warningf("Orphaned file %s is too young or has unknown age, skipping cleanup (created=%v, grace=%v)",
+				orphan.FilePath, orphan.CreatedAt, r.config.GracePeriod)
+			continue
+		}
+
 		if !plannedDeletes[orphan.FilePath] {
 			klog.Warningf("Orphaned file candidate observed but not yet confirmed for cleanup: %s", orphan.FilePath)
 			continue
@@ -507,6 +521,10 @@ func (r *OrphanReconciler) planConfirmedMutations(inventory *OrphanInventory) {
 	diskKeys := make(map[string]bool, len(inventory.DiskOrphans))
 	for _, orphan := range inventory.DiskOrphans {
 		diskKeys[orphan.VolumeID] = true
+		if !orphanOldEnough(orphan.CreatedAt, observedAt, r.config.GracePeriod) {
+			continue
+		}
+
 		state := r.observeCandidate(r.diskCandidates, orphan.VolumeID, observedAt)
 		if state.observations >= r.config.MinimumConfirmations {
 			inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
@@ -521,6 +539,10 @@ func (r *OrphanReconciler) planConfirmedMutations(inventory *OrphanInventory) {
 	fileKeys := make(map[string]bool, len(inventory.FileOrphans))
 	for _, orphan := range inventory.FileOrphans {
 		fileKeys[orphan.FilePath] = true
+		if !orphanOldEnough(orphan.CreatedAt, observedAt, r.config.GracePeriod) {
+			continue
+		}
+
 		state := r.observeCandidate(r.fileCandidates, orphan.FilePath, observedAt)
 		if state.observations >= r.config.MinimumConfirmations {
 			inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
@@ -531,6 +553,16 @@ func (r *OrphanReconciler) planConfirmedMutations(inventory *OrphanInventory) {
 		}
 	}
 	pruneMissingCandidates(r.fileCandidates, fileKeys)
+}
+
+func orphanOldEnough(createdAt, observedAt time.Time, gracePeriod time.Duration) bool {
+	if createdAt.IsZero() {
+		return false
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now()
+	}
+	return observedAt.Sub(createdAt) >= gracePeriod
 }
 
 func (r *OrphanReconciler) observeCandidate(candidates map[string]orphanCandidateState, key string, observedAt time.Time) orphanCandidateState {
