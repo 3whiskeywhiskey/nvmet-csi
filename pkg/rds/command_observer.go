@@ -29,7 +29,7 @@ type CommandObserver interface {
 // MutationDecisionObserver records high-level RDS mutation decisions before a
 // RouterOS write is attempted, including idempotent no-ops.
 type MutationDecisionObserver interface {
-	RecordRDSMutationDecision(operation, decision, reason string)
+	RecordRDSMutationDecision(operation, target, decision, reason string)
 }
 
 // ClassifyRouterOSCommand extracts a conservative command family/action/class.
