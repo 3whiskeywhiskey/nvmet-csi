@@ -223,13 +223,14 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	// configured. Linux-only controller deployments intentionally omit this.
 	if config.EnableController && config.RDSAddress != "" {
 		rdsClient, err := rds.NewClient(rds.ClientConfig{
-			Address:            config.RDSAddress,
-			Port:               config.RDSPort,
-			User:               config.RDSUser,
-			PrivateKey:         config.RDSPrivateKey,
-			HostKey:            config.RDSHostKey,
-			InsecureSkipVerify: config.RDSInsecureSkipVerify,
-			CommandObserver:    config.Metrics,
+			Address:                  config.RDSAddress,
+			Port:                     config.RDSPort,
+			User:                     config.RDSUser,
+			PrivateKey:               config.RDSPrivateKey,
+			HostKey:                  config.RDSHostKey,
+			InsecureSkipVerify:       config.RDSInsecureSkipVerify,
+			CommandObserver:          config.Metrics,
+			MutationDecisionObserver: config.Metrics,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create RDS client: %w", err)

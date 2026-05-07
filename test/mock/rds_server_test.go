@@ -11,6 +11,24 @@ import (
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
 )
 
+type recordedMutationDecision struct {
+	operation string
+	decision  string
+	reason    string
+}
+
+type recordingMutationDecisionObserver struct {
+	decisions []recordedMutationDecision
+}
+
+func (o *recordingMutationDecisionObserver) RecordRDSMutationDecision(operation, decision, reason string) {
+	o.decisions = append(o.decisions, recordedMutationDecision{
+		operation: operation,
+		decision:  decision,
+		reason:    reason,
+	})
+}
+
 // TestLoadConfigFromEnv_Defaults validates default configuration values when no env vars are set
 func TestLoadConfigFromEnv_Defaults(t *testing.T) {
 	// Clear all mock RDS env vars to ensure clean defaults
@@ -57,6 +75,51 @@ func TestLoadConfigFromEnv_Defaults(t *testing.T) {
 	}
 	if config.RouterOSVersion != "7.16" {
 		t.Errorf("expected RouterOSVersion=7.16, got %s", config.RouterOSVersion)
+	}
+}
+
+func TestRDSClientRecordsDeleteFileNoopDecision(t *testing.T) {
+	setupStressTestBasePaths(t)
+
+	server, err := NewMockRDSServer(0)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	observer := &recordingMutationDecisionObserver{}
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:                  server.Address(),
+		Port:                     server.Port(),
+		User:                     "admin",
+		InsecureSkipVerify:       true,
+		MutationDecisionObserver: observer,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	server.ClearCommandHistory()
+	if err := client.DeleteFile("/storage-pool/test/missing.img"); err != nil {
+		t.Fatalf("DeleteFile() failed: %v", err)
+	}
+
+	if len(observer.decisions) != 1 {
+		t.Fatalf("decisions len = %d, want 1: %+v", len(observer.decisions), observer.decisions)
+	}
+	decision := observer.decisions[0]
+	if decision.operation != "delete_file" || decision.decision != "noop" || decision.reason != "missing" {
+		t.Fatalf("decision = %+v, want delete_file noop missing", decision)
+	}
+	if commandHistoryContains(server.GetCommandHistory(), "/file remove") {
+		t.Fatalf("DeleteFile missing path issued /file remove: %+v", server.GetCommandHistory())
 	}
 }
 

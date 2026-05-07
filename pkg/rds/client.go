@@ -61,6 +61,9 @@ type ClientConfig struct {
 
 	// CommandObserver receives per-command RouterOS SSH telemetry.
 	CommandObserver CommandObserver
+
+	// MutationDecisionObserver receives high-level observe-before-mutate decisions.
+	MutationDecisionObserver MutationDecisionObserver
 }
 
 // NewClient creates a new RDS client based on the configuration

@@ -31,6 +31,7 @@ type sshClient struct {
 	sessionMu          sync.Mutex // Protects concurrent session creation
 	volumeLocks        *targetLockManager
 	commandObserver    CommandObserver
+	decisionObserver   MutationDecisionObserver
 }
 
 // newSSHClient creates a new SSH-based RDS client
@@ -80,6 +81,7 @@ func newSSHClient(config ClientConfig) (*sshClient, error) {
 		insecureSkipVerify: config.InsecureSkipVerify,
 		volumeLocks:        newTargetLockManager(),
 		commandObserver:    config.CommandObserver,
+		decisionObserver:   config.MutationDecisionObserver,
 	}, nil
 }
 
@@ -235,6 +237,13 @@ func (c *sshClient) runCommand(command string) (string, error) {
 	output := stdout.String()
 	klog.V(5).Infof("Command output: %s", output)
 	return output, nil
+}
+
+func (c *sshClient) recordMutationDecision(operation, decision, reason string) {
+	if c.decisionObserver == nil {
+		return
+	}
+	c.decisionObserver.RecordRDSMutationDecision(operation, decision, reason)
 }
 
 // runCommandWithRetry executes a command with retry logic for transient errors
