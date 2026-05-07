@@ -97,7 +97,7 @@ var _ = Describe("State Recovery [E2E-06/E2E-07]", func() {
 
 	Describe("Controller State Recovery [E2E-07]", func() {
 		It("should maintain volume state across ListVolumes calls", func() {
-			volumeName := testVolumeName("state-recovery")
+			volumeName := testPVCVolumeName("state-recovery")
 
 			By("Creating volume")
 			createResp, err := controllerClient.CreateVolume(ctx, &csi.CreateVolumeRequest{

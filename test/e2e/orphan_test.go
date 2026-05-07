@@ -72,7 +72,7 @@ var _ = Describe("Orphan Detection [E2E-05]", func() {
 
 	It("should list volumes including those that may be orphaned", func() {
 		// Create a normal volume
-		normalVolumeName := testVolumeName("orphan-test-normal")
+		normalVolumeName := testPVCVolumeName("orphan-test-normal")
 		normalResp, err := controllerClient.CreateVolume(ctx, &csi.CreateVolumeRequest{
 			Name:               normalVolumeName,
 			CapacityRange:      &csi.CapacityRange{RequiredBytes: smallVolumeSize},
@@ -87,7 +87,7 @@ var _ = Describe("Orphan Detection [E2E-05]", func() {
 		waitForVolumeOnMockRDS(normalVolumeID)
 
 		// Create an orphaned volume (disk object without CSI creation)
-		orphanSlot := testVolumeName("orphan-detected")
+		orphanSlot := testPVCVolumeName("orphan-detected")
 		orphanFilePath := fmt.Sprintf("/storage-pool/metal-csi/%s.img", orphanSlot)
 		mockRDS.CreateOrphanedVolume(orphanSlot, orphanFilePath, smallVolumeSize)
 		// Also create its backing file so it's a "complete" volume but not created via CSI
@@ -97,19 +97,19 @@ var _ = Describe("Orphan Detection [E2E-05]", func() {
 		listResp, err := controllerClient.ListVolumes(ctx, &csi.ListVolumesRequest{})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Find our normal volume
+		// Find our normal volume and PVC-shaped orphaned disk.
 		foundNormal := false
+		foundOrphan := false
 		for _, entry := range listResp.Entries {
 			if entry.Volume.VolumeId == normalVolumeID {
 				foundNormal = true
-				break
+			}
+			if entry.Volume.VolumeId == orphanSlot {
+				foundOrphan = true
 			}
 		}
 		Expect(foundNormal).To(BeTrue(), "Normal volume should be in ListVolumes response")
-
-		// Note: The orphaned volume created directly on mock RDS should also appear
-		// in ListVolumes if the driver queries all volumes from RDS.
-		// This is the foundation for orphan reconciliation.
+		Expect(foundOrphan).To(BeTrue(), "PVC-shaped orphan volume should be in ListVolumes response")
 
 		By("Verifying mock RDS shows both volumes")
 		allVolumes := mockRDS.ListVolumes()

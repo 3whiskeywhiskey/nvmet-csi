@@ -2,10 +2,13 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	. "github.com/onsi/gomega"
+
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
 )
 
 // Constants for test configuration
@@ -17,10 +20,28 @@ const (
 	testVolumeBasePath = "/storage-pool/metal-csi"
 )
 
+var testPVCVolumeNames = map[string]struct{}{}
+
 // testVolumeName creates a unique volume name for the current test
 // by prepending the test run ID to ensure isolation between test runs
 func testVolumeName(name string) string {
 	return fmt.Sprintf("%s-%s", testRunID, name)
+}
+
+// testPVCVolumeName creates a unique volume name that matches production PVC
+// volume IDs, which are the only slots returned by RDS ListVolumes.
+func testPVCVolumeName(name string) string {
+	volumeName := utils.VolumeNameToID(testVolumeName(name))
+	testPVCVolumeNames[volumeName] = struct{}{}
+	return volumeName
+}
+
+func isTestVolumeName(volumeName string) bool {
+	if strings.HasPrefix(volumeName, testRunID) {
+		return true
+	}
+	_, ok := testPVCVolumeNames[volumeName]
+	return ok
 }
 
 // mountVolumeCapability returns a mount volume capability with SINGLE_NODE_WRITER access mode
