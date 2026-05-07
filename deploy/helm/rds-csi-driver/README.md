@@ -134,9 +134,11 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `controller.tolerations` | Tolerations for controller pod | See values.yaml |
 | `controller.affinity` | Affinity for controller pod | See values.yaml |
 | `controller.priorityClassName` | Priority class for controller pod | `system-cluster-critical` |
-| `controller.orphanReconciler.enabled` | Enable orphaned volume detection and cleanup | `true` |
+| `controller.orphanReconciler.enabled` | Enable orphaned volume detection and cleanup | `false` |
 | `controller.orphanReconciler.checkInterval` | Orphan check interval | `1h` |
 | `controller.orphanReconciler.gracePeriod` | Grace period before cleanup | `5m` |
+| `controller.orphanReconciler.runOnStart` | Run orphan inventory immediately on controller startup | `false` |
+| `controller.orphanReconciler.minConfirmations` | Consecutive inventories required before cleanup | `2` |
 | `controller.orphanReconciler.dryRun` | Dry-run mode (no actual cleanup) | `true` |
 | `controller.attachmentGracePeriod` | Attachment grace period for live migration | `30s` |
 | `controller.attachmentReconcileInterval` | Attachment reconciliation interval | `5m` |

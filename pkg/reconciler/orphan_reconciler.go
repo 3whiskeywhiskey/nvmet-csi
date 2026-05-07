@@ -23,6 +23,10 @@ const (
 	// This prevents premature cleanup of volumes that are still being provisioned
 	DefaultOrphanGracePeriod = 5 * time.Minute
 
+	// DefaultOrphanMinimumConfirmations is the number of consecutive inventory
+	// passes that must see the same orphan before destructive cleanup is planned.
+	DefaultOrphanMinimumConfirmations = 2
+
 	// VolumeIDPrefix is the expected prefix for CSI-managed volumes
 	VolumeIDPrefix = "pvc-"
 )
@@ -44,6 +48,15 @@ type OrphanReconcilerConfig struct {
 	// DryRun if true, will only log orphans without deleting them
 	DryRun bool
 
+	// RunOnStart runs one inventory pass immediately when the reconciler starts.
+	// Leave false in production to avoid adding RouterOS command chatter during
+	// controller restarts, node churn, or cluster recovery.
+	RunOnStart bool
+
+	// MinimumConfirmations is the number of consecutive inventory passes required
+	// before cleanup is planned. Values <= 0 use DefaultOrphanMinimumConfirmations.
+	MinimumConfirmations int
+
 	// Enabled enables/disables the reconciler
 	Enabled bool
 
@@ -54,9 +67,12 @@ type OrphanReconcilerConfig struct {
 
 // OrphanReconciler periodically checks for orphaned volumes and cleans them up
 type OrphanReconciler struct {
-	config OrphanReconcilerConfig
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	config         OrphanReconcilerConfig
+	stopCh         chan struct{}
+	wg             sync.WaitGroup
+	candidatesMu   sync.Mutex
+	diskCandidates map[string]orphanCandidateState
+	fileCandidates map[string]orphanCandidateState
 }
 
 // OrphanedVolume represents a volume that appears to be orphaned
@@ -103,6 +119,12 @@ type OrphanInventory struct {
 	PlannedMutations []OrphanMutation
 }
 
+type orphanCandidateState struct {
+	firstSeen    time.Time
+	lastSeen     time.Time
+	observations int
+}
+
 // NewOrphanReconciler creates a new orphan reconciler
 func NewOrphanReconciler(config OrphanReconcilerConfig) (*OrphanReconciler, error) {
 	// Validate config
@@ -120,10 +142,15 @@ func NewOrphanReconciler(config OrphanReconcilerConfig) (*OrphanReconciler, erro
 	if config.GracePeriod == 0 {
 		config.GracePeriod = DefaultOrphanGracePeriod
 	}
+	if config.MinimumConfirmations <= 0 {
+		config.MinimumConfirmations = DefaultOrphanMinimumConfirmations
+	}
 
 	return &OrphanReconciler{
-		config: config,
-		stopCh: make(chan struct{}),
+		config:         config,
+		stopCh:         make(chan struct{}),
+		diskCandidates: make(map[string]orphanCandidateState),
+		fileCandidates: make(map[string]orphanCandidateState),
 	}, nil
 }
 
@@ -134,8 +161,8 @@ func (r *OrphanReconciler) Start(ctx context.Context) error {
 		return nil
 	}
 
-	klog.Infof("Starting orphan reconciler (interval=%v, grace_period=%v, dry_run=%v)",
-		r.config.CheckInterval, r.config.GracePeriod, r.config.DryRun)
+	klog.Infof("Starting orphan reconciler (interval=%v, grace_period=%v, dry_run=%v, run_on_start=%v, minimum_confirmations=%d)",
+		r.config.CheckInterval, r.config.GracePeriod, r.config.DryRun, r.config.RunOnStart, r.config.MinimumConfirmations)
 
 	r.wg.Add(1)
 	go r.run(ctx)
@@ -162,9 +189,12 @@ func (r *OrphanReconciler) run(ctx context.Context) {
 	ticker := time.NewTicker(r.config.CheckInterval)
 	defer ticker.Stop()
 
-	// Run once immediately on startup
-	if err := r.reconcile(ctx); err != nil {
-		klog.Errorf("Initial orphan reconciliation failed: %v", err)
+	if r.config.RunOnStart {
+		if err := r.reconcile(ctx); err != nil {
+			klog.Errorf("Initial orphan reconciliation failed: %v", err)
+		}
+	} else {
+		klog.Infof("Orphan reconciler startup inventory skipped; first scan scheduled in %v", r.config.CheckInterval)
 	}
 
 	for {
@@ -261,13 +291,6 @@ func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory
 	}
 
 	inventory.DiskOrphans = r.findOrphanedDisks(rdsVolumes, activeVolumeIDs)
-	for _, orphan := range inventory.DiskOrphans {
-		inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
-			Action: OrphanMutationDeleteDisk,
-			Target: orphan.VolumeID,
-			Reason: "CSI disk object has no active PersistentVolume",
-		})
-	}
 
 	if r.config.BasePath != "" {
 		fileOrphans, fileCount, err := r.findOrphanedFiles(rdsVolumes, activeVolumeIDs)
@@ -276,15 +299,10 @@ func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory
 		} else {
 			inventory.RDSFileCount = fileCount
 			inventory.FileOrphans = fileOrphans
-			for _, orphan := range inventory.FileOrphans {
-				inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
-					Action: OrphanMutationDeleteFile,
-					Target: orphan.FilePath,
-					Reason: "CSI image file has no disk object and no active PersistentVolume",
-				})
-			}
 		}
 	}
+
+	r.planConfirmedMutations(inventory)
 
 	return inventory, nil
 }
@@ -336,6 +354,9 @@ func (r *OrphanReconciler) applyOrphanInventory(inventory *OrphanInventory) {
 		return
 	}
 
+	plannedDiskDeletes := plannedTargets(inventory.PlannedMutations, OrphanMutationDeleteDisk)
+	plannedFileDeletes := plannedTargets(inventory.PlannedMutations, OrphanMutationDeleteFile)
+
 	if len(inventory.DiskOrphans) > 0 {
 		klog.Warningf("Found %d orphaned disk objects", len(inventory.DiskOrphans))
 	}
@@ -345,6 +366,11 @@ func (r *OrphanReconciler) applyOrphanInventory(inventory *OrphanInventory) {
 		if age < r.config.GracePeriod {
 			klog.V(4).Infof("Orphaned volume %s is too young (age=%v, grace=%v), skipping",
 				orphan.VolumeID, age, r.config.GracePeriod)
+			continue
+		}
+
+		if !plannedDiskDeletes[orphan.VolumeID] {
+			klog.Warningf("Orphaned disk object candidate observed but not yet confirmed for cleanup: %s", orphan.VolumeID)
 			continue
 		}
 
@@ -365,7 +391,7 @@ func (r *OrphanReconciler) applyOrphanInventory(inventory *OrphanInventory) {
 		klog.Infof("Successfully deleted orphaned volume: %s", orphan.VolumeID)
 	}
 
-	r.applyOrphanedFiles(inventory.FileOrphans)
+	r.applyOrphanedFiles(inventory.FileOrphans, plannedFileDeletes)
 }
 
 // findOrphanedFiles identifies orphaned files (files without disk objects AND without PVs).
@@ -427,7 +453,7 @@ func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, active
 	return orphans, len(files), nil
 }
 
-func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile) {
+func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile, plannedDeletes map[string]bool) {
 	if len(orphans) == 0 {
 		return
 	}
@@ -445,6 +471,11 @@ func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile) {
 		klog.Warningf("Orphaned file detected: %s (path=%s, size=%d bytes, created=%v)",
 			orphan.FileName, orphan.FilePath, orphan.SizeBytes, orphan.CreatedAt)
 
+		if !plannedDeletes[orphan.FilePath] {
+			klog.Warningf("Orphaned file candidate observed but not yet confirmed for cleanup: %s", orphan.FilePath)
+			continue
+		}
+
 		if r.config.DryRun {
 			klog.Infof("[DRY-RUN] Would delete orphaned file: %s", orphan.FilePath)
 			continue
@@ -458,6 +489,79 @@ func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile) {
 
 		klog.Infof("Successfully deleted orphaned file: %s", orphan.FilePath)
 	}
+}
+
+func (r *OrphanReconciler) planConfirmedMutations(inventory *OrphanInventory) {
+	if inventory == nil {
+		return
+	}
+
+	observedAt := inventory.ObservedAt
+	if observedAt.IsZero() {
+		observedAt = time.Now()
+	}
+
+	r.candidatesMu.Lock()
+	defer r.candidatesMu.Unlock()
+
+	diskKeys := make(map[string]bool, len(inventory.DiskOrphans))
+	for _, orphan := range inventory.DiskOrphans {
+		diskKeys[orphan.VolumeID] = true
+		state := r.observeCandidate(r.diskCandidates, orphan.VolumeID, observedAt)
+		if state.observations >= r.config.MinimumConfirmations {
+			inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
+				Action: OrphanMutationDeleteDisk,
+				Target: orphan.VolumeID,
+				Reason: fmt.Sprintf("CSI disk object has no active PersistentVolume across %d consecutive inventory passes", state.observations),
+			})
+		}
+	}
+	pruneMissingCandidates(r.diskCandidates, diskKeys)
+
+	fileKeys := make(map[string]bool, len(inventory.FileOrphans))
+	for _, orphan := range inventory.FileOrphans {
+		fileKeys[orphan.FilePath] = true
+		state := r.observeCandidate(r.fileCandidates, orphan.FilePath, observedAt)
+		if state.observations >= r.config.MinimumConfirmations {
+			inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
+				Action: OrphanMutationDeleteFile,
+				Target: orphan.FilePath,
+				Reason: fmt.Sprintf("CSI image file has no disk object and no active PersistentVolume across %d consecutive inventory passes", state.observations),
+			})
+		}
+	}
+	pruneMissingCandidates(r.fileCandidates, fileKeys)
+}
+
+func (r *OrphanReconciler) observeCandidate(candidates map[string]orphanCandidateState, key string, observedAt time.Time) orphanCandidateState {
+	state, ok := candidates[key]
+	if !ok {
+		state = orphanCandidateState{
+			firstSeen: observedAt,
+		}
+	}
+	state.lastSeen = observedAt
+	state.observations++
+	candidates[key] = state
+	return state
+}
+
+func pruneMissingCandidates(candidates map[string]orphanCandidateState, observed map[string]bool) {
+	for key := range candidates {
+		if !observed[key] {
+			delete(candidates, key)
+		}
+	}
+}
+
+func plannedTargets(mutations []OrphanMutation, action OrphanMutationAction) map[string]bool {
+	targets := make(map[string]bool)
+	for _, mutation := range mutations {
+		if mutation.Action == action {
+			targets[mutation.Target] = true
+		}
+	}
+	return targets
 }
 
 // deleteOrphanedVolume deletes an orphaned volume from RDS

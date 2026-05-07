@@ -100,9 +100,11 @@ controller:
 
   # Orphan reconciler settings (detects and cleans up orphaned volumes)
   orphanReconciler:
-    enabled: true
+    enabled: false
     checkInterval: 1h
     gracePeriod: 5m
+    runOnStart: false
+    minConfirmations: 2
     dryRun: true  # Set to false to enable actual cleanup
 
   # Attachment grace period for live migration handoff

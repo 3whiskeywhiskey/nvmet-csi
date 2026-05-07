@@ -38,6 +38,10 @@ func NewOrphanCleaner(connector Connector, managedNQNPrefix string) *OrphanClean
 func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 	klog.V(2).Info("Scanning for orphaned NVMe connections")
 
+	if err := ValidateNQNPrefix(oc.managedNQNPrefix); err != nil {
+		return fmt.Errorf("unsafe managed NQN prefix for orphan cleanup: %w", err)
+	}
+
 	// Get all connected NQNs using ListConnectedSubsystems
 	nqns, err := oc.resolver.ListConnectedSubsystems()
 	if err != nil {

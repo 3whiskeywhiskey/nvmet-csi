@@ -1,16 +1,21 @@
 # CRITICAL: Orphan Cleaner NQN Filtering Bug
 
-**Status:** NOT CURRENTLY ACTIVE (code exists but unused)
-**Severity:** CRITICAL if enabled
+**Status:** MITIGATED; keep guarded
+**Severity:** CRITICAL if prefix filtering is bypassed
 **Discovered:** 2026-02-03 during Phase 13 hardware validation
 
 ## Problem
 
-The NVMe orphan cleaner in `pkg/nvme/orphan.go` lists **ALL** NVMe subsystems on the node without filtering for CSI-managed volumes. If enabled, it could disconnect the host's own NVMe-oF mounts (e.g., diskless NixOS nodes using NVMe/TCP for /var).
+The NVMe orphan cleaner in `pkg/nvme/orphan.go` lists connected NVMe
+subsystems on node startup and disconnects CSI-managed subsystems that appear
+connected but have no working block device. This is useful after node churn, but
+it is dangerous if the managed NQN prefix is missing or too broad: it could
+disconnect the host's own NVMe-oF mounts (e.g., diskless NixOS nodes using
+NVMe/TCP for /var).
 
 ## Root Cause
 
-### Current Implementation
+### Historical Unsafe Implementation
 
 ```go
 // pkg/nvme/sysfs.go
@@ -33,7 +38,7 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 }
 ```
 
-### Attack Vector
+### Attack Vector If Filtering Is Missing
 
 1. Orphan cleaner lists ALL NVMe subsystems (including host's /var mount with different NQN)
 2. For each subsystem, checks if "orphaned" by looking for device in expected locations
@@ -61,20 +66,15 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 
 ## Current Status
 
-**Code exists but is NOT instantiated or called in production:**
+The node plugin runs this cleanup once on startup. The Helm and raw manifests
+set `CSI_MANAGED_NQN_PREFIX`, and `CleanupOrphanedConnections` now validates
+that the prefix is non-empty and syntactically valid before listing or
+disconnecting any subsystem. The cleaner also skips NQNs that do not match that
+prefix.
 
-```bash
-$ grep -r "NewOrphanCleaner\|CleanupOrphanedConnections" pkg/ --include="*.go" | grep -v "_test.go"
-pkg/nvme/orphan.go:func NewOrphanCleaner(...)
-pkg/nvme/orphan.go:func (oc *OrphanCleaner) CleanupOrphanedConnections(...)
-# No production usage found
-```
+## Required Guardrails
 
-The orphan cleaner is defined but never used outside of unit tests.
-
-## Required Fix
-
-Add NQN filtering to only check CSI-managed volumes:
+Keep NQN filtering in the cleanup loop:
 
 ```go
 // pkg/nvme/sysfs.go
@@ -91,8 +91,6 @@ func (s *SysfsScanner) ListSubsystemNQNs() ([]string, error) {
     return filteredNQNs, nil
 }
 ```
-
-**OR** add filtering in the orphan cleaner itself:
 
 ```go
 // pkg/nvme/orphan.go
@@ -112,12 +110,21 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 }
 ```
 
+Also keep prefix validation before any scan:
+
+```go
+if err := ValidateNQNPrefix(oc.managedNQNPrefix); err != nil {
+    return fmt.Errorf("unsafe managed NQN prefix for orphan cleanup: %w", err)
+}
+```
+
 ## Mitigation
 
-**BLOCKER for enabling orphan cleanup:**
-- Do NOT enable orphan reconciliation until this is fixed
-- Do NOT instantiate `OrphanCleaner` in production code
-- Do NOT add periodic orphan cleanup to node plugin
+**Do not weaken these controls:**
+- Do NOT run node orphan cleanup with an empty `CSI_MANAGED_NQN_PREFIX`
+- Do NOT use a broad prefix such as `nqn.`
+- Do NOT add periodic node orphan cleanup without rate limiting and explicit
+  tests on hosts that have non-CSI NVMe/TCP mounts
 
 ## Testing Requirements
 

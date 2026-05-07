@@ -65,6 +65,8 @@ spec:
             - "-enable-orphan-reconciler"
             - "-orphan-check-interval={{ .Values.controller.orphanReconciler.checkInterval }}"
             - "-orphan-grace-period={{ .Values.controller.orphanReconciler.gracePeriod }}"
+            - "-orphan-run-on-start={{ .Values.controller.orphanReconciler.runOnStart }}"
+            - "-orphan-min-confirmations={{ .Values.controller.orphanReconciler.minConfirmations }}"
             {{- if .Values.controller.orphanReconciler.dryRun }}
             - "-orphan-dry-run=true"
             {{- else }}

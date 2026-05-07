@@ -102,11 +102,14 @@ spec:
             - "-rds-mutation-min-interval=$(RDS_MUTATION_MIN_INTERVAL)"
             - "-rds-mutation-burst=$(RDS_MUTATION_BURST)"
             - "-rds-mutation-timeout=$(RDS_MUTATION_TIMEOUT)"
-            # Orphan reconciler settings (optional - enable to detect and cleanup orphaned volumes)
-            - "-enable-orphan-reconciler"
-            - "-orphan-check-interval=1h"
-            - "-orphan-grace-period=5m"
-            - "-orphan-dry-run=true"  # Dry-run mode - will only log orphaned volumes without deleting
+            # Orphan reconciler settings are intentionally disabled by default.
+            # Enable only for explicit audits/remediation; even dry-run scans add RouterOS chatter.
+            # - "-enable-orphan-reconciler"
+            # - "-orphan-check-interval=1h"
+            # - "-orphan-grace-period=5m"
+            # - "-orphan-run-on-start=false"
+            # - "-orphan-min-confirmations=2"
+            # - "-orphan-dry-run=true"
             - "-v=5"
             # SECURITY: For testing only, you can skip host key verification with:
             # - "-rds-insecure-skip-verify=true"

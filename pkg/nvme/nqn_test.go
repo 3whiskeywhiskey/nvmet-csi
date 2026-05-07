@@ -97,6 +97,11 @@ func TestNQNMatchesPrefix_Matching(t *testing.T) {
 			prefix: "nqn.2000-02.com.mikrotik:pvc-",
 			expect: false,
 		},
+		{
+			nqn:    "nqn.2000-02.com.mikrotik:pvc-12345",
+			prefix: "",
+			expect: false,
+		},
 	}
 
 	for _, tt := range tests {
