@@ -12,6 +12,13 @@ type Backend struct {
 	host Host
 }
 
+type hostCommandPlanner interface {
+	CreateVolumeCommands(spec VolumeSpec) []Command
+	RepairVolumeCommands(spec VolumeSpec) []Command
+	DeleteVolumeCommands(state VolumeState) []Command
+	ResizeVolumeCommands(volumeID string, sizeBytes int64) []Command
+}
+
 func New(cfg Config, host Host) (*Backend, error) {
 	cfg = cfg.withDefaults()
 	if err := cfg.validate(); err != nil {
@@ -47,70 +54,70 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 	if err != nil {
 		if backend.IsVolumeNotFound(err) {
 			normalized := requestFromSpec(spec, desired.Parameters)
-			return &backend.VolumePlan{
+			return b.withPlanMetadata(&backend.VolumePlan{
 				Action:   backend.VolumeActionCreate,
 				VolumeID: desired.ID,
 				Reason:   "zvol missing",
 				Desired:  &normalized,
 				Native:   spec,
-			}, nil
+			}), nil
 		}
 		return nil, fmt.Errorf("failed to observe volume %s: %w", desired.ID, err)
 	}
 
 	if actual.Dataset != spec.Dataset {
-		return conflictPlan(spec, actual, "ZFS dataset differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "ZFS dataset differs")), nil
 	}
 	if actual.DevicePath != spec.DevicePath {
-		return conflictPlan(spec, actual, "zvol device path differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "zvol device path differs")), nil
 	}
 	if actual.NQN != spec.NQN {
-		return conflictPlan(spec, actual, "NVMe/TCP NQN differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "NVMe/TCP NQN differs")), nil
 	}
 	if actual.Port != spec.Port {
-		return conflictPlan(spec, actual, "NVMe/TCP port differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "NVMe/TCP port differs")), nil
 	}
 	if actual.ExportDevice != "" && actual.ExportDevice != spec.DevicePath {
-		return conflictPlan(spec, actual, "nvmet namespace device path differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "nvmet namespace device path differs")), nil
 	}
 	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(spec.NQN) {
-		return conflictPlan(spec, actual, "nvmet port link target differs"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "nvmet port link target differs")), nil
 	}
 	if actual.SizeBytes > spec.SizeBytes {
-		return conflictPlan(spec, actual, "actual zvol is larger than desired"), nil
+		return b.withPlanMetadata(conflictPlan(spec, actual, "actual zvol is larger than desired")), nil
 	}
 	if actual.SizeBytes < spec.SizeBytes {
 		normalized := requestFromSpec(spec, desired.Parameters)
-		return &backend.VolumePlan{
+		return b.withPlanMetadata(&backend.VolumePlan{
 			Action:   backend.VolumeActionResize,
 			VolumeID: desired.ID,
 			Reason:   "zvol exists and is smaller than desired",
 			Desired:  &normalized,
 			Actual:   volumeFromState(actual),
 			Native:   spec,
-		}, nil
+		}), nil
 	}
 	if !actual.Exported {
 		normalized := requestFromSpec(spec, desired.Parameters)
-		return &backend.VolumePlan{
+		return b.withPlanMetadata(&backend.VolumePlan{
 			Action:   backend.VolumeActionRepair,
 			VolumeID: desired.ID,
 			Reason:   "zvol exists but nvmet export is incomplete",
 			Desired:  &normalized,
 			Actual:   volumeFromState(actual),
 			Native:   spec,
-		}, nil
+		}), nil
 	}
 
 	normalized := requestFromSpec(spec, desired.Parameters)
-	return &backend.VolumePlan{
+	return b.withPlanMetadata(&backend.VolumePlan{
 		Action:   backend.VolumeActionNoop,
 		VolumeID: desired.ID,
 		Reason:   "zvol and nvmet export already match desired state",
 		Desired:  &normalized,
 		Actual:   volumeFromState(actual),
 		Native:   spec,
-	}, nil
+	}), nil
 }
 
 func (b *Backend) BuildDeleteVolumePlan(ctx context.Context, volumeID string) (*backend.VolumePlan, error) {
@@ -124,35 +131,36 @@ func (b *Backend) BuildDeleteVolumePlan(ctx context.Context, volumeID string) (*
 	actual, err := b.host.GetVolume(ctx, volumeID)
 	if err != nil {
 		if backend.IsVolumeNotFound(err) {
-			return &backend.VolumePlan{
+			return b.withPlanMetadata(&backend.VolumePlan{
 				Action:   backend.VolumeActionNoop,
 				VolumeID: volumeID,
 				Reason:   "zvol already absent",
-			}, nil
+			}), nil
 		}
 		return nil, fmt.Errorf("failed to observe volume %s: %w", volumeID, err)
 	}
 	if actual.NQN == "" {
-		return conflictPlanFromState(volumeID, actual, "NVMe/TCP NQN metadata is missing"), nil
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "NVMe/TCP NQN metadata is missing")), nil
 	}
 	if actual.Port <= 0 {
-		return conflictPlanFromState(volumeID, actual, "NVMe/TCP port metadata is missing"), nil
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "NVMe/TCP port metadata is missing")), nil
 	}
 	if actual.ExportDevice != "" && actual.ExportDevice != actual.DevicePath {
-		return conflictPlanFromState(volumeID, actual, "nvmet namespace device path differs"), nil
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "nvmet namespace device path differs")), nil
 	}
 	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(actual.NQN) {
-		return conflictPlanFromState(volumeID, actual, "nvmet port link target differs"), nil
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "nvmet port link target differs")), nil
 	}
 	if actual.PortEntryExists && actual.PortLinkTarget == "" {
-		return conflictPlanFromState(volumeID, actual, "nvmet port entry exists but is not an expected symlink"), nil
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "nvmet port entry exists but is not an expected symlink")), nil
 	}
-	return &backend.VolumePlan{
+	return b.withPlanMetadata(&backend.VolumePlan{
 		Action:   backend.VolumeActionDelete,
 		VolumeID: volumeID,
 		Reason:   "zvol exists",
 		Actual:   volumeFromState(actual),
-	}, nil
+		Native:   *actual,
+	}), nil
 }
 
 func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan, opts backend.VolumeApplyOptions) (*backend.VolumeApplyResult, error) {
@@ -167,6 +175,9 @@ func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan,
 		Action:   plan.Action,
 		VolumeID: plan.VolumeID,
 		DryRun:   opts.DryRun,
+		Backend:  plan.Backend,
+		Reason:   plan.Reason,
+		Commands: copyStrings(plan.Commands),
 	}
 
 	switch plan.Action {
@@ -301,6 +312,76 @@ func (b *Backend) specFromPlan(plan *backend.VolumePlan) (VolumeSpec, error) {
 		return VolumeSpec{}, fmt.Errorf("%s plan for %s has no desired state", plan.Action, plan.VolumeID)
 	}
 	return b.specFromRequest(*plan.Desired), nil
+}
+
+func (b *Backend) withPlanMetadata(plan *backend.VolumePlan) *backend.VolumePlan {
+	if plan == nil {
+		return nil
+	}
+	plan.Backend = b.Name()
+	if plan.Commands == nil {
+		plan.Commands = b.commandsForPlan(plan)
+	}
+	return plan
+}
+
+func (b *Backend) commandsForPlan(plan *backend.VolumePlan) []string {
+	planner, ok := b.host.(hostCommandPlanner)
+	if !ok || plan == nil {
+		return nil
+	}
+
+	switch plan.Action {
+	case backend.VolumeActionCreate:
+		spec, err := b.specFromPlan(plan)
+		if err != nil {
+			return nil
+		}
+		return commandPlanStrings(planner.CreateVolumeCommands(spec))
+	case backend.VolumeActionRepair:
+		spec, err := b.specFromPlan(plan)
+		if err != nil {
+			return nil
+		}
+		return commandPlanStrings(planner.RepairVolumeCommands(spec))
+	case backend.VolumeActionResize:
+		spec, err := b.specFromPlan(plan)
+		if err != nil {
+			return nil
+		}
+		return commandPlanStrings(planner.ResizeVolumeCommands(spec.ID, spec.SizeBytes))
+	case backend.VolumeActionDelete:
+		switch state := plan.Native.(type) {
+		case VolumeState:
+			return commandPlanStrings(planner.DeleteVolumeCommands(state))
+		case *VolumeState:
+			if state == nil {
+				return nil
+			}
+			return commandPlanStrings(planner.DeleteVolumeCommands(*state))
+		default:
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
+func commandPlanStrings(commands []Command) []string {
+	out := make([]string, 0, len(commands))
+	for _, cmd := range commands {
+		out = append(out, cmd.String())
+	}
+	return out
+}
+
+func copyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
 }
 
 func requestFromSpec(spec VolumeSpec, params map[string]string) backend.CreateVolumeRequest {

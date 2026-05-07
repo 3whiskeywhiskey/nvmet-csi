@@ -88,8 +88,10 @@ type VolumePlan struct {
 	Action   VolumeAction
 	VolumeID string
 	Reason   string
+	Backend  string
 	Desired  *CreateVolumeRequest
 	Actual   *Volume
+	Commands []string
 
 	// Native lets an adapter carry backend-specific planning state between
 	// Build*Plan and ApplyVolumePlan without leaking that state into callers.
@@ -105,6 +107,9 @@ type VolumeApplyResult struct {
 	VolumeID string
 	Applied  bool
 	DryRun   bool
+	Backend  string
+	Reason   string
+	Commands []string
 }
 
 // Backend is the controller-side provisioning contract.

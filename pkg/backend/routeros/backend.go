@@ -73,6 +73,9 @@ func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan,
 		VolumeID: result.Slot,
 		Applied:  result.Applied,
 		DryRun:   result.DryRun,
+		Backend:  b.Name(),
+		Reason:   plan.Reason,
+		Commands: append([]string(nil), plan.Commands...),
 	}, nil
 }
 
@@ -237,6 +240,7 @@ func fromRDSVolumePlan(plan *reconciler.VolumePlan, desired backend.CreateVolume
 		Action:   backend.VolumeAction(plan.Action),
 		VolumeID: plan.Slot,
 		Reason:   plan.Reason,
+		Backend:  backend.TypeRouterOSRDS,
 		Actual:   fromRDSVolume(plan.Actual),
 		Native:   plan,
 	}
