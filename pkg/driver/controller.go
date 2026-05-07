@@ -17,7 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
@@ -55,7 +55,7 @@ func NewControllerServer(driver *Driver) *ControllerServer {
 	}
 }
 
-// CreateVolume provisions a new volume on RDS
+// CreateVolume provisions a new volume on the selected storage backend.
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	klog.V(4).Infof("CreateVolume CSI call for %s", req.GetName())
 
@@ -105,6 +105,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// Get parameters from StorageClass
 	params := req.GetParameters()
+	if err := cs.validateBackendSelection(params); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok {
 		volumeBasePath = path
@@ -140,28 +143,35 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Errorf(codes.Internal, "failed to generate file path: %v", err)
 	}
 
-	// Create volume on RDS
-	klog.V(4).Infof("Creating volume %s on RDS (size: %d bytes, path: %s, nqn: %s)", volumeID, requiredBytes, filePath, nqn)
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+
+	// Create volume on the configured backend.
+	klog.V(4).Infof("Creating volume %s on backend %s (size: %d bytes, path: %s, nqn: %s)",
+		volumeID, storageBackend.Name(), requiredBytes, filePath, nqn)
 
 	// Log volume create request
 	secLogger := security.GetLogger()
 	secLogger.LogVolumeCreate(volumeID, req.GetName(), security.OutcomeUnknown, nil, 0)
 
-	createOpts := rds.CreateVolumeOptions{
-		Slot:          volumeID,
-		FilePath:      filePath,
-		FileSizeBytes: requiredBytes,
-		NVMETCPPort:   nvmePort,
-		NVMETCPNQN:    nqn,
+	createOpts := backend.CreateVolumeRequest{
+		ID:          volumeID,
+		Path:        filePath,
+		SizeBytes:   requiredBytes,
+		NVMETCPPort: nvmePort,
+		NVMETCPNQN:  nqn,
+		Parameters:  params,
 	}
 
-	plan, err := reconciler.BuildEnsureVolumePlan(cs.driver.rdsClient, createOpts)
+	plan, err := storageBackend.BuildEnsureVolumePlan(ctx, createOpts)
 	if err != nil {
 		return nil, createVolumeStatusError(err)
 	}
 	klog.V(3).Infof("CreateVolume plan for %s: action=%s reason=%q", volumeID, plan.Action, plan.Reason)
 
-	if contentSource := req.GetVolumeContentSource(); contentSource != nil && plan.Action == reconciler.VolumeActionCreate {
+	if contentSource := req.GetVolumeContentSource(); contentSource != nil && plan.Action == backend.VolumeActionCreate {
 		if snapshotSource := contentSource.GetSnapshot(); snapshotSource != nil {
 			return cs.createVolumeFromSnapshot(ctx, req, volumeID, snapshotSource.GetSnapshotId(), requiredBytes)
 		}
@@ -170,29 +180,29 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 	}
 
-	if plan.Action == reconciler.VolumeActionNoop && plan.Actual != nil {
+	if plan.Action == backend.VolumeActionNoop && plan.Actual != nil {
 		klog.V(2).Infof("Volume %s already matches desired state (idempotent)", volumeID)
-		return cs.createVolumeResponse(volumeID, plan.Actual.FileSizeBytes, params, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.FilePath), nil
+		return cs.createVolumeResponse(volumeID, plan.Actual.SizeBytes, params, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.Path), nil
 	}
 
-	if plan.Action == reconciler.VolumeActionResize && plan.Actual != nil {
+	if plan.Action == backend.VolumeActionResize && plan.Actual != nil {
 		return nil, status.Errorf(codes.AlreadyExists,
 			"volume %s already exists with different capacity (existing: %d, requested: %d)",
-			volumeID, plan.Actual.FileSizeBytes, requiredBytes)
+			volumeID, plan.Actual.SizeBytes, requiredBytes)
 	}
 
-	if plan.Action == reconciler.VolumeActionConflict {
+	if plan.Action == backend.VolumeActionConflict {
 		return nil, status.Errorf(codes.FailedPrecondition, "unsafe volume reconciliation for %s: %s", volumeID, plan.Reason)
 	}
 
 	startTime := time.Now()
-	if _, err := reconciler.ApplyVolumePlan(ctx, cs.driver.rdsClient, plan, reconciler.VolumeApplyOptions{}); err != nil {
+	if _, err := storageBackend.ApplyVolumePlan(ctx, plan, backend.VolumeApplyOptions{}); err != nil {
 		// Log volume create failure
 		secLogger.LogVolumeCreate(volumeID, req.GetName(), security.OutcomeFailure, err, time.Since(startTime))
 		return nil, createVolumeStatusError(err)
 	}
 
-	// RDS layer already logged "Created volume X" at V(2) - no duplicate needed
+	// Backend layer already logged "Created volume X" at V(2) - no duplicate needed.
 	klog.V(4).Infof("CreateVolume CSI call completed for %s", volumeID)
 
 	// Log volume create success
@@ -231,6 +241,10 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	requiredBytes int64,
 ) (*csi.CreateVolumeResponse, error) {
 	klog.V(4).Infof("Creating volume %s from snapshot %s", volumeID, snapshotID)
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
 
 	// Validate snapshot ID
 	if err := utils.ValidateSnapshotID(snapshotID); err != nil {
@@ -238,22 +252,24 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	}
 
 	// Verify snapshot exists
-	snapshotInfo, err := cs.driver.rdsClient.GetSnapshot(snapshotID)
+	snapshotInfo, err := storageBackend.GetSnapshot(ctx, snapshotID)
 	if err != nil {
-		var notFoundErr *rds.SnapshotNotFoundError
-		if stderrors.As(err, &notFoundErr) {
+		if backend.IsSnapshotNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "snapshot %s not found", snapshotID)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get snapshot: %v", err)
 	}
 
 	// CSI spec: volume size must not be less than snapshot size
-	if requiredBytes < snapshotInfo.FileSizeBytes {
-		requiredBytes = snapshotInfo.FileSizeBytes
+	if requiredBytes < snapshotInfo.SizeBytes {
+		requiredBytes = snapshotInfo.SizeBytes
 	}
 
 	// Get parameters
 	params := req.GetParameters()
+	if err := cs.validateBackendSelection(params); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok {
 		volumeBasePath = path
@@ -284,18 +300,19 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 		return nil, status.Errorf(codes.Internal, "failed to generate file path: %v", err)
 	}
 
-	// Restore: create new volume from snapshot via RDS
-	restoreOpts := rds.CreateVolumeOptions{
-		Slot:          volumeID,
-		FilePath:      filePath,
-		FileSizeBytes: requiredBytes,
-		NVMETCPPort:   nvmePort,
-		NVMETCPNQN:    nqn,
+	// Restore: create new volume from snapshot via backend.
+	restoreOpts := backend.CreateVolumeRequest{
+		ID:          volumeID,
+		Path:        filePath,
+		SizeBytes:   requiredBytes,
+		NVMETCPPort: nvmePort,
+		NVMETCPNQN:  nqn,
+		Parameters:  params,
 	}
 
-	if err := cs.driver.rdsClient.RestoreSnapshot(snapshotID, restoreOpts); err != nil {
+	if err := storageBackend.RestoreSnapshot(ctx, snapshotID, restoreOpts); err != nil {
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to restore snapshot: %v", err)
 	}
@@ -328,7 +345,7 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	}, nil
 }
 
-// DeleteVolume removes a volume from RDS
+// DeleteVolume removes a volume from the selected storage backend.
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 	klog.V(4).Infof("DeleteVolume CSI call for %s", volumeID)
@@ -343,33 +360,33 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID: %v", err)
 	}
 
-	// Safety check: ensure RDS client is initialized
-	if cs.driver == nil || cs.driver.rdsClient == nil {
-		return nil, status.Error(codes.Internal, "RDS client not initialized")
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
 
-	plan, err := reconciler.BuildDeleteVolumePlan(cs.driver.rdsClient, volumeID)
+	plan, err := storageBackend.BuildDeleteVolumePlan(ctx, volumeID)
 	if err != nil {
 		return nil, deleteVolumeStatusError(err)
 	}
 	klog.V(3).Infof("DeleteVolume plan for %s: action=%s reason=%q", volumeID, plan.Action, plan.Reason)
 
-	if plan.Action == reconciler.VolumeActionNoop {
-		klog.V(4).Infof("Volume %s not found on RDS, assuming already deleted", volumeID)
+	if plan.Action == backend.VolumeActionNoop {
+		klog.V(4).Infof("Volume %s not found on backend %s, assuming already deleted", volumeID, storageBackend.Name())
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	// Log volume details for audit trail
 	klog.V(4).Infof("Deleting volume %s (path=%s, size=%d bytes, nvme_export=%v)",
-		volumeID, plan.Actual.FilePath, plan.Actual.FileSizeBytes, plan.Actual.NVMETCPExport)
+		volumeID, plan.Actual.Path, plan.Actual.SizeBytes, plan.Actual.NVMETCPExport)
 
 	// Log volume delete request
 	secLogger := security.GetLogger()
 	secLogger.LogVolumeDelete(volumeID, "", security.OutcomeUnknown, nil, 0)
 
-	// Delete volume from RDS (idempotent)
+	// Delete volume from backend (idempotent)
 	startTime := time.Now()
-	if _, err := reconciler.ApplyVolumePlan(ctx, cs.driver.rdsClient, plan, reconciler.VolumeApplyOptions{}); err != nil {
+	if _, err := storageBackend.ApplyVolumePlan(ctx, plan, backend.VolumeApplyOptions{}); err != nil {
 		klog.Errorf("Failed to delete volume %s: %v", volumeID, err)
 
 		// Log volume delete failure
@@ -377,7 +394,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, deleteVolumeStatusError(err)
 	}
 
-	// RDS layer already logged "Deleted volume X" at V(2) - no duplicate needed
+	// Backend layer already logged "Deleted volume X" at V(2) - no duplicate needed.
 	klog.V(4).Infof("DeleteVolume CSI call completed for %s", volumeID)
 
 	// Log volume delete success
@@ -388,17 +405,17 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 func createVolumeStatusError(err error) error {
 	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-		return status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+		return status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 	}
 	if stderrors.Is(err, utils.ErrResourceExhausted) {
-		return status.Errorf(codes.ResourceExhausted, "insufficient storage on RDS: %v", err)
+		return status.Errorf(codes.ResourceExhausted, "insufficient storage on backend: %v", err)
 	}
-	return status.Errorf(codes.Internal, "failed to create volume on RDS: %v", err)
+	return status.Errorf(codes.Internal, "failed to create volume on backend: %v", err)
 }
 
 func deleteVolumeStatusError(err error) error {
 	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-		return status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+		return status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 	}
 	return status.Errorf(codes.Internal, "failed to verify volume existence: %v", err)
 }
@@ -418,7 +435,11 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}
 
 	// Check if volume exists
-	if _, err := cs.driver.rdsClient.GetVolume(volumeID); err != nil {
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+	if _, err := storageBackend.GetVolume(ctx, volumeID); err != nil {
 		return nil, status.Errorf(codes.NotFound, "volume %s not found: %v", volumeID, err)
 	}
 
@@ -436,25 +457,33 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}, nil
 }
 
-// GetCapacity returns the available storage capacity on RDS
+// GetCapacity returns the available storage capacity on the selected backend.
 func (cs *ControllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	klog.V(4).Info("GetCapacity called")
 
 	// Get parameters
 	params := req.GetParameters()
+	if err := cs.validateBackendSelection(params); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok {
 		volumeBasePath = path
 	}
 
-	// Query capacity from RDS
-	capacity, err := cs.driver.rdsClient.GetCapacity(volumeBasePath)
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+
+	// Query capacity from backend
+	capacity, err := storageBackend.GetCapacity(ctx, volumeBasePath)
 	if err != nil {
-		klog.Errorf("Failed to get capacity from RDS: %v", err)
+		klog.Errorf("Failed to get capacity from backend %s: %v", storageBackend.Name(), err)
 		return nil, status.Errorf(codes.Internal, "failed to query capacity: %v", err)
 	}
 
-	klog.V(4).Infof("RDS capacity: total=%d, free=%d, used=%d", capacity.TotalBytes, capacity.FreeBytes, capacity.UsedBytes)
+	klog.V(4).Infof("Backend capacity: backend=%s total=%d free=%d used=%d", storageBackend.Name(), capacity.TotalBytes, capacity.FreeBytes, capacity.UsedBytes)
 
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: capacity.FreeBytes,
@@ -490,7 +519,7 @@ func (cs *ControllerServer) validateBlockingNodeExists(ctx context.Context, node
 
 // buildPublishContext creates the publish_context map with NVMe connection parameters.
 // Uses snake_case keys to match existing volumeContext conventions.
-func (cs *ControllerServer) buildPublishContext(volume *rds.VolumeInfo, params map[string]string) map[string]string {
+func (cs *ControllerServer) buildPublishContext(volume *backend.Volume, params map[string]string) map[string]string {
 	fsType := "ext4"
 	if fs, ok := params[paramFSType]; ok && fs != "" {
 		fsType = fs
@@ -647,11 +676,16 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 		}
 	}
 
-	// Verify volume exists on RDS
-	volume, err := cs.driver.rdsClient.GetVolume(volumeID)
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+
+	// Verify volume exists on backend
+	volume, err := storageBackend.GetVolume(ctx, volumeID)
 	if err != nil {
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 		}
 		return nil, status.Errorf(codes.NotFound, "volume %s not found: %v", volumeID, err)
 	}
@@ -763,7 +797,7 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 	}, nil
 }
 
-func (cs *ControllerServer) applySecondaryAttachmentPlan(ctx context.Context, req *csi.ControllerPublishVolumeRequest, volume *rds.VolumeInfo, plan *reconciler.AttachmentPlan, startTime time.Time) (*csi.ControllerPublishVolumeResponse, error) {
+func (cs *ControllerServer) applySecondaryAttachmentPlan(ctx context.Context, req *csi.ControllerPublishVolumeRequest, volume *backend.Volume, plan *reconciler.AttachmentPlan, startTime time.Time) (*csi.ControllerPublishVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 	nodeID := req.GetNodeId()
 	am := cs.driver.GetAttachmentManager()
@@ -1024,9 +1058,9 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
 	}
 
-	// Safety check: ensure RDS client is initialized
-	if cs.driver == nil || cs.driver.rdsClient == nil {
-		return nil, status.Error(codes.Internal, "RDS client not initialized")
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
 
 	// 2. Generate deterministic snapshot ID from CSI name + source volume for idempotency.
@@ -1039,31 +1073,30 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	// 3. Check idempotency: does a snapshot with this ID already exist?
 	// Since the ID is deterministic, a retry with the same (name, source) returns the same
 	// snapshot rather than creating a duplicate.
-	existingSnapshot, err := cs.driver.rdsClient.GetSnapshot(snapshotID)
+	existingSnapshot, err := storageBackend.GetSnapshot(ctx, snapshotID)
 	if err == nil {
 		// Snapshot exists -- check if same source volume (idempotent) or different (conflict)
-		if existingSnapshot.SourceVolume == sourceVolumeID {
+		if existingSnapshot.SourceVolumeID == sourceVolumeID {
 			klog.V(2).Infof("Snapshot %s already exists for source %s (idempotent)", snapshotID, sourceVolumeID)
 			return &csi.CreateSnapshotResponse{
 				Snapshot: &csi.Snapshot{
 					SnapshotId:     snapshotID,
-					SourceVolumeId: existingSnapshot.SourceVolume,
+					SourceVolumeId: existingSnapshot.SourceVolumeID,
 					CreationTime:   timestamppb.New(existingSnapshot.CreatedAt),
-					SizeBytes:      existingSnapshot.FileSizeBytes,
+					SizeBytes:      existingSnapshot.SizeBytes,
 					ReadyToUse:     true,
 				},
 			}, nil
 		}
 		return nil, status.Errorf(codes.AlreadyExists,
 			"snapshot %s already exists with different source volume (existing: %s, requested: %s)",
-			snapshotID, existingSnapshot.SourceVolume, sourceVolumeID)
+			snapshotID, existingSnapshot.SourceVolumeID, sourceVolumeID)
 	}
 
-	// 4. Verify source volume exists on RDS
-	sourceVolume, err := cs.driver.rdsClient.GetVolume(sourceVolumeID)
+	// 4. Verify source volume exists on backend
+	sourceVolume, err := storageBackend.GetVolume(ctx, sourceVolumeID)
 	if err != nil {
-		var notFoundErr *rds.VolumeNotFoundError
-		if stderrors.As(err, &notFoundErr) {
+		if backend.IsVolumeNotFound(err) {
 			return nil, status.Errorf(codes.NotFound, "source volume %s not found", sourceVolumeID)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get source volume: %v", err)
@@ -1072,23 +1105,27 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	// 5. Determine base path for snapshot file storage
 	// Snapshots are stored in the same base directory as volumes (paramVolumePath).
 	params := req.GetParameters()
+	if err := cs.validateBackendSelection(params); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok && path != "" {
 		volumeBasePath = path
 	}
 
-	// 6. Create snapshot via RDS using /disk add copy-from
-	createOpts := rds.CreateSnapshotOptions{
-		Name:         snapshotID,
-		SourceVolume: sourceVolumeID,
-		BasePath:     volumeBasePath,
+	// 6. Create snapshot via backend
+	createOpts := backend.CreateSnapshotRequest{
+		ID:             snapshotID,
+		SourceVolumeID: sourceVolumeID,
+		BasePath:       volumeBasePath,
+		Parameters:     params,
 	}
 
-	snapshotInfo, err := cs.driver.rdsClient.CreateSnapshot(createOpts)
+	snapshotInfo, err := storageBackend.CreateSnapshot(ctx, createOpts)
 	if err != nil {
 		// Map connection errors to Unavailable
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create snapshot: %v", err)
 	}
@@ -1101,7 +1138,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 			SnapshotId:     snapshotID,
 			SourceVolumeId: sourceVolumeID,
 			CreationTime:   timestamppb.New(snapshotInfo.CreatedAt),
-			SizeBytes:      sourceVolume.FileSizeBytes,
+			SizeBytes:      sourceVolume.SizeBytes,
 			ReadyToUse:     true,
 		},
 	}, nil
@@ -1122,16 +1159,16 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 	}
 
-	// Safety check
-	if cs.driver == nil || cs.driver.rdsClient == nil {
-		return nil, status.Error(codes.Internal, "RDS client not initialized")
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
 
-	// 2. Delete snapshot via RDS (idempotent -- RDS client returns nil for not-found)
-	if err := cs.driver.rdsClient.DeleteSnapshot(snapshotID); err != nil {
+	// 2. Delete snapshot via backend (idempotent)
+	if err := storageBackend.DeleteSnapshot(ctx, snapshotID); err != nil {
 		// Map connection errors
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to delete snapshot: %v", err)
 	}
@@ -1145,9 +1182,9 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 	klog.V(4).Infof("ListSnapshots CSI call (snapshot_id=%s, source_volume_id=%s, max_entries=%d, starting_token=%s)",
 		req.GetSnapshotId(), req.GetSourceVolumeId(), req.GetMaxEntries(), req.GetStartingToken())
 
-	// Safety check
-	if cs.driver == nil || cs.driver.rdsClient == nil {
-		return nil, status.Error(codes.Internal, "RDS client not initialized")
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
 
 	// Handle single snapshot lookup by ID
@@ -1158,7 +1195,7 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 			return &csi.ListSnapshotsResponse{}, nil
 		}
 
-		snap, err := cs.driver.rdsClient.GetSnapshot(snapshotID)
+		snap, err := storageBackend.GetSnapshot(ctx, snapshotID)
 		if err != nil {
 			// Not found -> return empty response (not error)
 			return &csi.ListSnapshotsResponse{}, nil
@@ -1168,10 +1205,10 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 			Entries: []*csi.ListSnapshotsResponse_Entry{
 				{
 					Snapshot: &csi.Snapshot{
-						SnapshotId:     snap.Name,
-						SourceVolumeId: snap.SourceVolume,
+						SnapshotId:     snap.ID,
+						SourceVolumeId: snap.SourceVolumeID,
 						CreationTime:   timestamppb.New(snap.CreatedAt),
-						SizeBytes:      snap.FileSizeBytes,
+						SizeBytes:      snap.SizeBytes,
 						ReadyToUse:     true,
 					},
 				},
@@ -1179,11 +1216,11 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		}, nil
 	}
 
-	// Fetch all snapshots from RDS
-	allSnapshots, err := cs.driver.rdsClient.ListSnapshots()
+	// Fetch all snapshots from backend
+	allSnapshots, err := storageBackend.ListSnapshots(ctx)
 	if err != nil {
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
 	}
@@ -1193,9 +1230,9 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 	// RDS /disk print output. Snapshots without a source-volume field are excluded from
 	// source-based filtering (they cannot be matched to a source volume).
 	if req.GetSourceVolumeId() != "" {
-		filtered := make([]rds.SnapshotInfo, 0)
+		filtered := make([]backend.Snapshot, 0)
 		for _, s := range allSnapshots {
-			if s.SourceVolume == req.GetSourceVolumeId() {
+			if s.SourceVolumeID == req.GetSourceVolumeId() {
 				filtered = append(filtered, s)
 			}
 		}
@@ -1204,7 +1241,7 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 
 	// Sort by name for deterministic pagination
 	sort.Slice(allSnapshots, func(i, j int) bool {
-		return allSnapshots[i].Name < allSnapshots[j].Name
+		return allSnapshots[i].ID < allSnapshots[j].ID
 	})
 
 	// Handle pagination
@@ -1231,10 +1268,10 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		s := allSnapshots[i]
 		entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 			Snapshot: &csi.Snapshot{
-				SnapshotId:     s.Name,
-				SourceVolumeId: s.SourceVolume,
+				SnapshotId:     s.ID,
+				SourceVolumeId: s.SourceVolumeID,
 				CreationTime:   timestamppb.New(s.CreatedAt),
-				SizeBytes:      s.FileSizeBytes,
+				SizeBytes:      s.SizeBytes,
 				ReadyToUse:     true,
 			},
 		})
@@ -1287,34 +1324,39 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		return nil, status.Errorf(codes.OutOfRange, "required bytes %d exceeds maximum %d", requiredBytes, maxVolumeSizeBytes)
 	}
 
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+
 	// Check if volume exists
-	existingVolume, err := cs.driver.rdsClient.GetVolume(volumeID)
+	existingVolume, err := storageBackend.GetVolume(ctx, volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "volume %s not found: %v", volumeID, err)
 	}
 
 	// Check if expansion is needed
-	if existingVolume.FileSizeBytes >= requiredBytes {
+	if existingVolume.SizeBytes >= requiredBytes {
 		klog.V(4).Infof("Volume %s already at or above requested size (%d >= %d), no expansion needed",
-			volumeID, existingVolume.FileSizeBytes, requiredBytes)
+			volumeID, existingVolume.SizeBytes, requiredBytes)
 		return &csi.ControllerExpandVolumeResponse{
-			CapacityBytes:         existingVolume.FileSizeBytes,
+			CapacityBytes:         existingVolume.SizeBytes,
 			NodeExpansionRequired: false,
 		}, nil
 	}
 
-	// Resize volume on RDS
-	klog.V(4).Infof("Expanding volume %s from %d to %d bytes", volumeID, existingVolume.FileSizeBytes, requiredBytes)
+	// Resize volume on backend
+	klog.V(4).Infof("Expanding volume %s from %d to %d bytes", volumeID, existingVolume.SizeBytes, requiredBytes)
 
-	if err := cs.driver.rdsClient.ResizeVolume(volumeID, requiredBytes); err != nil {
+	if err := storageBackend.ResizeVolume(ctx, volumeID, requiredBytes); err != nil {
 		// Check if this is a capacity error
 		if stderrors.Is(err, utils.ErrResourceExhausted) {
-			return nil, status.Errorf(codes.ResourceExhausted, "insufficient storage on RDS for expansion: %v", err)
+			return nil, status.Errorf(codes.ResourceExhausted, "insufficient storage on backend for expansion: %v", err)
 		}
-		return nil, status.Errorf(codes.Internal, "failed to resize volume on RDS: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to resize volume on backend: %v", err)
 	}
 
-	// RDS layer already logged "Resized volume X" at V(2) - no duplicate needed
+	// Backend layer already logged "Resized volume X" at V(2) - no duplicate needed.
 	klog.V(4).Infof("ControllerExpandVolume CSI call completed for %s", volumeID)
 
 	// Determine if node expansion is required
@@ -1335,14 +1377,19 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}, nil
 }
 
-// ListVolumes lists all volumes on RDS
+// ListVolumes lists all volumes on the selected storage backend.
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	klog.V(4).Info("ListVolumes called")
 
-	// Query all volumes from RDS
-	volumes, err := cs.driver.rdsClient.ListVolumes()
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	}
+
+	// Query all volumes from backend
+	volumes, err := storageBackend.ListVolumes(ctx)
 	if err != nil {
-		klog.Errorf("Failed to list volumes from RDS: %v", err)
+		klog.Errorf("Failed to list volumes from backend %s: %v", storageBackend.Name(), err)
 		return nil, status.Errorf(codes.Internal, "failed to list volumes: %v", err)
 	}
 
@@ -1351,8 +1398,8 @@ func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolume
 	for _, vol := range volumes {
 		entries = append(entries, &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
-				VolumeId:      vol.Slot,
-				CapacityBytes: vol.FileSizeBytes,
+				VolumeId:      vol.ID,
+				CapacityBytes: vol.SizeBytes,
 			},
 		})
 	}
@@ -1373,6 +1420,21 @@ func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi
 }
 
 // Helper functions
+
+func (cs *ControllerServer) validateBackendSelection(params map[string]string) error {
+	selection, err := ParseBackendSelection(params)
+	if err != nil {
+		return err
+	}
+	storageBackend := cs.driver.controllerBackend()
+	if storageBackend == nil {
+		return fmt.Errorf("storage backend not initialized")
+	}
+	if selection.Type != storageBackend.Name() {
+		return fmt.Errorf("selected backend %q is not available in this controller (active backend: %q)", selection.Type, storageBackend.Name())
+	}
+	return nil
+}
 
 // validateVolumeCapabilities checks if the requested capabilities are supported
 func (cs *ControllerServer) validateVolumeCapabilities(caps []*csi.VolumeCapability) error {
@@ -1418,15 +1480,18 @@ func (cs *ControllerServer) getRDSAddress(params map[string]string) string {
 		return addr
 	}
 	// Fall back to driver's RDS client address
-	return cs.driver.rdsClient.GetAddress()
+	if storageBackend := cs.driver.controllerBackend(); storageBackend != nil {
+		return storageBackend.Address()
+	}
+	return ""
 }
 
-// getNVMEAddress gets the NVMe/TCP target address from params or falls back to RDS address
+// getNVMEAddress gets the NVMe/TCP target address from params or falls back to the backend address.
 func (cs *ControllerServer) getNVMEAddress(params map[string]string) string {
 	// Prefer nvmeAddress if specified (for separate storage network)
 	if addr, ok := params[paramNVMEAddress]; ok {
 		return addr
 	}
-	// Fall back to RDS address if nvmeAddress not specified
+	// Fall back to backend address if nvmeAddress not specified.
 	return cs.getRDSAddress(params)
 }

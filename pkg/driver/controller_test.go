@@ -1625,7 +1625,7 @@ func TestCreateVolume_ErrorScenarios(t *testing.T) {
 			requestName:   "test-volume",
 			requestSize:   1 * 1024 * 1024 * 1024,
 			expectCode:    codes.Unavailable,
-			errorContains: "RDS unavailable",
+			errorContains: "storage backend unavailable",
 		},
 		{
 			name: "SSH timeout returns Unavailable",
@@ -1635,7 +1635,7 @@ func TestCreateVolume_ErrorScenarios(t *testing.T) {
 			requestName:   "test-volume",
 			requestSize:   1 * 1024 * 1024 * 1024,
 			expectCode:    codes.Unavailable,
-			errorContains: "RDS unavailable",
+			errorContains: "storage backend unavailable",
 		},
 		{
 			name: "Disk full returns ResourceExhausted",
@@ -1740,7 +1740,7 @@ func TestDeleteVolume_ErrorScenarios(t *testing.T) {
 				m.SetPersistentError(fmt.Errorf("ssh: %w", utils.ErrConnectionFailed))
 			},
 			expectCode:    codes.Unavailable,
-			errorContains: "RDS unavailable",
+			errorContains: "storage backend unavailable",
 		},
 		{
 			name:     "SSH timeout during delete returns Unavailable",
@@ -1753,7 +1753,7 @@ func TestDeleteVolume_ErrorScenarios(t *testing.T) {
 				m.SetPersistentError(fmt.Errorf("timeout: %w", utils.ErrOperationTimeout))
 			},
 			expectCode:    codes.Unavailable,
-			errorContains: "RDS unavailable",
+			errorContains: "storage backend unavailable",
 		},
 		{
 			name:     "Invalid volume ID format returns InvalidArgument",

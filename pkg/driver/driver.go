@@ -11,6 +11,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
+	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	routerosbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/routeros"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
@@ -47,6 +49,10 @@ type Driver struct {
 
 	// RDS client (interface allows different implementations: SSH, API, mock)
 	rdsClient rds.RDSClient
+
+	// Controller storage backend. RDS is currently adapted through this generic
+	// interface; ZoL/nvmet backends will plug in here without changing node code.
+	backend storagebackend.Backend
 
 	// NVMe connector (interface allows different implementations: real, mock)
 	nvmeConnector nvme.Connector
@@ -220,6 +226,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		}
 
 		driver.rdsClient = rdsClient
+		driver.backend = routerosbackend.New(rdsClient)
 		klog.Infof("Connected to RDS at %s:%d", config.RDSAddress, config.RDSPort)
 	}
 
@@ -504,7 +511,7 @@ func (d *Driver) Run(endpoint string) error {
 	d.ids = NewIdentityServer(d)
 
 	// Initialize controller service if enabled
-	if d.rdsClient != nil {
+	if d.controllerBackend() != nil {
 		klog.Info("Controller service enabled")
 		d.cs = NewControllerServer(d)
 	}
@@ -672,6 +679,25 @@ func (d *Driver) ShutdownWithContext(ctx context.Context) error {
 // SetRDSClient sets the RDS client (for testing)
 func (d *Driver) SetRDSClient(client rds.RDSClient) {
 	d.rdsClient = client
+	if client != nil {
+		d.backend = routerosbackend.New(client)
+	} else {
+		d.backend = nil
+	}
+}
+
+func (d *Driver) controllerBackend() storagebackend.Backend {
+	if d == nil {
+		return nil
+	}
+	if d.backend != nil {
+		return d.backend
+	}
+	if d.rdsClient != nil {
+		d.backend = routerosbackend.New(d.rdsClient)
+		return d.backend
+	}
+	return nil
 }
 
 // SetNVMEConnector sets the NVMe connector (for testing)

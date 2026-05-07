@@ -6,10 +6,15 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
 )
 
 // NVMe connection parameter keys for StorageClass
 const (
+	paramBackend  = "backend"
+	paramExecutor = "executor"
+
 	// paramCtrlLossTmo is the controller loss timeout parameter key
 	// Value: integer seconds, -1 for unlimited, 0 for kernel default
 	paramCtrlLossTmo = "ctrlLossTmo"
@@ -22,6 +27,45 @@ const (
 	// Value: integer seconds, 0 for kernel default
 	paramKeepAliveTmo = "keepAliveTmo"
 )
+
+type BackendSelection struct {
+	Type     string
+	Executor string
+}
+
+func DefaultBackendSelection() BackendSelection {
+	return BackendSelection{
+		Type:     backend.TypeRouterOSRDS,
+		Executor: backend.ExecutorSSH,
+	}
+}
+
+func ParseBackendSelection(params map[string]string) (BackendSelection, error) {
+	selection := DefaultBackendSelection()
+	if value, ok := params[paramBackend]; ok && value != "" {
+		selection.Type = value
+	}
+	if value, ok := params[paramExecutor]; ok && value != "" {
+		selection.Executor = value
+	}
+
+	switch selection.Type {
+	case backend.TypeRouterOSRDS:
+		if selection.Executor != backend.ExecutorSSH {
+			return selection, fmt.Errorf("%s backend requires %s=%s", backend.TypeRouterOSRDS, paramExecutor, backend.ExecutorSSH)
+		}
+	case backend.TypeLinuxZOLNVMET:
+		switch selection.Executor {
+		case backend.ExecutorLocal, backend.ExecutorSSH:
+		default:
+			return selection, fmt.Errorf("%s backend requires %s to be %q or %q", backend.TypeLinuxZOLNVMET, paramExecutor, backend.ExecutorLocal, backend.ExecutorSSH)
+		}
+	default:
+		return selection, fmt.Errorf("unsupported %s %q", paramBackend, selection.Type)
+	}
+
+	return selection, nil
+}
 
 // NVMEConnectionParams holds parsed NVMe connection parameters from StorageClass
 type NVMEConnectionParams struct {

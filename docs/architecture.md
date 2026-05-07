@@ -89,6 +89,29 @@ The RDS CSI Driver is a Kubernetes-native storage driver that enables dynamic pr
 
 ## Component Details
 
+### Backend Model
+
+The CSI node plugin is intentionally backend-agnostic. It consumes generic
+NVMe/TCP publish context (`nvme_address`, `nvme_port`, `nvme_nqn`, filesystem and
+reconnect settings), connects to the target, discovers the block device, and
+stages/publishes it for kubelet. The node path should not need to know whether a
+target was created by RouterOS, Linux nvmet, a local controller pod, or SSH.
+
+The CSI controller owns backend-specific provisioning. StorageClass parameters
+select a backend type and executor:
+
+- `backend=routeros-rds`, `executor=ssh`: compatibility path for MikroTik
+  RouterOS/RDS. This is the current implemented backend.
+- `backend=linux-zol-nvmet`, `executor=local`: planned kube-native path where the
+  controller pod is scheduled onto the ZFS/nvmet host and manipulates zvols and
+  configfs locally.
+- `backend=linux-zol-nvmet`, `executor=ssh`: planned remote-host path, similar to
+  democratic-csi's trusted SSH model.
+
+Current controller code routes through a generic backend interface, with
+RouterOS/RDS adapted behind that interface. Unsupported backend selections are
+rejected during provisioning instead of silently falling back to RDS.
+
 ### CSI Controller Plugin
 
 **Deployment**: Kubernetes Deployment (1 replica, no horizontal scaling needed)

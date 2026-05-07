@@ -4,7 +4,106 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
 )
+
+func TestParseBackendSelection(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   map[string]string
+		wantType string
+		wantExec string
+	}{
+		{
+			name:     "defaults to routeros rds over ssh",
+			params:   map[string]string{},
+			wantType: backend.TypeRouterOSRDS,
+			wantExec: backend.ExecutorSSH,
+		},
+		{
+			name: "explicit routeros rds over ssh",
+			params: map[string]string{
+				"backend":  backend.TypeRouterOSRDS,
+				"executor": backend.ExecutorSSH,
+			},
+			wantType: backend.TypeRouterOSRDS,
+			wantExec: backend.ExecutorSSH,
+		},
+		{
+			name: "linux zol nvmet local",
+			params: map[string]string{
+				"backend":  backend.TypeLinuxZOLNVMET,
+				"executor": backend.ExecutorLocal,
+			},
+			wantType: backend.TypeLinuxZOLNVMET,
+			wantExec: backend.ExecutorLocal,
+		},
+		{
+			name: "linux zol nvmet ssh",
+			params: map[string]string{
+				"backend":  backend.TypeLinuxZOLNVMET,
+				"executor": backend.ExecutorSSH,
+			},
+			wantType: backend.TypeLinuxZOLNVMET,
+			wantExec: backend.ExecutorSSH,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseBackendSelection(tt.params)
+			if err != nil {
+				t.Fatalf("ParseBackendSelection() error = %v", err)
+			}
+			if got.Type != tt.wantType || got.Executor != tt.wantExec {
+				t.Fatalf("ParseBackendSelection() = %+v, want type=%s executor=%s", got, tt.wantType, tt.wantExec)
+			}
+		})
+	}
+}
+
+func TestParseBackendSelectionInvalid(t *testing.T) {
+	tests := []struct {
+		name          string
+		params        map[string]string
+		errorContains string
+	}{
+		{
+			name:          "unknown backend",
+			params:        map[string]string{"backend": "unknown"},
+			errorContains: "unsupported backend",
+		},
+		{
+			name: "routeros local rejected",
+			params: map[string]string{
+				"backend":  backend.TypeRouterOSRDS,
+				"executor": backend.ExecutorLocal,
+			},
+			errorContains: "requires executor=ssh",
+		},
+		{
+			name: "linux invalid executor rejected",
+			params: map[string]string{
+				"backend":  backend.TypeLinuxZOLNVMET,
+				"executor": "routeros",
+			},
+			errorContains: "requires executor",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseBackendSelection(tt.params)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.errorContains) {
+				t.Fatalf("expected error containing %q, got %v", tt.errorContains, err)
+			}
+		})
+	}
+}
 
 func TestParseNVMEConnectionParams_Defaults(t *testing.T) {
 	// Empty map should return default values
