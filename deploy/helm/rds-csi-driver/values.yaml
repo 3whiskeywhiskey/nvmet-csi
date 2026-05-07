@@ -63,12 +63,6 @@ controller:
   # Log verbosity level (0-10, higher is more verbose)
   logLevel: 5
 
-  # Startup cleanup for managed orphaned NVMe sessions.
-  # Disabled by default; enable only for explicit remediation/audit windows.
-  orphanCleanup:
-    enabled: false
-    maxDisconnects: 4
-
   # Resource requests and limits
   resources:
     requests:
@@ -141,6 +135,13 @@ node:
 
   # Log verbosity level (0-10, higher is more verbose)
   logLevel: 5
+
+  # Startup cleanup for managed orphaned NVMe sessions.
+  # Disabled by default; enable only for explicit remediation/audit windows.
+  orphanCleanup:
+    enabled: false
+    dryRun: true
+    maxDisconnects: 4
 
   # Resource requests and limits
   resources:

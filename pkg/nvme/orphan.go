@@ -21,6 +21,7 @@ type OrphanCleaner struct {
 	metrics          *observability.Metrics
 	managedNQNPrefix string
 	maxDisconnects   int
+	dryRun           bool
 }
 
 // SetMetrics sets the Prometheus metrics for recording orphan cleanup
@@ -43,6 +44,11 @@ func NewOrphanCleaner(connector Connector, managedNQNPrefix string) *OrphanClean
 // Values <= 0 allow all detected managed orphans to be disconnected.
 func (oc *OrphanCleaner) SetMaxDisconnects(maxDisconnects int) {
 	oc.maxDisconnects = maxDisconnects
+}
+
+// SetDryRun reports orphaned subsystems without disconnecting them.
+func (oc *OrphanCleaner) SetDryRun(dryRun bool) {
+	oc.dryRun = dryRun
 }
 
 // CleanupOrphanedConnections scans for and disconnects orphaned NVMe subsystems.
@@ -95,6 +101,11 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 
 		klog.Warningf("Found orphaned subsystem: %s", nqn)
 		orphanCount++
+		if oc.dryRun {
+			klog.Infof("[DRY-RUN] Would disconnect orphaned subsystem: %s", nqn)
+			continue
+		}
+
 		if oc.maxDisconnects > 0 && disconnectAttempts >= oc.maxDisconnects {
 			klog.Warningf("Orphan cleanup disconnect limit reached (max=%d); leaving remaining managed orphans for a later explicit cleanup pass", oc.maxDisconnects)
 			break

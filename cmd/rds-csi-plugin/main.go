@@ -51,6 +51,7 @@ var (
 
 	// Node cleanup flags
 	nodeOrphanCleanup               = flag.Bool("node-orphan-cleanup", false, "Run startup cleanup for managed orphaned NVMe connections")
+	nodeOrphanCleanupDryRun         = flag.Bool("node-orphan-cleanup-dry-run", true, "Dry-run mode for startup orphan NVMe cleanup (log only, do not disconnect)")
 	nodeOrphanCleanupMaxDisconnects = flag.Int("node-orphan-cleanup-max-disconnects", nvme.DefaultOrphanCleanupMaxDisconnects, "Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass (<=0 allows all)")
 
 	// Orphan reconciler flags
@@ -192,11 +193,13 @@ func main() {
 	// enabled. The cleanup can disconnect managed NVMe sessions, so keep it as
 	// an auditable remediation action instead of ambient startup behavior.
 	if *nodeMode && *nodeOrphanCleanup {
-		klog.Info("Running orphan NVMe connection cleanup on startup")
+		klog.Infof("Running orphan NVMe connection cleanup on startup (dry_run=%t, max_disconnects=%d)",
+			*nodeOrphanCleanupDryRun, *nodeOrphanCleanupMaxDisconnects)
 
 		// Create a connector for cleanup (same as node server uses internally)
 		cleanupConnector := nvme.NewConnector()
 		cleaner := nvme.NewOrphanCleaner(cleanupConnector, managedNQNPrefix)
+		cleaner.SetDryRun(*nodeOrphanCleanupDryRun)
 		cleaner.SetMaxDisconnects(*nodeOrphanCleanupMaxDisconnects)
 
 		// Pass metrics to cleaner for recording orphan cleanup

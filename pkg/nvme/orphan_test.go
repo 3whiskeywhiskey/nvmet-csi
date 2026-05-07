@@ -441,6 +441,30 @@ func TestOrphanCleanerActualImplementationLimitsDisconnectAttempts(t *testing.T)
 	}
 }
 
+func TestOrphanCleanerActualImplementationDryRunDoesNotDisconnect(t *testing.T) {
+	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
+	sysfsRoot := createMockSysfs(t, nil)
+	createMockSubsystemEntries(t, sysfsRoot, managedOrphan)
+
+	mockConnector := NewMockConnector()
+	mockConnector.isConnectedResult[managedOrphan] = true
+	resolver := NewDeviceResolverWithConfig(ResolverConfig{
+		SysfsRoot: sysfsRoot,
+		TTL:       10 * time.Second,
+	})
+	resolver.SetIsConnectedFn(mockConnector.IsConnected)
+	mockConnector.resolver = resolver
+
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner.SetDryRun(true)
+	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
+		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
+	}
+	if len(mockConnector.disconnectCalls) != 0 {
+		t.Fatalf("disconnectCalls = %v, want none in dry-run", mockConnector.disconnectCalls)
+	}
+}
+
 func createMockSubsystemEntries(t *testing.T, sysfsRoot string, nqns ...string) {
 	t.Helper()
 	subsystemsDir := filepath.Join(sysfsRoot, "class", "nvme-subsystem")
