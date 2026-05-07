@@ -84,14 +84,17 @@ type VolumeSpec struct {
 }
 
 type VolumeState struct {
-	ID         string
-	Dataset    string
-	DevicePath string
-	SizeBytes  int64
-	NQN        string
-	Port       int
-	Exported   bool
-	Status     string
+	ID             string
+	Dataset        string
+	DevicePath     string
+	SizeBytes      int64
+	NQN            string
+	Port           int
+	Exported       bool
+	NamespaceReady bool
+	ExportDevice   string
+	PortLinkTarget string
+	Status         string
 }
 
 func volumeFromState(state *VolumeState) *backend.Volume {

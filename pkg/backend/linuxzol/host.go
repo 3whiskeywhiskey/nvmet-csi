@@ -13,6 +13,7 @@ type Host interface {
 	GetVolume(ctx context.Context, volumeID string) (*VolumeState, error)
 	ListVolumes(ctx context.Context) ([]VolumeState, error)
 	CreateVolume(ctx context.Context, spec VolumeSpec) error
+	RepairVolume(ctx context.Context, spec VolumeSpec) error
 	DeleteVolume(ctx context.Context, volumeID string) error
 	ResizeVolume(ctx context.Context, volumeID string, sizeBytes int64) error
 	GetCapacity(ctx context.Context) (*backend.Capacity, error)
@@ -55,17 +56,23 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 	portValue, _ := h.getZFSProperty(ctx, dataset, zfsPropPort)
 	port, _ := strconv.Atoi(strings.TrimSpace(portValue))
 	nqn = strings.TrimSpace(nqn)
-	exported := h.namespaceEnabled(ctx, nqn)
+	exportDevice := h.namespaceDevicePath(ctx, nqn)
+	portLinkTarget := h.portLinkTarget(ctx, port, nqn)
+	namespaceReady := h.namespaceEnabled(ctx, nqn)
+	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkTarget == h.cfg.subsystemPath(nqn)
 
 	return &VolumeState{
-		ID:         volumeID,
-		Dataset:    dataset,
-		DevicePath: h.cfg.devicePathFor(volumeID),
-		SizeBytes:  sizeBytes,
-		NQN:        nqn,
-		Port:       port,
-		Exported:   exported,
-		Status:     statusFromExport(exported),
+		ID:             volumeID,
+		Dataset:        dataset,
+		DevicePath:     h.cfg.devicePathFor(volumeID),
+		SizeBytes:      sizeBytes,
+		NQN:            nqn,
+		Port:           port,
+		Exported:       exported,
+		NamespaceReady: namespaceReady,
+		ExportDevice:   exportDevice,
+		PortLinkTarget: portLinkTarget,
+		Status:         statusFromExport(exported),
 	}, nil
 }
 
@@ -99,16 +106,24 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		nqn, _ := h.getZFSProperty(ctx, fields[0], zfsPropNQN)
 		portValue, _ := h.getZFSProperty(ctx, fields[0], zfsPropPort)
 		port, _ := strconv.Atoi(strings.TrimSpace(portValue))
-		exported := h.namespaceEnabled(ctx, strings.TrimSpace(nqn))
+		nqn = strings.TrimSpace(nqn)
+		exportDevice := h.namespaceDevicePath(ctx, nqn)
+		portLinkTarget := h.portLinkTarget(ctx, port, nqn)
+		devicePath := h.cfg.devicePathFor(id)
+		namespaceReady := h.namespaceEnabled(ctx, nqn)
+		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn)
 		volumes = append(volumes, VolumeState{
-			ID:         id,
-			Dataset:    fields[0],
-			DevicePath: h.cfg.devicePathFor(id),
-			SizeBytes:  sizeBytes,
-			NQN:        strings.TrimSpace(nqn),
-			Port:       port,
-			Exported:   exported,
-			Status:     statusFromExport(exported),
+			ID:             id,
+			Dataset:        fields[0],
+			DevicePath:     devicePath,
+			SizeBytes:      sizeBytes,
+			NQN:            nqn,
+			Port:           port,
+			Exported:       exported,
+			NamespaceReady: namespaceReady,
+			ExportDevice:   exportDevice,
+			PortLinkTarget: portLinkTarget,
+			Status:         statusFromExport(exported),
 		})
 	}
 	return volumes, nil
@@ -137,6 +152,21 @@ func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
 		{Name: "mkdir", Args: []string{"-p", filepathJoin(h.cfg.portPath(spec.Port), "subsystems")}},
 		{Name: "ln", Args: []string{"-s", h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)}},
+	}
+}
+
+func (h *CommandHost) RepairVolume(ctx context.Context, spec VolumeSpec) error {
+	return h.runAll(ctx, h.RepairVolumeCommands(spec))
+}
+
+func (h *CommandHost) RepairVolumeCommands(spec VolumeSpec) []Command {
+	return []Command{
+		{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
+		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
+		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
+		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
+		{Name: "mkdir", Args: []string{"-p", filepathJoin(h.cfg.portPath(spec.Port), "subsystems")}},
+		linkIfMissingCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	}
 }
 
@@ -220,6 +250,34 @@ func (h *CommandHost) namespaceEnabled(ctx context.Context, nqn string) bool {
 	return err == nil && strings.TrimSpace(out) == "1"
 }
 
+func (h *CommandHost) namespaceDevicePath(ctx context.Context, nqn string) string {
+	if nqn == "" {
+		return ""
+	}
+	out, err := h.run(ctx, Command{
+		Name: "cat",
+		Args: []string{h.cfg.namespacePath(nqn) + "/device_path"},
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+func (h *CommandHost) portLinkTarget(ctx context.Context, port int, nqn string) string {
+	if port <= 0 || nqn == "" {
+		return ""
+	}
+	out, err := h.run(ctx, Command{
+		Name: "readlink",
+		Args: []string{h.cfg.portSubsystemPath(port, nqn)},
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
 func (h *CommandHost) run(ctx context.Context, cmd Command) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -249,6 +307,20 @@ func writeCommand(path string, value string) Command {
 		Args:  []string{path},
 		Stdin: value,
 	}
+}
+
+func linkIfMissingCommand(target string, link string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"test -L " + shellQuote(link) + " || ln -s " + shellQuote(target) + " " + shellQuote(link),
+		},
+	}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func isZFSNotFound(err error) bool {
