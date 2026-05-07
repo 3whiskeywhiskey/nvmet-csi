@@ -11,6 +11,7 @@ type VolumeInfo struct {
 	Type          string // "file" for file-backed volumes
 	FilePath      string // Path to backing file
 	FileSizeBytes int64  // Size in bytes
+	Mount         bool   // Whether RouterOS should auto-mount/scan the disk
 	NVMETCPExport bool   // Whether NVMe/TCP export is enabled
 	NVMETCPPort   int    // NVMe/TCP server port
 	NVMETCPNQN    string // NVMe Qualified Name
@@ -30,6 +31,7 @@ type CreateVolumeOptions struct {
 	Slot          string // Unique identifier (pvc-<uuid>)
 	FilePath      string // Full path to backing file
 	FileSizeBytes int64  // Size in bytes
+	Mount         bool   // RouterOS disk mount setting; false emits mount=no
 	NVMETCPPort   int    // NVMe/TCP port (default 4420)
 	NVMETCPNQN    string // NVMe Qualified Name
 }

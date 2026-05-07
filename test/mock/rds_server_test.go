@@ -464,6 +464,11 @@ func TestMockRDS_SnapshotCopyFrom(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateVolume failed: %v", err)
 		}
+		if sourceVol, ok := server.GetVolume(sourceSlot); !ok {
+			t.Fatalf("source volume %s not found in server state after creation", sourceSlot)
+		} else if sourceVol.Mount {
+			t.Error("source volume should be created with mount=no")
+		}
 
 		// Create snapshot from source volume via CreateSnapshot
 		snapOpts := rds.CreateSnapshotOptions{
@@ -496,10 +501,19 @@ func TestMockRDS_SnapshotCopyFrom(t *testing.T) {
 		if mockSnap.FileSizeBytes != 10*1024*1024*1024 {
 			t.Errorf("expected snapshot size 10GiB, got %d", mockSnap.FileSizeBytes)
 		}
+		if mockSnap.Mount {
+			t.Error("snapshot disk should be created with mount=no")
+		}
 
 		// Snapshot must NOT be in volumes (not an NVMe-exported volume)
 		if _, ok := server.GetVolume(snapName); ok {
 			t.Error("snapshot should NOT be in volumes map (it is not an NVMe-exported volume)")
+		}
+		if !commandHistoryContains(server.GetCommandHistory(), "/disk add", "mount=no", sourceSlot) {
+			t.Error("expected source volume /disk add command to include mount=no")
+		}
+		if !commandHistoryContains(server.GetCommandHistory(), "/disk add", "mount=no", snapName) {
+			t.Error("expected snapshot /disk add command to include mount=no")
 		}
 
 		// Return value from CreateSnapshot should have name set
@@ -751,8 +765,14 @@ func TestMockRDS_SnapshotCopyFrom(t *testing.T) {
 		if !restoredVol.Exported {
 			t.Error("restored volume should have NVMe export enabled")
 		}
+		if restoredVol.Mount {
+			t.Error("restored volume should be created with mount=no")
+		}
 		if restoredVol.Slot != restoredSlot {
 			t.Errorf("expected Slot=%s, got %s", restoredSlot, restoredVol.Slot)
+		}
+		if !commandHistoryContains(server.GetCommandHistory(), "/disk add", "mount=no", restoredSlot) {
+			t.Error("expected restore /disk add command to include mount=no")
 		}
 
 		// Original snapshot should still exist (restore is non-destructive)
@@ -760,4 +780,20 @@ func TestMockRDS_SnapshotCopyFrom(t *testing.T) {
 			t.Errorf("original snapshot %s should still exist after restore", snapName)
 		}
 	})
+}
+
+func commandHistoryContains(history []CommandLog, parts ...string) bool {
+	for _, entry := range history {
+		matches := true
+		for _, part := range parts {
+			if !strings.Contains(entry.Command, part) {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return true
+		}
+	}
+	return false
 }

@@ -25,10 +25,11 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 
 	// Build /disk add command
 	cmd := fmt.Sprintf(
-		`/disk add type=file file-path=%s file-size=%s slot=%s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
+		`/disk add type=file file-path=%s file-size=%s slot=%s %s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
 		opts.FilePath,
 		sizeStr,
 		opts.Slot,
+		routerOSMountParam(opts.Mount),
 		opts.NVMETCPPort,
 		opts.NVMETCPNQN,
 	)
@@ -361,6 +362,12 @@ func parseVolumeInfo(output string) (*VolumeInfo, error) {
 		volume.FilePath = "/" + volume.FilePath
 	}
 
+	// Extract RouterOS mount setting. RouterOS detail output has used both
+	// mount=<yes|no> and mount-filesystem=<yes|no> forms across versions.
+	if match := regexp.MustCompile(`mount(?:-filesystem)?=(yes|no)`).FindStringSubmatch(normalized); len(match) > 1 {
+		volume.Mount = match[1] == "yes"
+	}
+
 	// Extract file-size (human-readable format like "50.0GiB" or "1024.0MiB")
 	// This is more reliable than the raw size field with spaces
 	if match := regexp.MustCompile(`file-size=([\d.]+)\s*([KMGT]i?B)`).FindStringSubmatch(normalized); len(match) > 2 {
@@ -623,6 +630,13 @@ func formatBytes(bytes int64) string {
 	}
 }
 
+func routerOSMountParam(mount bool) string {
+	if mount {
+		return "mount=yes"
+	}
+	return "mount=no"
+}
+
 // parseSize converts human-readable size to bytes
 func parseSize(value, unit string) (int64, error) {
 	num, err := strconv.ParseFloat(value, 64)
@@ -764,7 +778,7 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	// - Omit file-size: copy-from determines size from source automatically.
 	// - NO nvme-tcp-export, nvme-tcp-server-port, nvme-tcp-server-nqn (snapshots not NVMe-exported).
 	cmd := fmt.Sprintf(
-		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s`,
+		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s mount=no`,
 		opts.SourceVolume,
 		snapFilePath,
 		opts.Name,
@@ -934,11 +948,12 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 	// file-size is included to allow larger-than-snapshot restores (per CSI spec).
 	sizeStr := formatBytes(newVolumeOpts.FileSizeBytes)
 	cmd := fmt.Sprintf(
-		`/disk add type=file copy-from=[find slot=%s] file-path=%s file-size=%s slot=%s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
+		`/disk add type=file copy-from=[find slot=%s] file-path=%s file-size=%s slot=%s %s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
 		snapshotID,
 		newVolumeOpts.FilePath,
 		sizeStr,
 		newVolumeOpts.Slot,
+		routerOSMountParam(newVolumeOpts.Mount),
 		newVolumeOpts.NVMETCPPort,
 		newVolumeOpts.NVMETCPNQN,
 	)

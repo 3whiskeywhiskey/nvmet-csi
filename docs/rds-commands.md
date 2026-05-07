@@ -21,6 +21,7 @@ The RDS CSI Driver interacts with the RDS via **SSH** using RouterOS command-lin
   file-path=/storage-pool/kubernetes-volumes/pvc-<uuid>.img \
   file-size=<size> \
   slot=pvc-<uuid> \
+  mount=no \
   nvme-tcp-export=yes \
   nvme-tcp-server-port=4420 \
   nvme-tcp-server-nqn=nqn.2000-02.com.mikrotik:pvc-<uuid>
@@ -31,6 +32,7 @@ The RDS CSI Driver interacts with the RDS via **SSH** using RouterOS command-lin
 - `file-path`: Full path to backing file on Btrfs filesystem
 - `file-size`: Volume size (e.g., `50G`, `100G`, `1T`)
 - `slot`: Unique identifier for the disk (we use PVC UUID)
+- `mount=no`: Prevent RouterOS from trying to mount or scan the PVC backing disk
 - `nvme-tcp-export=yes`: Enable NVMe/TCP export for this disk
 - `nvme-tcp-server-port`: NVMe/TCP listening port (default 4420)
 - `nvme-tcp-server-nqn`: NVMe Qualified Name (must be unique per volume)
@@ -42,6 +44,7 @@ ssh admin@10.42.68.1 '/disk add \
   file-path=/storage-pool/kubernetes-volumes/pvc-abc123.img \
   file-size=50G \
   slot=pvc-abc123 \
+  mount=no \
   nvme-tcp-export=yes \
   nvme-tcp-server-port=4420 \
   nvme-tcp-server-nqn=nqn.2000-02.com.mikrotik:pvc-abc123'
