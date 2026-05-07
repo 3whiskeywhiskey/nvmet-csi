@@ -147,6 +147,8 @@ type DriverConfig struct {
 	OrphanCheckInterval    time.Duration
 	OrphanGracePeriod      time.Duration
 	OrphanDryRun           bool
+	OrphanRunOnStart       bool
+	OrphanMinConfirmations int
 
 	// Attachment reconciler settings
 	EnableAttachmentReconciler  bool
@@ -404,13 +406,15 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	// Initialize orphan reconciler if enabled and we have controller + k8s client
 	if config.EnableController && config.EnableOrphanReconciler && config.K8sClient != nil {
 		reconcilerConfig := reconciler.OrphanReconcilerConfig{
-			RDSClient:     driver.rdsClient,
-			K8sClient:     config.K8sClient,
-			CheckInterval: config.OrphanCheckInterval,
-			GracePeriod:   config.OrphanGracePeriod,
-			DryRun:        config.OrphanDryRun,
-			Enabled:       true,
-			BasePath:      config.RDSVolumeBasePath,
+			RDSClient:            driver.rdsClient,
+			K8sClient:            config.K8sClient,
+			CheckInterval:        config.OrphanCheckInterval,
+			GracePeriod:          config.OrphanGracePeriod,
+			DryRun:               config.OrphanDryRun,
+			RunOnStart:           config.OrphanRunOnStart,
+			MinimumConfirmations: config.OrphanMinConfirmations,
+			Enabled:              true,
+			BasePath:             config.RDSVolumeBasePath,
 		}
 
 		orphanReconciler, err := reconciler.NewOrphanReconciler(reconcilerConfig)

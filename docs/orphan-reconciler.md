@@ -23,15 +23,25 @@ The orphan reconciler runs as part of the controller pod and performs the follow
    - Identifies volumes on RDS that don't have a corresponding PV
    - Builds an observe-only inventory with object counts and planned cleanup actions
 
-2. **Grace Period**: Only considers volumes older than `orphan-grace-period` (default: 5 minutes) to avoid deleting volumes that are currently being provisioned
+2. **Confirmation Window**: Requires the same orphan candidate to appear in
+   `orphan-min-confirmations` consecutive inventories (default: 2) before any
+   destructive cleanup is planned. This protects against transient Kubernetes
+   API/cache churn and keeps cleanup monotonic during node drains.
 
-3. **Cleanup**: For each orphaned volume:
+3. **Grace Period**: Only considers volumes older than `orphan-grace-period` (default: 5 minutes) to avoid deleting volumes that are currently being provisioned
+
+4. **Cleanup**: For each confirmed orphaned volume:
    - **Dry-run mode** (default): Logs the orphaned volume without deleting it
    - **Active mode**: Deletes the orphaned volume from RDS
 
 The inventory step is built before any delete operation is applied. Tests and
 future simulator tooling can inspect the planned mutation list to prove the
 reconciler stays calm before pointing it at live RouterOS/RDS.
+
+The reconciler does not run an inventory immediately on controller startup by
+default. This avoids adding RouterOS `/disk print` and `/file print` chatter
+during controller restarts, cluster recovery, or node churn. Use
+`-orphan-run-on-start=true` only for an explicit audit/remediation session.
 
 ## Configuration
 
@@ -42,6 +52,8 @@ The orphan reconciler is **disabled by default** and must be explicitly enabled.
 | `-enable-orphan-reconciler` | `false` | Enable orphan volume detection and cleanup |
 | `-orphan-check-interval` | `1h` | Interval between orphan checks |
 | `-orphan-grace-period` | `5m` | Minimum age before considering a volume orphaned |
+| `-orphan-run-on-start` | `false` | Run an inventory immediately on controller startup |
+| `-orphan-min-confirmations` | `2` | Consecutive inventory passes required before cleanup |
 | `-orphan-dry-run` | `true` | Dry-run mode (log only, don't delete) |
 
 ## Enabling the Orphan Reconciler
@@ -59,6 +71,8 @@ args:
   - "-enable-orphan-reconciler"
   - "-orphan-check-interval=1h"
   - "-orphan-grace-period=5m"
+  - "-orphan-run-on-start=false"
+  - "-orphan-min-confirmations=2"
   - "-orphan-dry-run=false"  # Set to false to actually delete orphans
 ```
 
@@ -83,7 +97,7 @@ kubectl -n kube-system patch deployment rds-csi-controller --type='json' -p='[
 
 ### Initial Deployment (Dry-Run Mode)
 
-1. **Enable with dry-run**: Deploy with `-enable-orphan-reconciler` and `-orphan-dry-run=true` (default)
+1. **Enable with dry-run**: Deploy with `-enable-orphan-reconciler` and `-orphan-dry-run=true` (default). Keep `-orphan-run-on-start=false` unless you are intentionally running an audit.
 2. **Monitor logs**: Watch controller logs for orphaned volume detections:
    ```bash
    kubectl -n kube-system logs -f deployment/rds-csi-controller -c rds-csi-driver | grep -i orphan
@@ -103,7 +117,7 @@ Once you've validated the orphan detection:
 
 1. **Enable active cleanup**: Set `-orphan-dry-run=false`
 2. **Monitor closely**: Watch logs during the first few reconciliation cycles
-3. **Adjust intervals**: Tune `orphan-check-interval` and `orphan-grace-period` based on your workload
+3. **Adjust intervals**: Tune `orphan-check-interval`, `orphan-grace-period`, and `orphan-min-confirmations` based on your workload
 
 ## Safety Features
 
@@ -123,6 +137,12 @@ Once you've validated the orphan detection:
 - Enabled by default for safety
 - Allows you to validate orphan detection before enabling cleanup
 - Production recommendation: Run in dry-run for at least 24 hours before enabling active cleanup
+
+### Repeated Confirmation
+
+- Requires repeated observations before deletes are planned
+- Prevents one bad or incomplete PV list response from causing RouterOS deletes
+- Resets candidate state when the RDS object becomes active again or disappears
 
 ## Monitoring
 

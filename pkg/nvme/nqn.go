@@ -42,6 +42,9 @@ func ValidateNQNPrefix(prefix string) error {
 // NQNMatchesPrefix checks if an NQN matches the given prefix.
 // Comparison is case-sensitive per NVMe spec.
 func NQNMatchesPrefix(nqn, prefix string) bool {
+	if prefix == "" {
+		return false
+	}
 	return strings.HasPrefix(nqn, prefix)
 }
 

@@ -54,6 +54,8 @@ var (
 	orphanCheckInterval    = flag.Duration("orphan-check-interval", 1*time.Hour, "Interval between orphan checks")
 	orphanGracePeriod      = flag.Duration("orphan-grace-period", 5*time.Minute, "Minimum age before considering a volume orphaned")
 	orphanDryRun           = flag.Bool("orphan-dry-run", true, "Dry-run mode for orphan cleanup (only log, don't delete)")
+	orphanRunOnStart       = flag.Bool("orphan-run-on-start", false, "Run orphan inventory immediately on controller startup")
+	orphanMinConfirmations = flag.Int("orphan-min-confirmations", 2, "Consecutive orphan inventory passes required before cleanup")
 
 	// Attachment management flags
 	attachmentGracePeriod       = flag.Duration("attachment-grace-period", 30*time.Second, "Grace period for attachment handoff during live migration")
@@ -164,6 +166,8 @@ func main() {
 		OrphanCheckInterval:         *orphanCheckInterval,
 		OrphanGracePeriod:           *orphanGracePeriod,
 		OrphanDryRun:                *orphanDryRun,
+		OrphanRunOnStart:            *orphanRunOnStart,
+		OrphanMinConfirmations:      *orphanMinConfirmations,
 		EnableAttachmentReconciler:  true, // Always enable attachment reconciler in controller mode
 		AttachmentGracePeriod:       *attachmentGracePeriod,
 		AttachmentReconcileInterval: *attachmentReconcileInterval,

@@ -18,6 +18,8 @@ type mockRDSClient struct {
 	files          []rds.FileInfo
 	deletedVolumes []string
 	deletedFiles   []string
+	listVolumes    int
+	listFiles      int
 }
 
 func (m *mockRDSClient) CreateVolume(opts rds.CreateVolumeOptions) error {
@@ -56,10 +58,12 @@ func (m *mockRDSClient) GetCapacity(basePath string) (*rds.CapacityInfo, error) 
 }
 
 func (m *mockRDSClient) ListVolumes() ([]rds.VolumeInfo, error) {
+	m.listVolumes++
 	return m.volumes, nil
 }
 
 func (m *mockRDSClient) ListFiles(path string) ([]rds.FileInfo, error) {
+	m.listFiles++
 	return m.files, nil
 }
 
@@ -267,12 +271,13 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 
 			// Create reconciler
 			config := OrphanReconcilerConfig{
-				RDSClient:     mockRDS,
-				K8sClient:     k8sClient,
-				CheckInterval: 1 * time.Hour,
-				GracePeriod:   1 * time.Second, // Short grace period for testing
-				DryRun:        tt.dryRun,
-				Enabled:       true,
+				RDSClient:            mockRDS,
+				K8sClient:            k8sClient,
+				CheckInterval:        1 * time.Hour,
+				GracePeriod:          1 * time.Second, // Short grace period for testing
+				DryRun:               tt.dryRun,
+				Enabled:              true,
+				MinimumConfirmations: 1,
 			}
 
 			reconciler, err := NewOrphanReconciler(config)
@@ -330,12 +335,13 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 	k8sClient := fake.NewSimpleClientset(activePV("pv-active", "pvc-active"))
 
 	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
-		RDSClient:   mockRDS,
-		K8sClient:   k8sClient,
-		GracePeriod: time.Second,
-		DryRun:      true,
-		Enabled:     true,
-		BasePath:    "/storage-pool/metal-csi",
+		RDSClient:            mockRDS,
+		K8sClient:            k8sClient,
+		GracePeriod:          time.Second,
+		DryRun:               true,
+		Enabled:              true,
+		BasePath:             "/storage-pool/metal-csi",
+		MinimumConfirmations: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewOrphanReconciler() failed: %v", err)
@@ -375,6 +381,71 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 	}
 	if len(mockRDS.deletedVolumes) != 0 || len(mockRDS.deletedFiles) != 0 {
 		t.Fatalf("BuildInventory mutated RDS: deletedVolumes=%v deletedFiles=%v", mockRDS.deletedVolumes, mockRDS.deletedFiles)
+	}
+}
+
+func TestOrphanReconciler_DefaultConfirmationsDeferCleanup(t *testing.T) {
+	mockRDS := &mockRDSClient{
+		volumes: []rds.VolumeInfo{
+			{Slot: "pvc-orphan", FilePath: "/storage-pool/metal-csi/pvc-orphan.img", FileSizeBytes: 20 << 30},
+		},
+	}
+
+	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
+		RDSClient:   mockRDS,
+		K8sClient:   fake.NewSimpleClientset(),
+		GracePeriod: time.Second,
+		Enabled:     true,
+	})
+	if err != nil {
+		t.Fatalf("NewOrphanReconciler() failed: %v", err)
+	}
+
+	if err := reconciler.reconcile(context.Background()); err != nil {
+		t.Fatalf("first reconcile() failed: %v", err)
+	}
+	if len(mockRDS.deletedVolumes) != 0 {
+		t.Fatalf("first reconcile deleted volumes: %v", mockRDS.deletedVolumes)
+	}
+
+	if err := reconciler.reconcile(context.Background()); err != nil {
+		t.Fatalf("second reconcile() failed: %v", err)
+	}
+	if len(mockRDS.deletedVolumes) != 1 || mockRDS.deletedVolumes[0] != "pvc-orphan" {
+		t.Fatalf("deletedVolumes = %v, want [pvc-orphan]", mockRDS.deletedVolumes)
+	}
+}
+
+func TestOrphanReconciler_StartSkipsStartupInventoryByDefault(t *testing.T) {
+	mockRDS := &mockRDSClient{
+		volumes: []rds.VolumeInfo{
+			{Slot: "pvc-orphan", FilePath: "/storage-pool/metal-csi/pvc-orphan.img", FileSizeBytes: 20 << 30},
+		},
+	}
+
+	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
+		RDSClient:     mockRDS,
+		K8sClient:     fake.NewSimpleClientset(),
+		CheckInterval: time.Hour,
+		GracePeriod:   time.Second,
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("NewOrphanReconciler() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := reconciler.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	reconciler.Stop()
+
+	if mockRDS.listVolumes != 0 {
+		t.Fatalf("ListVolumes calls = %d, want 0", mockRDS.listVolumes)
+	}
+	if len(mockRDS.deletedVolumes) != 0 {
+		t.Fatalf("deletedVolumes = %v, want none", mockRDS.deletedVolumes)
 	}
 }
 
@@ -482,13 +553,14 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 
 			// Create reconciler
 			config := OrphanReconcilerConfig{
-				RDSClient:     mockRDS,
-				K8sClient:     k8sClient,
-				CheckInterval: 1 * time.Hour,
-				GracePeriod:   1 * time.Second,
-				DryRun:        true, // Always dry-run for tests
-				Enabled:       true,
-				BasePath:      tt.basePath,
+				RDSClient:            mockRDS,
+				K8sClient:            k8sClient,
+				CheckInterval:        1 * time.Hour,
+				GracePeriod:          1 * time.Second,
+				DryRun:               true, // Always dry-run for tests
+				Enabled:              true,
+				BasePath:             tt.basePath,
+				MinimumConfirmations: 1,
 			}
 
 			reconciler, err := NewOrphanReconciler(config)

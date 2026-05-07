@@ -121,11 +121,15 @@ args:
   - "-enable-orphan-reconciler"
   - "-orphan-check-interval=1h"
   - "-orphan-grace-period=5m"
+  - "-orphan-run-on-start=false"
+  - "-orphan-min-confirmations=2"
   - "-orphan-dry-run=true"
 ```
 
 - **orphan-check-interval:** How often to check for orphaned volumes (default: 1h)
 - **orphan-grace-period:** Minimum age before considering a volume orphaned (default: 5m)
+- **orphan-run-on-start:** Run an inventory immediately when the controller starts (default: false)
+- **orphan-min-confirmations:** Consecutive inventories required before cleanup is planned (default: 2)
 - **orphan-dry-run:** Log orphans without deleting (default: true, set false to enable cleanup)
 
 See [docs/orphan-reconciler.md](orphan-reconciler.md) for details.

@@ -326,6 +326,25 @@ func TestCleanupOrphanedConnections_ListError(t *testing.T) {
 	}
 }
 
+func TestCleanupOrphanedConnections_RejectsEmptyManagedPrefix(t *testing.T) {
+	mockConnector := NewMockConnector()
+	resolver := NewDeviceResolverWithConfig(ResolverConfig{
+		SysfsRoot: t.TempDir(),
+		TTL:       10 * time.Second,
+	})
+	mockConnector.resolver = resolver
+
+	cleaner := NewOrphanCleaner(mockConnector, "")
+
+	err := cleaner.CleanupOrphanedConnections(context.Background())
+	if err == nil {
+		t.Fatal("Expected invalid prefix error")
+	}
+	if len(mockConnector.disconnectCalls) != 0 {
+		t.Fatalf("disconnectCalls = %v, want none", mockConnector.disconnectCalls)
+	}
+}
+
 // TestNewOrphanCleaner verifies the constructor works correctly
 func TestNewOrphanCleaner(t *testing.T) {
 	mockConnector := NewMockConnector()

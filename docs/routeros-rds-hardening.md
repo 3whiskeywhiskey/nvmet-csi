@@ -53,6 +53,8 @@ The suspect trigger class is rapid or unnecessary RouterOS storage mutations:
 - remediation loops that delete and recreate backing objects instead of
   reconciling actual state;
 - orphan cleanup acting on too broad a set of RouterOS objects;
+- orphan cleanup dry-run inventories adding `/disk print` and `/file print`
+  chatter during controller restarts or churn;
 - metrics or monitoring commands adding load or calling invalid RouterOS paths;
 - RouterOS auto-mount or filesystem scanning of PVC backing disks.
 
