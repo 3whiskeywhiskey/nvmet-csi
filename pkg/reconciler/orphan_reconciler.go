@@ -75,6 +75,34 @@ type OrphanedFile struct {
 	CreatedAt time.Time
 }
 
+// OrphanMutationAction is a planned cleanup operation from an orphan inventory.
+type OrphanMutationAction string
+
+const (
+	OrphanMutationDeleteDisk OrphanMutationAction = "delete_disk"
+	OrphanMutationDeleteFile OrphanMutationAction = "delete_file"
+)
+
+// OrphanMutation describes a planned cleanup action without applying it.
+type OrphanMutation struct {
+	Action OrphanMutationAction
+	Target string
+	Reason string
+}
+
+// OrphanInventory is the observed RDS/Kubernetes stale-object state for one
+// reconciliation pass.
+type OrphanInventory struct {
+	ObservedAt       time.Time
+	RDSVolumeCount   int
+	CSIVolumeCount   int
+	ActivePVCount    int
+	RDSFileCount     int
+	DiskOrphans      []OrphanedVolume
+	FileOrphans      []OrphanedFile
+	PlannedMutations []OrphanMutation
+}
+
 // NewOrphanReconciler creates a new orphan reconciler
 func NewOrphanReconciler(config OrphanReconcilerConfig) (*OrphanReconciler, error) {
 	// Validate config
@@ -158,16 +186,46 @@ func (r *OrphanReconciler) reconcile(ctx context.Context) error {
 	klog.V(2).Info("Starting orphan reconciliation cycle")
 	start := time.Now()
 
+	inventory, err := r.BuildInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	klog.V(2).Infof("Orphan reconciliation inventory built (duration=%v, rds_volumes=%d, csi_volumes=%d, active_pvs=%d, rds_files=%d, disk_orphans=%d, file_orphans=%d, planned_mutations=%d)",
+		time.Since(start),
+		inventory.RDSVolumeCount,
+		inventory.CSIVolumeCount,
+		inventory.ActivePVCount,
+		inventory.RDSFileCount,
+		len(inventory.DiskOrphans),
+		len(inventory.FileOrphans),
+		len(inventory.PlannedMutations))
+
+	r.applyOrphanInventory(inventory)
+
+	klog.V(2).Infof("Orphan reconciliation cycle complete (duration=%v, disk_orphans=%d, file_orphans=%d, total=%d, planned_mutations=%d)",
+		time.Since(start),
+		len(inventory.DiskOrphans),
+		len(inventory.FileOrphans),
+		len(inventory.DiskOrphans)+len(inventory.FileOrphans),
+		len(inventory.PlannedMutations))
+
+	return nil
+}
+
+// BuildInventory observes RDS and Kubernetes state and returns planned cleanup
+// actions without mutating RDS.
+func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory, error) {
 	// Get all volumes from RDS
 	rdsVolumes, err := r.config.RDSClient.ListVolumes()
 	if err != nil {
-		return fmt.Errorf("failed to list RDS volumes: %w", err)
+		return nil, fmt.Errorf("failed to list RDS volumes: %w", err)
 	}
 
 	// Get all PVs from Kubernetes
 	pvList, err := r.config.K8sClient.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to list Kubernetes PVs: %w", err)
+		return nil, fmt.Errorf("failed to list Kubernetes PVs: %w", err)
 	}
 
 	// Build a map of active volume IDs from Kubernetes PVs
@@ -186,36 +244,53 @@ func (r *OrphanReconciler) reconcile(ctx context.Context) error {
 
 	klog.Infof("Orphan reconciliation: %d volumes in RDS, %d active PVs in Kubernetes", len(rdsVolumes), len(activeVolumeIDs))
 
+	inventory := &OrphanInventory{
+		ObservedAt:     time.Now(),
+		RDSVolumeCount: len(rdsVolumes),
+		ActivePVCount:  len(activeVolumeIDs),
+	}
+
 	// Log all RDS volumes for visibility
 	for _, vol := range rdsVolumes {
 		if strings.HasPrefix(vol.Slot, VolumeIDPrefix) {
+			inventory.CSIVolumeCount++
 			hasActivePV := activeVolumeIDs[vol.Slot]
 			klog.V(4).Infof("  RDS volume: %s (size=%d bytes, path=%s, hasActivePV=%v)",
 				vol.Slot, vol.FileSizeBytes, vol.FilePath, hasActivePV)
 		}
 	}
 
-	// Reconcile orphaned disk objects (volumes without PVs)
-	diskOrphans := r.reconcileOrphanedDisks(rdsVolumes, activeVolumeIDs)
+	inventory.DiskOrphans = r.findOrphanedDisks(rdsVolumes, activeVolumeIDs)
+	for _, orphan := range inventory.DiskOrphans {
+		inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
+			Action: OrphanMutationDeleteDisk,
+			Target: orphan.VolumeID,
+			Reason: "CSI disk object has no active PersistentVolume",
+		})
+	}
 
-	// Reconcile orphaned files (files without disk objects)
-	fileOrphans := []OrphanedFile{}
 	if r.config.BasePath != "" {
-		fileOrphans, err = r.reconcileOrphanedFiles(rdsVolumes, activeVolumeIDs)
+		fileOrphans, fileCount, err := r.findOrphanedFiles(rdsVolumes, activeVolumeIDs)
 		if err != nil {
-			klog.Errorf("Failed to reconcile orphaned files: %v", err)
+			klog.Errorf("Failed to inventory orphaned files: %v", err)
+		} else {
+			inventory.RDSFileCount = fileCount
+			inventory.FileOrphans = fileOrphans
+			for _, orphan := range inventory.FileOrphans {
+				inventory.PlannedMutations = append(inventory.PlannedMutations, OrphanMutation{
+					Action: OrphanMutationDeleteFile,
+					Target: orphan.FilePath,
+					Reason: "CSI image file has no disk object and no active PersistentVolume",
+				})
+			}
 		}
 	}
 
-	totalOrphans := len(diskOrphans) + len(fileOrphans)
-	klog.V(2).Infof("Orphan reconciliation cycle complete (duration=%v, disk_orphans=%d, file_orphans=%d, total=%d)",
-		time.Since(start), len(diskOrphans), len(fileOrphans), totalOrphans)
-
-	return nil
+	return inventory, nil
 }
 
-// reconcileOrphanedDisks identifies and cleans up orphaned disk objects
-func (r *OrphanReconciler) reconcileOrphanedDisks(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) []OrphanedVolume {
+// findOrphanedDisks identifies orphaned disk objects without mutating RDS.
+func (r *OrphanReconciler) findOrphanedDisks(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) []OrphanedVolume {
 	orphans := []OrphanedVolume{}
 
 	klog.V(4).Infof("Checking %d RDS volumes for orphans (CSI-managed volumes must start with '%s')", len(rdsVolumes), VolumeIDPrefix)
@@ -253,9 +328,18 @@ func (r *OrphanReconciler) reconcileOrphanedDisks(rdsVolumes []rds.VolumeInfo, a
 		return orphans
 	}
 
-	// Log and potentially clean up orphans
-	klog.Warningf("Found %d orphaned disk objects", len(orphans))
-	for _, orphan := range orphans {
+	return orphans
+}
+
+func (r *OrphanReconciler) applyOrphanInventory(inventory *OrphanInventory) {
+	if inventory == nil {
+		return
+	}
+
+	if len(inventory.DiskOrphans) > 0 {
+		klog.Warningf("Found %d orphaned disk objects", len(inventory.DiskOrphans))
+	}
+	for _, orphan := range inventory.DiskOrphans {
 		age := time.Since(orphan.CreatedAt)
 
 		if age < r.config.GracePeriod {
@@ -281,17 +365,17 @@ func (r *OrphanReconciler) reconcileOrphanedDisks(rdsVolumes []rds.VolumeInfo, a
 		klog.Infof("Successfully deleted orphaned volume: %s", orphan.VolumeID)
 	}
 
-	return orphans
+	r.applyOrphanedFiles(inventory.FileOrphans)
 }
 
-// reconcileOrphanedFiles identifies orphaned files (files without disk objects AND without PVs)
-func (r *OrphanReconciler) reconcileOrphanedFiles(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) ([]OrphanedFile, error) {
+// findOrphanedFiles identifies orphaned files (files without disk objects AND without PVs).
+func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) ([]OrphanedFile, int, error) {
 	klog.V(4).Infof("Checking for orphaned files in %s", r.config.BasePath)
 
 	// Get all files in the base path
 	files, err := r.config.RDSClient.ListFiles(r.config.BasePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list files: %w", err)
+		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
 
 	// Build a map of file paths from disk objects
@@ -304,7 +388,6 @@ func (r *OrphanReconciler) reconcileOrphanedFiles(rdsVolumes []rds.VolumeInfo, a
 
 	// Filter for .img files only
 	orphans := []OrphanedFile{}
-	totalSize := int64(0)
 	for _, file := range files {
 		// Only check .img files
 		if !strings.HasSuffix(file.Name, ".img") {
@@ -334,12 +417,24 @@ func (r *OrphanReconciler) reconcileOrphanedFiles(rdsVolumes []rds.VolumeInfo, a
 			CreatedAt: file.CreatedAt,
 		}
 		orphans = append(orphans, orphan)
-		totalSize += file.SizeBytes
 	}
 
 	if len(orphans) == 0 {
 		klog.V(4).Info("No orphaned files found")
-		return orphans, nil
+		return orphans, len(files), nil
+	}
+
+	return orphans, len(files), nil
+}
+
+func (r *OrphanReconciler) applyOrphanedFiles(orphans []OrphanedFile) {
+	if len(orphans) == 0 {
+		return
+	}
+
+	totalSize := int64(0)
+	for _, orphan := range orphans {
+		totalSize += orphan.SizeBytes
 	}
 
 	// Log orphaned files
@@ -363,8 +458,6 @@ func (r *OrphanReconciler) reconcileOrphanedFiles(rdsVolumes []rds.VolumeInfo, a
 
 		klog.Infof("Successfully deleted orphaned file: %s", orphan.FilePath)
 	}
-
-	return orphans, nil
 }
 
 // deleteOrphanedVolume deletes an orphaned volume from RDS

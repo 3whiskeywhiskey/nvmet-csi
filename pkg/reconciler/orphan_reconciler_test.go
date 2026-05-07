@@ -311,6 +311,73 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 	}
 }
 
+func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing.T) {
+	mockRDS := &mockRDSClient{
+		volumes: []rds.VolumeInfo{
+			{Slot: "pvc-active", FilePath: "/storage-pool/metal-csi/pvc-active.img", FileSizeBytes: 10 << 30},
+			{Slot: "pvc-orphan", FilePath: "/storage-pool/metal-csi/pvc-orphan.img", FileSizeBytes: 20 << 30},
+			{Slot: "manual-volume", FilePath: "/storage-pool/manual.img", FileSizeBytes: 30 << 30},
+		},
+		files: []rds.FileInfo{
+			{Name: "pvc-active.img", Path: "/storage-pool/metal-csi/pvc-active.img", SizeBytes: 10 << 30, Type: "file"},
+			{Name: "pvc-orphan.img", Path: "/storage-pool/metal-csi/pvc-orphan.img", SizeBytes: 20 << 30, Type: "file"},
+			{Name: "pvc-file-orphan.img", Path: "/storage-pool/metal-csi/pvc-file-orphan.img", SizeBytes: 5 << 30, Type: "file"},
+			{Name: "notes.txt", Path: "/storage-pool/metal-csi/notes.txt", SizeBytes: 1, Type: "file"},
+		},
+		deletedVolumes: []string{},
+		deletedFiles:   []string{},
+	}
+	k8sClient := fake.NewSimpleClientset(activePV("pv-active", "pvc-active"))
+
+	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
+		RDSClient:   mockRDS,
+		K8sClient:   k8sClient,
+		GracePeriod: time.Second,
+		DryRun:      true,
+		Enabled:     true,
+		BasePath:    "/storage-pool/metal-csi",
+	})
+	if err != nil {
+		t.Fatalf("NewOrphanReconciler() failed: %v", err)
+	}
+
+	inventory, err := reconciler.BuildInventory(context.Background())
+	if err != nil {
+		t.Fatalf("BuildInventory() failed: %v", err)
+	}
+
+	if inventory.RDSVolumeCount != 3 {
+		t.Fatalf("RDSVolumeCount = %d, want 3", inventory.RDSVolumeCount)
+	}
+	if inventory.CSIVolumeCount != 2 {
+		t.Fatalf("CSIVolumeCount = %d, want 2", inventory.CSIVolumeCount)
+	}
+	if inventory.ActivePVCount != 1 {
+		t.Fatalf("ActivePVCount = %d, want 1", inventory.ActivePVCount)
+	}
+	if inventory.RDSFileCount != 4 {
+		t.Fatalf("RDSFileCount = %d, want 4", inventory.RDSFileCount)
+	}
+	if len(inventory.DiskOrphans) != 1 || inventory.DiskOrphans[0].VolumeID != "pvc-orphan" {
+		t.Fatalf("DiskOrphans = %+v, want pvc-orphan", inventory.DiskOrphans)
+	}
+	if len(inventory.FileOrphans) != 1 || inventory.FileOrphans[0].FilePath != "/storage-pool/metal-csi/pvc-file-orphan.img" {
+		t.Fatalf("FileOrphans = %+v, want pvc-file-orphan.img", inventory.FileOrphans)
+	}
+	if len(inventory.PlannedMutations) != 2 {
+		t.Fatalf("PlannedMutations len = %d, want 2: %+v", len(inventory.PlannedMutations), inventory.PlannedMutations)
+	}
+	if inventory.PlannedMutations[0].Action != OrphanMutationDeleteDisk || inventory.PlannedMutations[0].Target != "pvc-orphan" {
+		t.Fatalf("first planned mutation = %+v, want delete_disk pvc-orphan", inventory.PlannedMutations[0])
+	}
+	if inventory.PlannedMutations[1].Action != OrphanMutationDeleteFile || inventory.PlannedMutations[1].Target != "/storage-pool/metal-csi/pvc-file-orphan.img" {
+		t.Fatalf("second planned mutation = %+v, want delete_file pvc-file-orphan.img", inventory.PlannedMutations[1])
+	}
+	if len(mockRDS.deletedVolumes) != 0 || len(mockRDS.deletedFiles) != 0 {
+		t.Fatalf("BuildInventory mutated RDS: deletedVolumes=%v deletedFiles=%v", mockRDS.deletedVolumes, mockRDS.deletedFiles)
+	}
+}
+
 func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -438,5 +505,19 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 			// but we verify the reconciliation completed without error)
 			// In a real scenario, we'd expose metrics or a status API to verify counts
 		})
+	}
+}
+
+func activePV(name, volumeHandle string) *v1.PersistentVolume {
+	return &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{
+					Driver:       "rds.csi.srvlab.io",
+					VolumeHandle: volumeHandle,
+				},
+			},
+		},
 	}
 }
