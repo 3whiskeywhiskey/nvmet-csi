@@ -111,6 +111,11 @@ type DriverConfig struct {
 	RDSInsecureSkipVerify bool   // Skip host key verification (INSECURE)
 	RDSVolumeBasePath     string // Base path for volumes on RDS (e.g., /storage-pool/metal-csi)
 
+	// RDS mutation guardrails
+	RDSMutationMinInterval time.Duration
+	RDSMutationBurst       int
+	RDSMutationTimeout     time.Duration
+
 	// Kubernetes client (required for orphan reconciler)
 	K8sClient kubernetes.Interface
 
@@ -196,6 +201,21 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		// Connect to RDS
 		if err := rdsClient.Connect(); err != nil {
 			return nil, fmt.Errorf("failed to connect to RDS: %w", err)
+		}
+
+		if config.RDSMutationMinInterval > 0 {
+			guardedClient, err := rds.NewGuardedClient(rdsClient, rds.GuardedClientConfig{
+				MinInterval: config.RDSMutationMinInterval,
+				Burst:       config.RDSMutationBurst,
+				Timeout:     config.RDSMutationTimeout,
+				Observer:    config.Metrics,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create guarded RDS client: %w", err)
+			}
+			rdsClient = guardedClient
+			klog.Infof("RDS mutation guard enabled (min_interval=%v, burst=%d, timeout=%v)",
+				config.RDSMutationMinInterval, config.RDSMutationBurst, config.RDSMutationTimeout)
 		}
 
 		driver.rdsClient = rdsClient

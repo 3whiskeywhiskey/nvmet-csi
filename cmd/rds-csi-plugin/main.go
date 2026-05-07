@@ -40,6 +40,11 @@ var (
 	rdsInsecure       = flag.Bool("rds-insecure-skip-verify", false, "Skip SSH host key verification (INSECURE - for testing only)")
 	rdsVolumeBasePath = flag.String("rds-volume-base-path", "", "Base path for volumes on RDS (e.g., /storage-pool/metal-csi, required for file orphan detection)")
 
+	// RDS mutation guardrails
+	rdsMutationMinInterval = flag.Duration("rds-mutation-min-interval", 250*time.Millisecond, "Minimum spacing between mutating RDS operations (0 disables guard)")
+	rdsMutationBurst       = flag.Int("rds-mutation-burst", 1, "Maximum RDS mutations allowed to burst through the guard")
+	rdsMutationTimeout     = flag.Duration("rds-mutation-timeout", 30*time.Second, "Maximum time to wait for the RDS mutation guard")
+
 	// Mode flags
 	controllerMode = flag.Bool("controller", false, "Run in controller mode")
 	nodeMode       = flag.Bool("node", false, "Run in node mode")
@@ -151,6 +156,9 @@ func main() {
 		RDSHostKey:                  hostKey,
 		RDSInsecureSkipVerify:       *rdsInsecure,
 		RDSVolumeBasePath:           *rdsVolumeBasePath,
+		RDSMutationMinInterval:      *rdsMutationMinInterval,
+		RDSMutationBurst:            *rdsMutationBurst,
+		RDSMutationTimeout:          *rdsMutationTimeout,
 		K8sClient:                   k8sClient,
 		Metrics:                     promMetrics,
 		EnableOrphanReconciler:      *enableOrphanReconciler,

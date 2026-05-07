@@ -489,6 +489,7 @@ func TestSysfsScanner_NewSysfsScanner(t *testing.T) {
 		scanner := NewSysfsScanner()
 		if scanner == nil {
 			t.Fatal("NewSysfsScanner returned nil")
+			return
 		}
 		if scanner.Root != DefaultSysfsRoot {
 			t.Errorf("Expected root %s, got %s", DefaultSysfsRoot, scanner.Root)
@@ -500,6 +501,7 @@ func TestSysfsScanner_NewSysfsScanner(t *testing.T) {
 		scanner := NewSysfsScannerWithRoot(customRoot)
 		if scanner == nil {
 			t.Fatal("NewSysfsScannerWithRoot returned nil")
+			return
 		}
 		if scanner.Root != customRoot {
 			t.Errorf("Expected root %s, got %s", customRoot, scanner.Root)

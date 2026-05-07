@@ -35,6 +35,9 @@ data:
   rds-port: "22"               # SSH port
   rds-user: "metal-csi"        # SSH user on RouterOS
   rds-volume-base-path: "/storage-pool/metal-csi"  # Base path for volumes
+  rds-mutation-min-interval: "250ms"
+  rds-mutation-burst: "1"
+  rds-mutation-timeout: "30s"
   # NQN prefix for CSI-managed volumes (safety filter)
   nqn-prefix: "nqn.2000-02.com.mikrotik:pvc-"
 
@@ -96,6 +99,9 @@ spec:
             - "-rds-key-file=/etc/rds-csi/rds-private-key"
             - "-rds-host-key=/etc/rds-csi/rds-host-key"
             - "-rds-volume-base-path=$(RDS_VOLUME_BASE_PATH)"
+            - "-rds-mutation-min-interval=$(RDS_MUTATION_MIN_INTERVAL)"
+            - "-rds-mutation-burst=$(RDS_MUTATION_BURST)"
+            - "-rds-mutation-timeout=$(RDS_MUTATION_TIMEOUT)"
             # Orphan reconciler settings (optional - enable to detect and cleanup orphaned volumes)
             - "-enable-orphan-reconciler"
             - "-orphan-check-interval=1h"
@@ -132,6 +138,21 @@ spec:
                 configMapKeyRef:
                   name: rds-csi-config
                   key: rds-volume-base-path
+            - name: RDS_MUTATION_MIN_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: rds-csi-config
+                  key: rds-mutation-min-interval
+            - name: RDS_MUTATION_BURST
+              valueFrom:
+                configMapKeyRef:
+                  name: rds-csi-config
+                  key: rds-mutation-burst
+            - name: RDS_MUTATION_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: rds-csi-config
+                  key: rds-mutation-timeout
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

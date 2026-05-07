@@ -20,6 +20,7 @@ func TestNewEventPoster_CreatesRecorder(t *testing.T) {
 
 	if poster == nil {
 		t.Fatal("Expected non-nil EventPoster")
+		return
 	}
 
 	if poster.recorder == nil {
@@ -293,6 +294,7 @@ func TestEventSinkAdapter(t *testing.T) {
 
 	if created == nil {
 		t.Fatal("Expected non-nil created event")
+		return
 	}
 
 	if created.Reason != "TestReason" {
