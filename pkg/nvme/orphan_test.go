@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,6 +60,28 @@ func (m *MockConnector) IsConnected(nqn string) (bool, error) {
 		return false, m.isConnectedError
 	}
 	return m.isConnectedResult[nqn], nil
+}
+
+func requireMetricLine(t *testing.T, body string, labels ...string) {
+	t.Helper()
+
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, "rds_csi_orphan_cleanup_total{") || !strings.HasSuffix(line, " 1") {
+			continue
+		}
+		matched := true
+		for _, label := range labels {
+			if !strings.Contains(line, label) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return
+		}
+	}
+
+	t.Fatalf("expected orphan cleanup metric with labels %v, got:\n%s", labels, body)
 }
 
 func (m *MockConnector) IsConnectedWithContext(ctx context.Context, nqn string) (bool, error) {
@@ -455,13 +479,25 @@ func TestOrphanCleanerActualImplementationDryRunDoesNotDisconnect(t *testing.T) 
 	resolver.SetIsConnectedFn(mockConnector.IsConnected)
 	mockConnector.resolver = resolver
 
+	metrics := observability.NewMetrics()
 	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner.SetMetrics(metrics)
 	cleaner.SetDryRun(true)
 	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
 		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
 	}
 	if len(mockConnector.disconnectCalls) != 0 {
 		t.Fatalf("disconnectCalls = %v, want none in dry-run", mockConnector.disconnectCalls)
+	}
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(rec, req)
+	body := rec.Body.String()
+	requireMetricLine(t, body, `action="detect"`, `result="orphan"`, `dry_run="true"`)
+	requireMetricLine(t, body, `action="disconnect"`, `result="dry_run"`, `dry_run="true"`)
+	if strings.Contains(body, "rds_csi_orphans_cleaned_total 1") {
+		t.Fatalf("dry-run must not record successful cleanup, got:\n%s", body)
 	}
 }
 

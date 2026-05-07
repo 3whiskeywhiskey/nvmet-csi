@@ -101,26 +101,42 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 
 		klog.Warningf("Found orphaned subsystem: %s", nqn)
 		orphanCount++
+		if oc.metrics != nil {
+			oc.metrics.RecordOrphanDetected(oc.dryRun)
+		}
 		if oc.dryRun {
 			klog.Infof("[DRY-RUN] Would disconnect orphaned subsystem: %s", nqn)
+			if oc.metrics != nil {
+				oc.metrics.RecordOrphanDisconnectSkippedDryRun()
+			}
 			continue
 		}
 
 		if oc.maxDisconnects > 0 && disconnectAttempts >= oc.maxDisconnects {
 			klog.Warningf("Orphan cleanup disconnect limit reached (max=%d); leaving remaining managed orphans for a later explicit cleanup pass", oc.maxDisconnects)
+			if oc.metrics != nil {
+				oc.metrics.RecordOrphanDisconnectLimitReached()
+			}
 			break
 		}
 		disconnectAttempts++
+		if oc.metrics != nil {
+			oc.metrics.RecordOrphanDisconnectAttempt()
+		}
 
 		// Attempt to disconnect
 		if err := oc.connector.DisconnectWithContext(ctx, nqn); err != nil {
 			klog.Warningf("Failed to disconnect orphaned subsystem %s: %v", nqn, err)
+			if oc.metrics != nil {
+				oc.metrics.RecordOrphanDisconnectFailure()
+			}
 			// Continue to next orphan - best effort cleanup
 		} else {
 			klog.V(2).Infof("Successfully disconnected orphaned subsystem: %s", nqn)
 			// Record metric for successful cleanup
 			if oc.metrics != nil {
 				oc.metrics.RecordOrphanCleaned()
+				oc.metrics.RecordOrphanDisconnectSuccess()
 			}
 		}
 	}

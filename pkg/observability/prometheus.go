@@ -80,6 +80,7 @@ type Metrics struct {
 
 	// Orphan cleanup metrics
 	orphansCleanedTotal prometheus.Counter
+	orphanCleanupTotal  *prometheus.CounterVec
 
 	// Kubernetes events metrics
 	eventsPostedTotal *prometheus.CounterVec
@@ -189,6 +190,15 @@ func NewMetrics() *Metrics {
 			Name:      "orphans_cleaned_total",
 			Help:      "Total number of orphaned NVMe connections cleaned up",
 		}),
+
+		orphanCleanupTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Name:      "orphan_cleanup_total",
+				Help:      "Total number of node orphan cleanup observations by action, result, and dry-run mode",
+			},
+			[]string{"action", "result", "dry_run"},
+		),
 
 		eventsPostedTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -390,6 +400,7 @@ func NewMetrics() *Metrics {
 		m.staleMountsDetectedTotal,
 		m.staleRecoveriesTotal,
 		m.orphansCleanedTotal,
+		m.orphanCleanupTotal,
 		m.eventsPostedTotal,
 		m.attachmentAttachTotal,
 		m.attachmentDetachTotal,
@@ -726,6 +737,43 @@ func (m *Metrics) RecordStaleRecovery(err error) {
 // RecordOrphanCleaned records that an orphaned NVMe connection was cleaned up.
 func (m *Metrics) RecordOrphanCleaned() {
 	m.orphansCleanedTotal.Inc()
+}
+
+func dryRunLabel(dryRun bool) string {
+	if dryRun {
+		return "true"
+	}
+	return "false"
+}
+
+// RecordOrphanDetected records a managed orphan found during node cleanup.
+func (m *Metrics) RecordOrphanDetected(dryRun bool) {
+	m.orphanCleanupTotal.WithLabelValues("detect", "orphan", dryRunLabel(dryRun)).Inc()
+}
+
+// RecordOrphanDisconnectSkippedDryRun records a dry-run cleanup decision.
+func (m *Metrics) RecordOrphanDisconnectSkippedDryRun() {
+	m.orphanCleanupTotal.WithLabelValues("disconnect", "dry_run", "true").Inc()
+}
+
+// RecordOrphanDisconnectLimitReached records that cleanup left orphans due to the per-pass cap.
+func (m *Metrics) RecordOrphanDisconnectLimitReached() {
+	m.orphanCleanupTotal.WithLabelValues("disconnect", "limit_reached", "false").Inc()
+}
+
+// RecordOrphanDisconnectAttempt records an actual orphan disconnect attempt.
+func (m *Metrics) RecordOrphanDisconnectAttempt() {
+	m.orphanCleanupTotal.WithLabelValues("disconnect", "attempt", "false").Inc()
+}
+
+// RecordOrphanDisconnectFailure records a failed orphan disconnect attempt.
+func (m *Metrics) RecordOrphanDisconnectFailure() {
+	m.orphanCleanupTotal.WithLabelValues("disconnect", "failure", "false").Inc()
+}
+
+// RecordOrphanDisconnectSuccess records a successful orphan disconnect attempt.
+func (m *Metrics) RecordOrphanDisconnectSuccess() {
+	m.orphanCleanupTotal.WithLabelValues("disconnect", "success", "false").Inc()
 }
 
 // RecordEventPosted records that a Kubernetes event was posted.

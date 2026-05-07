@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,29 @@ func TestHandler(t *testing.T) {
 	if !strings.Contains(string(body), "rds_csi_") {
 		t.Error("metrics response should contain rds_csi_ namespace")
 	}
+}
+
+func assertMetricWithLabels(t *testing.T, body, metric string, labels map[string]string, value string) {
+	t.Helper()
+
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, metric+"{") || !strings.HasSuffix(line, " "+value) {
+			continue
+		}
+
+		matched := true
+		for name, want := range labels {
+			if !strings.Contains(line, name+"="+strconv.Quote(want)) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return
+		}
+	}
+
+	t.Fatalf("expected %s with labels %v and value %s, got:\n%s", metric, labels, value, body)
 }
 
 func TestRecordVolumeOp(t *testing.T) {
@@ -429,6 +453,60 @@ func TestRecordOrphanCleaned_Multiple(t *testing.T) {
 	if !strings.Contains(body, "rds_csi_orphans_cleaned_total 3") {
 		t.Errorf("expected orphans_cleaned_total to be 3, got:\n%s", body)
 	}
+}
+
+func TestRecordOrphanCleanupOutcomes(t *testing.T) {
+	m := NewMetrics()
+
+	m.RecordOrphanDetected(true)
+	m.RecordOrphanDisconnectSkippedDryRun()
+	m.RecordOrphanDetected(false)
+	m.RecordOrphanDisconnectAttempt()
+	m.RecordOrphanDisconnectFailure()
+	m.RecordOrphanDisconnectLimitReached()
+	m.RecordOrphanDisconnectSuccess()
+
+	handler := m.Handler()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "detect",
+		"result":  "orphan",
+		"dry_run": "true",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "disconnect",
+		"result":  "dry_run",
+		"dry_run": "true",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "detect",
+		"result":  "orphan",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "disconnect",
+		"result":  "attempt",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "disconnect",
+		"result":  "failure",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "disconnect",
+		"result":  "limit_reached",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+		"action":  "disconnect",
+		"result":  "success",
+		"dry_run": "false",
+	}, "1")
 }
 
 func TestRecordEventPosted(t *testing.T) {
