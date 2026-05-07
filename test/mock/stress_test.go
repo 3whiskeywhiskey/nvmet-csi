@@ -208,6 +208,182 @@ func TestConcurrentSameVolume(t *testing.T) {
 	_ = client.DeleteVolume(volumeID)
 }
 
+// TestConcurrentSameResize validates idempotency: concurrent ResizeVolume with same target size
+func TestConcurrentSameResize(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping stress test in short mode")
+	}
+
+	setupStressTestBasePaths(t)
+
+	server, err := NewMockRDSServer(0)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:            server.Address(),
+		Port:               server.Port(),
+		User:               "admin",
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	volumeID := "concurrent-same-resize"
+	if err := client.CreateVolume(rds.CreateVolumeOptions{
+		Slot:          volumeID,
+		FilePath:      fmt.Sprintf("/storage-pool/test/%s.img", volumeID),
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPPort:   4420,
+		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", volumeID),
+	}); err != nil {
+		t.Fatalf("failed to create volume: %v", err)
+	}
+	server.ClearCommandHistory()
+
+	const numGoroutines = 10
+	const targetSize = 2 * 1024 * 1024 * 1024
+
+	var wg sync.WaitGroup
+	var successCount, failCount atomic.Int32
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := client.ResizeVolume(volumeID, targetSize); err != nil {
+				failCount.Add(1)
+			} else {
+				successCount.Add(1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if successCount.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent resizes to succeed, got %d successes", successCount.Load())
+	}
+	if failCount.Load() != 0 {
+		t.Errorf("expected 0 failures, got %d", failCount.Load())
+	}
+
+	sets := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk set ") && strings.Contains(entry.Command, "slot="+volumeID) {
+			sets++
+		}
+	}
+	if sets != 1 {
+		t.Errorf("expected exactly 1 /disk set for idempotent concurrent resize, got %d", sets)
+	}
+
+	volume, err := client.GetVolume(volumeID)
+	if err != nil {
+		t.Fatalf("failed to get resized volume: %v", err)
+	}
+	if volume.FileSizeBytes != targetSize {
+		t.Errorf("expected volume size %d, got %d", targetSize, volume.FileSizeBytes)
+	}
+
+	_ = client.DeleteVolume(volumeID)
+}
+
+// TestConcurrentSameDelete validates idempotency: concurrent DeleteVolume with same target slot
+func TestConcurrentSameDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping stress test in short mode")
+	}
+
+	setupStressTestBasePaths(t)
+
+	server, err := NewMockRDSServer(0)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:            server.Address(),
+		Port:               server.Port(),
+		User:               "admin",
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	volumeID := "concurrent-same-delete"
+	if err := client.CreateVolume(rds.CreateVolumeOptions{
+		Slot:          volumeID,
+		FilePath:      fmt.Sprintf("/storage-pool/test/%s.img", volumeID),
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPPort:   4420,
+		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", volumeID),
+	}); err != nil {
+		t.Fatalf("failed to create volume: %v", err)
+	}
+	server.ClearCommandHistory()
+
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	var successCount, failCount atomic.Int32
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := client.DeleteVolume(volumeID); err != nil {
+				failCount.Add(1)
+			} else {
+				successCount.Add(1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if successCount.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent deletes to succeed, got %d successes", successCount.Load())
+	}
+	if failCount.Load() != 0 {
+		t.Errorf("expected 0 failures, got %d", failCount.Load())
+	}
+
+	removes := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk remove ") && strings.Contains(entry.Command, "slot="+volumeID) {
+			removes++
+		}
+	}
+	if removes != 1 {
+		t.Errorf("expected exactly 1 /disk remove for idempotent concurrent delete, got %d", removes)
+	}
+
+	volumes := server.ListVolumes()
+	if len(volumes) != 0 {
+		t.Errorf("expected 0 volumes after concurrent delete, got %d", len(volumes))
+	}
+}
+
 // TestConcurrentCreateDelete validates concurrent create and delete operations
 func TestConcurrentCreateDelete(t *testing.T) {
 	if testing.Short() {
