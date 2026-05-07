@@ -132,6 +132,21 @@ func (b *Backend) BuildDeleteVolumePlan(ctx context.Context, volumeID string) (*
 		}
 		return nil, fmt.Errorf("failed to observe volume %s: %w", volumeID, err)
 	}
+	if actual.NQN == "" {
+		return conflictPlanFromState(volumeID, actual, "NVMe/TCP NQN metadata is missing"), nil
+	}
+	if actual.Port <= 0 {
+		return conflictPlanFromState(volumeID, actual, "NVMe/TCP port metadata is missing"), nil
+	}
+	if actual.ExportDevice != "" && actual.ExportDevice != actual.DevicePath {
+		return conflictPlanFromState(volumeID, actual, "nvmet namespace device path differs"), nil
+	}
+	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(actual.NQN) {
+		return conflictPlanFromState(volumeID, actual, "nvmet port link target differs"), nil
+	}
+	if actual.PortEntryExists && actual.PortLinkTarget == "" {
+		return conflictPlanFromState(volumeID, actual, "nvmet port entry exists but is not an expected symlink"), nil
+	}
 	return &backend.VolumePlan{
 		Action:   backend.VolumeActionDelete,
 		VolumeID: volumeID,
@@ -324,6 +339,15 @@ func conflictPlan(desired VolumeSpec, actual *VolumeState, reason string) *backe
 		Desired:  &normalized,
 		Actual:   volumeFromState(actual),
 		Native:   desired,
+	}
+}
+
+func conflictPlanFromState(volumeID string, actual *VolumeState, reason string) *backend.VolumePlan {
+	return &backend.VolumePlan{
+		Action:   backend.VolumeActionConflict,
+		VolumeID: volumeID,
+		Reason:   reason,
+		Actual:   volumeFromState(actual),
 	}
 }
 

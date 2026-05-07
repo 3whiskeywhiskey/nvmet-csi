@@ -57,22 +57,24 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 	port, _ := strconv.Atoi(strings.TrimSpace(portValue))
 	nqn = strings.TrimSpace(nqn)
 	exportDevice := h.namespaceDevicePath(ctx, nqn)
+	portEntryExists := h.portEntryExists(ctx, port, nqn)
 	portLinkTarget := h.portLinkTarget(ctx, port, nqn)
 	namespaceReady := h.namespaceEnabled(ctx, nqn)
 	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkTarget == h.cfg.subsystemPath(nqn)
 
 	return &VolumeState{
-		ID:             volumeID,
-		Dataset:        dataset,
-		DevicePath:     h.cfg.devicePathFor(volumeID),
-		SizeBytes:      sizeBytes,
-		NQN:            nqn,
-		Port:           port,
-		Exported:       exported,
-		NamespaceReady: namespaceReady,
-		ExportDevice:   exportDevice,
-		PortLinkTarget: portLinkTarget,
-		Status:         statusFromExport(exported),
+		ID:              volumeID,
+		Dataset:         dataset,
+		DevicePath:      h.cfg.devicePathFor(volumeID),
+		SizeBytes:       sizeBytes,
+		NQN:             nqn,
+		Port:            port,
+		Exported:        exported,
+		NamespaceReady:  namespaceReady,
+		ExportDevice:    exportDevice,
+		PortEntryExists: portEntryExists,
+		PortLinkTarget:  portLinkTarget,
+		Status:          statusFromExport(exported),
 	}, nil
 }
 
@@ -108,22 +110,24 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		port, _ := strconv.Atoi(strings.TrimSpace(portValue))
 		nqn = strings.TrimSpace(nqn)
 		exportDevice := h.namespaceDevicePath(ctx, nqn)
+		portEntryExists := h.portEntryExists(ctx, port, nqn)
 		portLinkTarget := h.portLinkTarget(ctx, port, nqn)
 		devicePath := h.cfg.devicePathFor(id)
 		namespaceReady := h.namespaceEnabled(ctx, nqn)
 		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn)
 		volumes = append(volumes, VolumeState{
-			ID:             id,
-			Dataset:        fields[0],
-			DevicePath:     devicePath,
-			SizeBytes:      sizeBytes,
-			NQN:            nqn,
-			Port:           port,
-			Exported:       exported,
-			NamespaceReady: namespaceReady,
-			ExportDevice:   exportDevice,
-			PortLinkTarget: portLinkTarget,
-			Status:         statusFromExport(exported),
+			ID:              id,
+			Dataset:         fields[0],
+			DevicePath:      devicePath,
+			SizeBytes:       sizeBytes,
+			NQN:             nqn,
+			Port:            port,
+			Exported:        exported,
+			NamespaceReady:  namespaceReady,
+			ExportDevice:    exportDevice,
+			PortEntryExists: portEntryExists,
+			PortLinkTarget:  portLinkTarget,
+			Status:          statusFromExport(exported),
 		})
 	}
 	return volumes, nil
@@ -178,18 +182,41 @@ func (h *CommandHost) DeleteVolume(ctx context.Context, volumeID string) error {
 		}
 		return err
 	}
+	if err := h.validateDeleteState(*state); err != nil {
+		return err
+	}
 
 	return h.runAll(ctx, h.DeleteVolumeCommands(*state))
 }
 
 func (h *CommandHost) DeleteVolumeCommands(state VolumeState) []Command {
 	return []Command{
-		writeCommand(h.cfg.namespacePath(state.NQN)+"/enable", "0\n"),
-		{Name: "rm", Args: []string{"-f", h.cfg.portSubsystemPath(state.Port, state.NQN)}},
-		{Name: "rmdir", Args: []string{h.cfg.namespacePath(state.NQN)}},
-		{Name: "rmdir", Args: []string{h.cfg.subsystemPath(state.NQN)}},
+		disableIfPresentCommand(h.cfg.namespacePath(state.NQN) + "/enable"),
+		removeSymlinkIfPresentCommand(h.cfg.portSubsystemPath(state.Port, state.NQN)),
+		rmdirIfPresentCommand(h.cfg.namespacePath(state.NQN)),
+		rmdirIfPresentCommand(h.cfg.subsystemPath(state.NQN)),
 		{Name: "zfs", Args: []string{"destroy", state.Dataset}},
 	}
+}
+
+func (h *CommandHost) validateDeleteState(state VolumeState) error {
+	if state.NQN == "" {
+		return fmt.Errorf("refusing to delete %s: NVMe/TCP NQN metadata is missing", state.ID)
+	}
+	if state.Port <= 0 {
+		return fmt.Errorf("refusing to delete %s: NVMe/TCP port metadata is missing", state.ID)
+	}
+	if state.ExportDevice != "" && state.ExportDevice != state.DevicePath {
+		return fmt.Errorf("refusing to delete %s: nvmet namespace device path %q differs from expected %q", state.ID, state.ExportDevice, state.DevicePath)
+	}
+	expectedSubsystem := h.cfg.subsystemPath(state.NQN)
+	if state.PortLinkTarget != "" && state.PortLinkTarget != expectedSubsystem {
+		return fmt.Errorf("refusing to delete %s: nvmet port link target %q differs from expected %q", state.ID, state.PortLinkTarget, expectedSubsystem)
+	}
+	if state.PortEntryExists && state.PortLinkTarget == "" {
+		return fmt.Errorf("refusing to delete %s: nvmet port entry exists but is not an expected symlink", state.ID)
+	}
+	return nil
 }
 
 func (h *CommandHost) ResizeVolume(ctx context.Context, volumeID string, sizeBytes int64) error {
@@ -278,6 +305,18 @@ func (h *CommandHost) portLinkTarget(ctx context.Context, port int, nqn string) 
 	return strings.TrimSpace(out)
 }
 
+func (h *CommandHost) portEntryExists(ctx context.Context, port int, nqn string) bool {
+	if port <= 0 || nqn == "" {
+		return false
+	}
+	path := h.cfg.portSubsystemPath(port, nqn)
+	if _, err := h.run(ctx, Command{Name: "test", Args: []string{"-e", path}}); err == nil {
+		return true
+	}
+	_, err := h.run(ctx, Command{Name: "test", Args: []string{"-L", path}})
+	return err == nil
+}
+
 func (h *CommandHost) run(ctx context.Context, cmd Command) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -315,6 +354,36 @@ func linkIfMissingCommand(target string, link string) Command {
 		Args: []string{
 			"-c",
 			"test -L " + shellQuote(link) + " || ln -s " + shellQuote(target) + " " + shellQuote(link),
+		},
+	}
+}
+
+func disableIfPresentCommand(path string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"if [ -e " + shellQuote(path) + " ]; then printf '%s\\n' 0 > " + shellQuote(path) + "; fi",
+		},
+	}
+}
+
+func removeSymlinkIfPresentCommand(path string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"if [ -L " + shellQuote(path) + " ]; then rm " + shellQuote(path) + "; fi",
+		},
+	}
+}
+
+func rmdirIfPresentCommand(path string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"if [ -d " + shellQuote(path) + " ]; then rmdir " + shellQuote(path) + "; fi",
 		},
 	}
 }

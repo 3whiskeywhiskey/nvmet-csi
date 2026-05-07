@@ -188,6 +188,79 @@ func TestBuildDeleteVolumePlanIdempotent(t *testing.T) {
 	}
 }
 
+func TestBuildDeleteVolumePlanConflictsOnUnsafeExportState(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:           spec.ID,
+		Dataset:      spec.Dataset,
+		DevicePath:   spec.DevicePath,
+		SizeBytes:    spec.SizeBytes,
+		NQN:          spec.NQN,
+		Port:         spec.Port,
+		ExportDevice: "/dev/zvol/tank/nvmet/other-volume",
+	}
+	plan, err := storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionConflict {
+		t.Fatalf("expected conflict for wrong export device, got %s", plan.Action)
+	}
+	if !strings.Contains(plan.Reason, "namespace device path differs") {
+		t.Fatalf("unexpected conflict reason: %q", plan.Reason)
+	}
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:              spec.ID,
+		Dataset:         spec.Dataset,
+		DevicePath:      spec.DevicePath,
+		SizeBytes:       spec.SizeBytes,
+		NQN:             spec.NQN,
+		Port:            spec.Port,
+		PortEntryExists: true,
+	}
+	plan, err = storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionConflict {
+		t.Fatalf("expected conflict for non-symlink port entry, got %s", plan.Action)
+	}
+	if !strings.Contains(plan.Reason, "not an expected symlink") {
+		t.Fatalf("unexpected conflict reason: %q", plan.Reason)
+	}
+}
+
+func TestBuildDeleteVolumePlanAllowsPartialExpectedExport(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:             spec.ID,
+		Dataset:        spec.Dataset,
+		DevicePath:     spec.DevicePath,
+		SizeBytes:      spec.SizeBytes,
+		NQN:            spec.NQN,
+		Port:           spec.Port,
+		ExportDevice:   spec.DevicePath,
+		PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+	}
+
+	plan, err := storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionDelete {
+		t.Fatalf("expected delete for partial expected export, got %s", plan.Action)
+	}
+}
+
 func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	recorder := &recordingExecutor{outputs: map[string]string{}}
 	host, err := NewCommandHost(Config{Pool: "tank/nvmet", ConfigFSRoot: "/config/nvmet"}, recorder)
@@ -245,9 +318,15 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 	}
 
 	deletion := commandStrings(host.DeleteVolumeCommands(state))
-	wantLast := "zfs destroy tank/nvmet/pvc-test-volume"
-	if deletion[len(deletion)-1] != wantLast {
-		t.Fatalf("expected final delete command %q, got %q", wantLast, deletion[len(deletion)-1])
+	wantDeletion := []string{
+		"sh -c if [ -e '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable' ]; then printf '%s\\n' 0 > '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable'; fi",
+		"sh -c if [ -L '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' ]; then rm '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume'; fi",
+		"sh -c if [ -d '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1' ]; then rmdir '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1'; fi",
+		"sh -c if [ -d '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' ]; then rmdir '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume'; fi",
+		"zfs destroy tank/nvmet/pvc-test-volume",
+	}
+	if !reflect.DeepEqual(deletion, wantDeletion) {
+		t.Fatalf("unexpected delete commands:\nwant=%v\n got=%v", wantDeletion, deletion)
 	}
 
 	repair := commandStrings(host.RepairVolumeCommands(stateToSpec(state)))
@@ -372,17 +451,18 @@ func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
 
 func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 	h.volumes[spec.ID] = VolumeState{
-		ID:             spec.ID,
-		Dataset:        spec.Dataset,
-		DevicePath:     spec.DevicePath,
-		SizeBytes:      spec.SizeBytes,
-		NQN:            spec.NQN,
-		Port:           spec.Port,
-		Exported:       true,
-		NamespaceReady: true,
-		ExportDevice:   spec.DevicePath,
-		PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
-		Status:         "ready",
+		ID:              spec.ID,
+		Dataset:         spec.Dataset,
+		DevicePath:      spec.DevicePath,
+		SizeBytes:       spec.SizeBytes,
+		NQN:             spec.NQN,
+		Port:            spec.Port,
+		Exported:        true,
+		NamespaceReady:  true,
+		ExportDevice:    spec.DevicePath,
+		PortEntryExists: true,
+		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+		Status:          "ready",
 	}
 	return nil
 }
@@ -395,6 +475,7 @@ func (h *memoryHost) RepairVolume(_ context.Context, spec VolumeSpec) error {
 	volume.Exported = true
 	volume.NamespaceReady = true
 	volume.ExportDevice = spec.DevicePath
+	volume.PortEntryExists = true
 	volume.PortLinkTarget = defaultConfigFSRoot + "/subsystems/" + spec.NQN
 	volume.Status = "ready"
 	h.volumes[spec.ID] = volume
