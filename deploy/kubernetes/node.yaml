@@ -53,6 +53,7 @@ spec:
             - "-v=5"
             # Enable only for explicit stale NVMe session remediation windows.
             # - "-node-orphan-cleanup"
+            # - "-node-orphan-cleanup-max-disconnects=4"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock

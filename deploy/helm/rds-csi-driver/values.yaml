@@ -67,6 +67,7 @@ controller:
   # Disabled by default; enable only for explicit remediation/audit windows.
   orphanCleanup:
     enabled: false
+    maxDisconnects: 4
 
   # Resource requests and limits
   resources:

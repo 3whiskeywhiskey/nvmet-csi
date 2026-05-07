@@ -126,6 +126,8 @@ if err := ValidateNQNPrefix(oc.managedNQNPrefix); err != nil {
 - Do NOT use a broad prefix such as `nqn.`
 - Do NOT add periodic node orphan cleanup without rate limiting and explicit
   tests on hosts that have non-CSI NVMe/TCP mounts
+- Keep `-node-orphan-cleanup-max-disconnects` bounded during remediation windows
+  unless a one-time full cleanup has been reviewed.
 
 ## Testing Requirements
 

@@ -86,9 +86,15 @@ explicit remediation or audit window.
 **Flag:** `-node-orphan-cleanup`
 **Default:** `false`
 
+**Flag:** `-node-orphan-cleanup-max-disconnects`
+**Default:** `4`
+
 When disabled, the node plugin logs that startup orphan cleanup is disabled and
 does not enumerate or disconnect NVMe subsystems. When enabled, it still filters
-by `CSI_MANAGED_NQN_PREFIX` before considering any disconnect.
+by `CSI_MANAGED_NQN_PREFIX` before considering any disconnect, and it limits the
+number of disconnect attempts per startup cleanup pass. Set the max-disconnects
+flag to `0` only for an explicit one-time remediation where disconnecting every
+detected managed orphan in one pass is acceptable.
 
 ### Circuit Breaker
 

@@ -410,6 +410,37 @@ func TestOrphanCleanerActualImplementationRespectsCanceledContextBeforeDisconnec
 	}
 }
 
+func TestOrphanCleanerActualImplementationLimitsDisconnectAttempts(t *testing.T) {
+	orphans := []string{
+		"nqn.2000-02.com.mikrotik:pvc-orphan-1",
+		"nqn.2000-02.com.mikrotik:pvc-orphan-2",
+		"nqn.2000-02.com.mikrotik:pvc-orphan-3",
+	}
+	sysfsRoot := createMockSysfs(t, nil)
+	createMockSubsystemEntries(t, sysfsRoot, orphans...)
+
+	mockConnector := NewMockConnector()
+	for _, nqn := range orphans {
+		mockConnector.isConnectedResult[nqn] = true
+	}
+	resolver := NewDeviceResolverWithConfig(ResolverConfig{
+		SysfsRoot: sysfsRoot,
+		TTL:       10 * time.Second,
+	})
+	resolver.SetIsConnectedFn(mockConnector.IsConnected)
+	mockConnector.resolver = resolver
+
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner.SetMaxDisconnects(2)
+	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
+		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
+	}
+
+	if len(mockConnector.disconnectCalls) != 2 {
+		t.Fatalf("disconnectCalls = %v, want exactly 2 attempts", mockConnector.disconnectCalls)
+	}
+}
+
 func createMockSubsystemEntries(t *testing.T, sysfsRoot string, nqns ...string) {
 	t.Helper()
 	subsystemsDir := filepath.Join(sysfsRoot, "class", "nvme-subsystem")
@@ -451,5 +482,8 @@ func TestNewOrphanCleaner(t *testing.T) {
 	}
 	if cleaner.managedNQNPrefix != prefix {
 		t.Errorf("OrphanCleaner has wrong managedNQNPrefix: got %q, want %q", cleaner.managedNQNPrefix, prefix)
+	}
+	if cleaner.maxDisconnects != DefaultOrphanCleanupMaxDisconnects {
+		t.Errorf("OrphanCleaner has wrong maxDisconnects: got %d, want %d", cleaner.maxDisconnects, DefaultOrphanCleanupMaxDisconnects)
 	}
 }
