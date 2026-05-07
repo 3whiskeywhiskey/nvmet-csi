@@ -3,6 +3,9 @@ package nvme
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -342,6 +345,82 @@ func TestCleanupOrphanedConnections_RejectsEmptyManagedPrefix(t *testing.T) {
 	}
 	if len(mockConnector.disconnectCalls) != 0 {
 		t.Fatalf("disconnectCalls = %v, want none", mockConnector.disconnectCalls)
+	}
+}
+
+func TestOrphanCleanerActualImplementationFiltersAndDisconnectsOnlyManagedOrphans(t *testing.T) {
+	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
+	managedHealthy := "nqn.2000-02.com.mikrotik:pvc-healthy"
+	systemOrphan := "nqn.2014-08.org.nixos:root-disk"
+
+	sysfsRoot := createMockSysfs(t, []mockController{
+		{
+			name:         "nvme0",
+			nqn:          managedHealthy,
+			blockDevices: []string{"nvme0n1"},
+		},
+	})
+	createMockSubsystemEntries(t, sysfsRoot, managedOrphan, managedHealthy, systemOrphan)
+
+	mockConnector := NewMockConnector()
+	mockConnector.isConnectedResult[managedOrphan] = true
+	mockConnector.isConnectedResult[managedHealthy] = true
+	mockConnector.isConnectedResult[systemOrphan] = true
+	resolver := NewDeviceResolverWithConfig(ResolverConfig{
+		SysfsRoot: sysfsRoot,
+		TTL:       10 * time.Second,
+	})
+	resolver.SetIsConnectedFn(mockConnector.IsConnected)
+	mockConnector.resolver = resolver
+
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
+		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
+	}
+
+	if len(mockConnector.disconnectCalls) != 1 || mockConnector.disconnectCalls[0] != managedOrphan {
+		t.Fatalf("disconnectCalls = %v, want [%s]", mockConnector.disconnectCalls, managedOrphan)
+	}
+}
+
+func TestOrphanCleanerActualImplementationRespectsCanceledContextBeforeDisconnect(t *testing.T) {
+	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
+	sysfsRoot := createMockSysfs(t, nil)
+	createMockSubsystemEntries(t, sysfsRoot, managedOrphan)
+
+	mockConnector := NewMockConnector()
+	mockConnector.isConnectedResult[managedOrphan] = true
+	resolver := NewDeviceResolverWithConfig(ResolverConfig{
+		SysfsRoot: sysfsRoot,
+		TTL:       10 * time.Second,
+	})
+	resolver.SetIsConnectedFn(mockConnector.IsConnected)
+	mockConnector.resolver = resolver
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	err := cleaner.CleanupOrphanedConnections(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CleanupOrphanedConnections() error = %v, want context.Canceled", err)
+	}
+	if len(mockConnector.disconnectCalls) != 0 {
+		t.Fatalf("disconnectCalls = %v, want none", mockConnector.disconnectCalls)
+	}
+}
+
+func createMockSubsystemEntries(t *testing.T, sysfsRoot string, nqns ...string) {
+	t.Helper()
+	subsystemsDir := filepath.Join(sysfsRoot, "class", "nvme-subsystem")
+	for i, nqn := range nqns {
+		subsystemDir := filepath.Join(subsystemsDir, fmt.Sprintf("nvme-subsys%d", i))
+		if err := os.MkdirAll(subsystemDir, 0755); err != nil {
+			t.Fatalf("failed to create subsystem dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(subsystemDir, "subsysnqn"), []byte(nqn+"\n"), 0644); err != nil {
+			t.Fatalf("failed to write subsystem NQN: %v", err)
+		}
 	}
 }
 
