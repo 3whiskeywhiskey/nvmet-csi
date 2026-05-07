@@ -55,6 +55,23 @@ func NewControllerServer(driver *Driver) *ControllerServer {
 	}
 }
 
+func (cs *ControllerServer) lockControllerVolume(volumeID string) func() {
+	if cs == nil || cs.driver == nil || volumeID == "" {
+		return func() {}
+	}
+	cs.driver.controllerVolumeLocksMu.Lock()
+	if cs.driver.controllerVolumeLocks == nil {
+		cs.driver.controllerVolumeLocks = attachment.NewVolumeLockManager()
+	}
+	locks := cs.driver.controllerVolumeLocks
+	cs.driver.controllerVolumeLocksMu.Unlock()
+
+	locks.Lock(volumeID)
+	return func() {
+		locks.Unlock(volumeID)
+	}
+}
+
 // CreateVolume provisions a new volume on the selected storage backend.
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	klog.V(4).Infof("CreateVolume CSI call for %s", req.GetName())
@@ -102,6 +119,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume name format: %v", err)
 	}
 	klog.V(4).Infof("Using volume ID: %s (from volume name: %s)", volumeID, req.GetName())
+
+	unlockVolume := cs.lockControllerVolume(volumeID)
+	defer unlockVolume()
 
 	// Get parameters from StorageClass
 	params := req.GetParameters()
@@ -359,6 +379,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	if err := utils.ValidateVolumeID(volumeID); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID: %v", err)
 	}
+
+	unlockVolume := cs.lockControllerVolume(volumeID)
+	defer unlockVolume()
 
 	storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, volumeID)
 	if err != nil {
@@ -1366,6 +1389,9 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if requiredBytes > maxVolumeSizeBytes {
 		return nil, status.Errorf(codes.OutOfRange, "required bytes %d exceeds maximum %d", requiredBytes, maxVolumeSizeBytes)
 	}
+
+	unlockVolume := cs.lockControllerVolume(volumeID)
+	defer unlockVolume()
 
 	storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, volumeID)
 	if err != nil {

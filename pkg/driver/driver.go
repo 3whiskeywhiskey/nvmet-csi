@@ -92,6 +92,12 @@ type Driver struct {
 	// Attachment manager (for controller only)
 	attachmentManager *attachment.AttachmentManager
 
+	// Controller volume lifecycle locks serialize Create/Delete/Expand for the
+	// same volume before backend planning, preventing duplicate mutations during
+	// concurrent CSI retries.
+	controllerVolumeLocksMu sync.Mutex
+	controllerVolumeLocks   *attachment.VolumeLockManager
+
 	// Attachment reconciler (for controller only)
 	attachmentReconciler *attachment.AttachmentReconciler
 
@@ -210,6 +216,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		backends:                  map[string]storagebackend.Backend{},
 		volumeBackendSelections:   map[string]BackendSelection{},
 		snapshotBackendSelections: map[string]BackendSelection{},
+		controllerVolumeLocks:     attachment.NewVolumeLockManager(),
 	}
 
 	// Initialize RDS client if controller is enabled and an RDS address is
