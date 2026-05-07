@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
@@ -643,6 +644,9 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 	// Verify volume exists on RDS
 	volume, err := cs.driver.rdsClient.GetVolume(volumeID)
 	if err != nil {
+		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+			return nil, status.Errorf(codes.Unavailable, "RDS unavailable: %v", err)
+		}
 		return nil, status.Errorf(codes.NotFound, "volume %s not found: %v", volumeID, err)
 	}
 
@@ -656,169 +660,71 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 		}, nil
 	}
 
-	// Check existing attachment
 	existing, exists := am.GetAttachment(volumeID)
-	if exists {
-		// Check if already attached to requesting node (idempotent)
-		if am.IsAttachedToNode(volumeID, nodeID) {
-			klog.V(2).Infof("Volume %s already attached to node %s (idempotent)", volumeID, nodeID)
-			return &csi.ControllerPublishVolumeResponse{
-				PublishContext: cs.buildPublishContext(volume, req.GetVolumeContext()),
-			}, nil
-		}
-
-		// Different node - behavior depends on access mode
-		if isRWX {
-			// RWX: Allow second attachment if within limit
-			nodeCount := am.GetNodeCount(volumeID)
-			if nodeCount >= 2 {
-				// ROADMAP-5: 2-node migration limit reached
-				klog.Warningf("RWX volume %s already attached to 2 nodes, rejecting 3rd attachment to %s",
-					volumeID, nodeID)
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"Volume %s already attached to 2 nodes (migration limit). Wait for migration to complete. Attached nodes: %v",
-					volumeID, existing.GetNodeIDs())
-			}
-
-			// SAFETY-01: Check if existing migration has timed out
-			// This prevents indefinite dual-attach if migration fails
-			if existing.IsMigrationTimedOut() {
-				elapsed := time.Since(*existing.MigrationStartedAt)
-				klog.Warningf("RWX volume %s migration timed out (%v elapsed, %v max), rejecting new secondary attachment",
-					volumeID, elapsed, existing.MigrationTimeout)
-
-				// Record timeout metric
-				if cs.driver.metrics != nil {
-					cs.driver.metrics.RecordMigrationResult("timeout", elapsed)
-				}
-
-				// Post migration failed event
-				if cs.driver.k8sClient != nil {
-					volCtx := req.GetVolumeContext()
-					pvcNamespace := volCtx["csi.storage.k8s.io/pvc/namespace"]
-					pvcName := volCtx["csi.storage.k8s.io/pvc/name"]
-					if pvcNamespace != "" && pvcName != "" && len(existing.Nodes) >= 2 {
-						sourceNode := existing.Nodes[0].NodeID
-						targetNode := existing.Nodes[1].NodeID
-						eventPoster := NewEventPoster(cs.driver.k8sClient)
-						if err := eventPoster.PostMigrationFailed(ctx, pvcNamespace, pvcName, volumeID, sourceNode, targetNode, "timeout", elapsed); err != nil {
-							klog.Warningf("Failed to post migration failed event: %v", err)
-						}
-					}
-				}
-
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"Volume %s migration timeout exceeded (%v elapsed, %v max). "+
-						"Previous migration may be stuck. Detach source node to reset, or adjust migrationTimeoutSeconds in StorageClass.",
-					volumeID, elapsed.Round(time.Second), existing.MigrationTimeout)
-			}
-
-			// Parse migration timeout from VolumeContext
-			volCtx := req.GetVolumeContext()
-			migrationTimeoutParams := map[string]string{
-				"migrationTimeoutSeconds": volCtx["migrationTimeoutSeconds"],
-			}
-			migrationTimeout := ParseMigrationTimeout(migrationTimeoutParams)
-
-			// Allow second attachment for migration
-			klog.V(2).Infof("Allowing second attachment of RWX volume %s to node %s (migration target, timeout=%v)", volumeID, nodeID, migrationTimeout)
-
-			// Capture source node before adding secondary attachment
-			// Defensive check: existing.Nodes should always have at least 1 entry if exists=true,
-			// but protect against state corruption (e.g., manual annotation edits, rebuild bugs)
-			if len(existing.Nodes) == 0 {
-				return nil, status.Errorf(codes.Internal,
-					"Volume %s has empty node list (corrupted state). "+
-						"Detach and reattach volume to recover.",
-					volumeID)
-			}
-			sourceNode := existing.Nodes[0].NodeID
-
-			if err := am.AddSecondaryAttachment(ctx, volumeID, nodeID, migrationTimeout); err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to track secondary attachment: %v", err)
-			}
-
-			// Record RWX dual-attach (distinct from RWO conflict)
-			if cs.driver.metrics != nil {
-				cs.driver.metrics.RecordAttachmentOp("attach_secondary", nil, time.Since(startTime))
-			}
-
-			// Post migration started event
-			if cs.driver.k8sClient != nil {
-				pvcNamespace := volCtx["csi.storage.k8s.io/pvc/namespace"]
-				pvcName := volCtx["csi.storage.k8s.io/pvc/name"]
-				if pvcNamespace != "" && pvcName != "" {
-					eventPoster := NewEventPoster(cs.driver.k8sClient)
-					if err := eventPoster.PostMigrationStarted(ctx, pvcNamespace, pvcName, volumeID, sourceNode, nodeID, migrationTimeout); err != nil {
-						klog.Warningf("Failed to post migration started event: %v", err)
-					}
-				}
-			}
-
-			return &csi.ControllerPublishVolumeResponse{
-				PublishContext: cs.buildPublishContext(volume, req.GetVolumeContext()),
-			}, nil
-		}
-
-		// RWO: Fail immediately for dual-attach attempts
-		// SAFETY-02: Grace period is ONLY for reattachment AFTER detach
-		// It does NOT allow concurrent multi-node attachment like RWX
-		// This distinction is critical: grace period tolerates network blips during
-		// pod migration where old pod dies before new pod starts. It does NOT
-		// enable live migration where both nodes need simultaneous access.
-
-		// RWO: Check grace period first
+	var blockingNodeExists *bool
+	withinGracePeriod := false
+	if exists && existing != nil && !existing.IsAttachedToNode(nodeID) && !isRWX {
 		gracePeriod := cs.driver.GetAttachmentGracePeriod()
 		if gracePeriod > 0 && am.IsWithinGracePeriod(volumeID, gracePeriod) {
-			klog.V(2).Infof("Volume %s within grace period, allowing attachment handoff from %s to %s",
-				volumeID, existing.NodeID, nodeID)
-
-			// Record grace period usage metric
-			if cs.driver.metrics != nil {
-				cs.driver.metrics.RecordGracePeriodUsed()
-			}
-
-			// Clear the old attachment and detach timestamp before new attach
-			if err := am.UntrackAttachment(ctx, volumeID); err != nil {
-				klog.Warningf("Failed to clear old attachment for volume %s during grace period handoff: %v", volumeID, err)
-			}
-			am.ClearDetachTimestamp(volumeID)
-			// Fall through to track new attachment
+			withinGracePeriod = true
 		} else {
-			// CSI-06: Before rejecting, verify blocking node still exists
 			nodeExists, err := cs.validateBlockingNodeExists(ctx, existing.NodeID)
 			if err != nil {
-				// API error - fail closed to prevent data corruption
 				klog.Errorf("Failed to verify node %s existence: %v", existing.NodeID, err)
 				return nil, status.Errorf(codes.Internal, "failed to verify node %s: %v", existing.NodeID, err)
 			}
-
-			if !nodeExists {
-				// Node deleted - auto-clear stale attachment (self-healing)
-				klog.Warningf("Volume %s attached to deleted node %s, clearing stale attachment", volumeID, existing.NodeID)
-				if err := am.UntrackAttachment(ctx, volumeID); err != nil {
-					klog.Warningf("Failed to clear stale attachment for volume %s: %v", volumeID, err)
-					// Continue anyway - in-memory state may be stale
-				}
-				// Fall through to allow new attachment
-			} else {
-				// CSI-02: Node exists - genuine RWO conflict - hint about RWX
-				klog.Warningf("RWO volume %s already attached to node %s, rejecting attachment to node %s",
-					volumeID, existing.NodeID, nodeID)
-
-				// Post event for operator visibility (best effort)
-				cs.postAttachmentConflictEvent(ctx, req, existing.NodeID)
-
-				// Record conflict metric
-				if cs.driver.metrics != nil {
-					cs.driver.metrics.RecordAttachmentConflict()
-				}
-
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"Volume %s already attached to node %s. For multi-node access, use RWX with block volumes.",
-					volumeID, existing.NodeID)
-			}
+			blockingNodeExists = &nodeExists
 		}
+	}
+
+	plan, err := reconciler.BuildPublishAttachmentPlan(reconciler.PublishAttachmentInput{
+		VolumeID:           volumeID,
+		NodeID:             nodeID,
+		AccessMode:         accessMode,
+		AllowMultiNode:     isRWX,
+		WithinGracePeriod:  withinGracePeriod,
+		BlockingNodeExists: blockingNodeExists,
+		Existing:           existing,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to plan attachment: %v", err)
+	}
+	cs.recordAttachmentPlan("publish", plan.Action)
+	klog.V(3).Infof("ControllerPublishVolume plan for %s to %s: action=%s reason=%q", volumeID, nodeID, plan.Action, plan.Reason)
+
+	switch plan.Action {
+	case reconciler.AttachmentActionNoop:
+		klog.V(2).Infof("Volume %s already attached to node %s (idempotent)", volumeID, nodeID)
+		return &csi.ControllerPublishVolumeResponse{
+			PublishContext: cs.buildPublishContext(volume, req.GetVolumeContext()),
+		}, nil
+	case reconciler.AttachmentActionAttachSecondary:
+		return cs.applySecondaryAttachmentPlan(ctx, req, volume, plan, startTime)
+	case reconciler.AttachmentActionClearGraceAttach:
+		klog.V(2).Infof("Volume %s within grace period, allowing attachment handoff from %s to %s",
+			volumeID, plan.BlockingNodeID, nodeID)
+		if cs.driver.metrics != nil {
+			cs.driver.metrics.RecordGracePeriodUsed()
+		}
+		if err := am.UntrackAttachment(ctx, volumeID); err != nil {
+			klog.Warningf("Failed to clear old attachment for volume %s during grace period handoff: %v", volumeID, err)
+		}
+		am.ClearDetachTimestamp(volumeID)
+	case reconciler.AttachmentActionClearStaleAttach:
+		klog.Warningf("Volume %s attached to deleted node %s, clearing stale attachment", volumeID, plan.BlockingNodeID)
+		if err := am.UntrackAttachment(ctx, volumeID); err != nil {
+			klog.Warningf("Failed to clear stale attachment for volume %s: %v", volumeID, err)
+		}
+		if cs.driver.metrics != nil {
+			cs.driver.metrics.RecordStaleAttachmentCleared()
+			cs.driver.metrics.RecordReconcileAction("clear_stale")
+		}
+	case reconciler.AttachmentActionConflict:
+		return nil, cs.attachmentConflictStatus(ctx, req, plan)
+	case reconciler.AttachmentActionAttach:
+		// Fall through to primary attachment tracking below.
+	default:
+		return nil, status.Errorf(codes.Internal, "unknown attachment plan action %q", plan.Action)
 	}
 
 	// No existing attachment - track new primary attachment with access mode
@@ -851,6 +757,125 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 	}, nil
 }
 
+func (cs *ControllerServer) applySecondaryAttachmentPlan(ctx context.Context, req *csi.ControllerPublishVolumeRequest, volume *rds.VolumeInfo, plan *reconciler.AttachmentPlan, startTime time.Time) (*csi.ControllerPublishVolumeResponse, error) {
+	volumeID := req.GetVolumeId()
+	nodeID := req.GetNodeId()
+	am := cs.driver.GetAttachmentManager()
+	if am == nil || plan == nil || plan.Existing == nil {
+		return nil, status.Error(codes.Internal, "attachment manager or plan state missing")
+	}
+	if len(plan.Existing.Nodes) == 0 {
+		return nil, status.Errorf(codes.Internal,
+			"Volume %s has empty node list (corrupted state). Detach and reattach volume to recover.",
+			volumeID)
+	}
+
+	volCtx := req.GetVolumeContext()
+	migrationTimeoutParams := map[string]string{
+		"migrationTimeoutSeconds": volCtx["migrationTimeoutSeconds"],
+	}
+	migrationTimeout := ParseMigrationTimeout(migrationTimeoutParams)
+
+	klog.V(2).Infof("Allowing second attachment of RWX volume %s to node %s (migration target, timeout=%v)", volumeID, nodeID, migrationTimeout)
+	sourceNode := plan.Existing.Nodes[0].NodeID
+
+	if err := am.AddSecondaryAttachment(ctx, volumeID, nodeID, migrationTimeout); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to track secondary attachment: %v", err)
+	}
+
+	if cs.driver.metrics != nil {
+		cs.driver.metrics.RecordAttachmentOp("attach_secondary", nil, time.Since(startTime))
+	}
+
+	if cs.driver.k8sClient != nil {
+		pvcNamespace := volCtx["csi.storage.k8s.io/pvc/namespace"]
+		pvcName := volCtx["csi.storage.k8s.io/pvc/name"]
+		if pvcNamespace != "" && pvcName != "" {
+			eventPoster := NewEventPoster(cs.driver.k8sClient)
+			if err := eventPoster.PostMigrationStarted(ctx, pvcNamespace, pvcName, volumeID, sourceNode, nodeID, migrationTimeout); err != nil {
+				klog.Warningf("Failed to post migration started event: %v", err)
+			}
+		}
+	}
+
+	return &csi.ControllerPublishVolumeResponse{
+		PublishContext: cs.buildPublishContext(volume, req.GetVolumeContext()),
+	}, nil
+}
+
+func (cs *ControllerServer) attachmentConflictStatus(ctx context.Context, req *csi.ControllerPublishVolumeRequest, plan *reconciler.AttachmentPlan) error {
+	volumeID := req.GetVolumeId()
+	nodeID := req.GetNodeId()
+
+	if cs.driver.metrics != nil {
+		cs.driver.metrics.RecordAttachmentConflict()
+	}
+
+	if plan != nil && plan.Existing != nil && plan.Existing.AccessMode == "RWX" {
+		if plan.Existing.NodeCount() == 0 {
+			return status.Errorf(codes.Internal,
+				"Volume %s has empty node list (corrupted state). Detach and reattach volume to recover.",
+				volumeID)
+		}
+		if plan.Existing.IsMigrationTimedOut() {
+			elapsed := time.Since(*plan.Existing.MigrationStartedAt)
+			klog.Warningf("RWX volume %s migration timed out (%v elapsed, %v max), rejecting new secondary attachment",
+				volumeID, elapsed, plan.Existing.MigrationTimeout)
+			if cs.driver.metrics != nil {
+				cs.driver.metrics.RecordMigrationResult("timeout", elapsed)
+			}
+			cs.postMigrationFailedEvent(ctx, req, plan.Existing, elapsed)
+			return status.Errorf(codes.FailedPrecondition,
+				"Volume %s migration timeout exceeded (%v elapsed, %v max). "+
+					"Previous migration may be stuck. Detach source node to reset, or adjust migrationTimeoutSeconds in StorageClass.",
+				volumeID, elapsed.Round(time.Second), plan.Existing.MigrationTimeout)
+		}
+		if plan.Existing.NodeCount() >= 2 {
+			klog.Warningf("RWX volume %s already attached to 2 nodes, rejecting 3rd attachment to %s",
+				volumeID, nodeID)
+			return status.Errorf(codes.FailedPrecondition,
+				"Volume %s already attached to 2 nodes (migration limit). Wait for migration to complete. Attached nodes: %v",
+				volumeID, plan.Existing.GetNodeIDs())
+		}
+	}
+
+	blockingNode := ""
+	if plan != nil {
+		blockingNode = plan.BlockingNodeID
+	}
+	klog.Warningf("RWO volume %s already attached to node %s, rejecting attachment to node %s",
+		volumeID, blockingNode, nodeID)
+	cs.postAttachmentConflictEvent(ctx, req, blockingNode)
+	return status.Errorf(codes.FailedPrecondition,
+		"Volume %s already attached to node %s. For multi-node access, use RWX with block volumes.",
+		volumeID, blockingNode)
+}
+
+func (cs *ControllerServer) postMigrationFailedEvent(ctx context.Context, req *csi.ControllerPublishVolumeRequest, existing *attachment.AttachmentState, elapsed time.Duration) {
+	if cs.driver.k8sClient == nil || existing == nil || len(existing.Nodes) < 2 {
+		return
+	}
+	volCtx := req.GetVolumeContext()
+	pvcNamespace := volCtx["csi.storage.k8s.io/pvc/namespace"]
+	pvcName := volCtx["csi.storage.k8s.io/pvc/name"]
+	if pvcNamespace == "" || pvcName == "" {
+		return
+	}
+	sourceNode := existing.Nodes[0].NodeID
+	targetNode := existing.Nodes[1].NodeID
+	eventPoster := NewEventPoster(cs.driver.k8sClient)
+	if err := eventPoster.PostMigrationFailed(ctx, pvcNamespace, pvcName, req.GetVolumeId(), sourceNode, targetNode, "timeout", elapsed); err != nil {
+		klog.Warningf("Failed to post migration failed event: %v", err)
+	}
+}
+
+func (cs *ControllerServer) recordAttachmentPlan(operation string, action reconciler.AttachmentAction) {
+	if cs.driver.metrics == nil {
+		return
+	}
+	cs.driver.metrics.RecordReconcileAction(operation + "_" + string(action))
+}
+
 // ControllerUnpublishVolume removes volume attachment tracking for a node.
 // This method is idempotent - returns success even if volume not currently attached.
 func (cs *ControllerServer) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
@@ -879,11 +904,28 @@ func (cs *ControllerServer) ControllerUnpublishVolume(ctx context.Context, req *
 		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 
+	existing, _ := am.GetAttachment(volumeID)
+	plan, err := reconciler.BuildUnpublishAttachmentPlan(reconciler.UnpublishAttachmentInput{
+		VolumeID: volumeID,
+		NodeID:   nodeID,
+		Existing: existing,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to plan detachment: %v", err)
+	}
+	cs.recordAttachmentPlan("unpublish", plan.Action)
+	klog.V(3).Infof("ControllerUnpublishVolume plan for %s from %s: action=%s reason=%q", volumeID, nodeID, plan.Action, plan.Reason)
+
+	if plan.Action == reconciler.AttachmentActionNoop {
+		klog.V(2).Infof("Volume %s attachment already absent for node %s (idempotent)", volumeID, nodeID)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
+	}
+
 	// Before removing attachment, capture migration state for event posting
 	var wasMigrating bool
 	var sourceNode, targetNode string
 	var migrationStartedAt time.Time
-	if existing, found := am.GetAttachment(volumeID); found && existing.IsMigrating() {
+	if existing != nil && existing.IsMigrating() {
 		wasMigrating = true
 		// Identify which node is being removed (source) and which remains (target)
 		if len(existing.Nodes) == 2 {
@@ -902,10 +944,21 @@ func (cs *ControllerServer) ControllerUnpublishVolume(ctx context.Context, req *
 		}
 	}
 
-	// Remove this node's attachment (handles both RWO and RWX)
-	fullyDetached, err := am.RemoveNodeAttachment(ctx, volumeID, nodeID)
-	if err != nil {
-		klog.Warningf("Error removing node attachment for volume %s: %v (returning success)", volumeID, err)
+	var fullyDetached bool
+	switch plan.Action {
+	case reconciler.AttachmentActionDetachAll:
+		if err := am.UntrackAttachment(ctx, volumeID); err != nil {
+			klog.Warningf("Error force-detaching volume %s: %v (returning success)", volumeID, err)
+		}
+		fullyDetached = true
+	case reconciler.AttachmentActionDetach, reconciler.AttachmentActionDetachNode:
+		var err error
+		fullyDetached, err = am.RemoveNodeAttachment(ctx, volumeID, nodeID)
+		if err != nil {
+			klog.Warningf("Error removing node attachment for volume %s: %v (returning success)", volumeID, err)
+		}
+	default:
+		return nil, status.Errorf(codes.Internal, "unknown detachment plan action %q", plan.Action)
 	}
 
 	if fullyDetached {
