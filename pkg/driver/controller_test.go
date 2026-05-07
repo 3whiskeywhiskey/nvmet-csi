@@ -817,6 +817,41 @@ func TestControllerPublishVolume_VolumeNotFound(t *testing.T) {
 	}
 }
 
+func TestControllerPublishVolume_RDSObserveErrorDoesNotTrackAttachment(t *testing.T) {
+	ctx := context.Background()
+	node1 := testNode("node-1")
+	cs, mockRDS := testControllerServer(t, node1)
+	mockRDS.SetPersistentError(fmt.Errorf("ssh: %w", utils.ErrConnectionFailed))
+
+	req := &csi.ControllerPublishVolumeRequest{
+		VolumeId: testVolumeID1,
+		NodeId:   "node-1",
+		VolumeCapability: &csi.VolumeCapability{
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+		},
+	}
+
+	_, err := cs.ControllerPublishVolume(ctx, req)
+	if err == nil {
+		t.Fatal("expected RDS observe error")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %T %v", err, err)
+	}
+	if st.Code() != codes.Unavailable {
+		t.Fatalf("code = %v, want Unavailable", st.Code())
+	}
+	if _, exists := cs.driver.GetAttachmentManager().GetAttachment(testVolumeID1); exists {
+		t.Fatal("attachment should not be tracked when RDS observe fails")
+	}
+}
+
 func TestControllerPublishVolume_InvalidVolumeID(t *testing.T) {
 	ctx := context.Background()
 	cs, _ := testControllerServer(t)
@@ -995,6 +1030,9 @@ func TestControllerUnpublishVolume_EmptyNodeID(t *testing.T) {
 	_, err := cs.ControllerUnpublishVolume(ctx, req)
 	if err != nil {
 		t.Fatalf("Unpublish with empty nodeID should succeed, got: %v", err)
+	}
+	if _, exists := am.GetAttachment(testVolumeID7); exists {
+		t.Fatal("empty nodeID force-detach should clear the tracked attachment")
 	}
 }
 
