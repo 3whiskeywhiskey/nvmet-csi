@@ -112,6 +112,15 @@ Current controller code routes through a generic backend interface, with
 RouterOS/RDS adapted behind that interface. Unsupported backend selections are
 rejected during provisioning instead of silently falling back to RDS.
 
+The Linux ZoL/nvmet backend package exists as an offline-testable skeleton. It
+normalizes a volume request into a zvol device path, observes existing zvol and
+nvmet state before mutating, and plans only create, resize, delete, no-op, or
+conflict actions. Its command-backed host emits conservative `zfs` and configfs
+operations through either a local executor or an SSH executor. Controller
+factory wiring and live-cluster deployment are intentionally separate follow-up
+work so the command/state model can be tested without pointing at a real storage
+host.
+
 ### CSI Controller Plugin
 
 **Deployment**: Kubernetes Deployment (1 replica, no horizontal scaling needed)
