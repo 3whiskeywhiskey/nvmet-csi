@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -316,6 +317,47 @@ func TestCreateVolume_PlannerIdempotentNoMutation(t *testing.T) {
 	}
 	if mockRDS.MutationCount("resize_volume") != 0 {
 		t.Fatalf("resize_volume mutations = %d, want 0", mockRDS.MutationCount("resize_volume"))
+	}
+}
+
+func TestCreateVolume_ConcurrentSameVolumeSerializesMutation(t *testing.T) {
+	ctx := context.Background()
+	cs, mockRDS := testControllerServer(t)
+
+	const workers = 10
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	resps := make(chan *csi.CreateVolumeResponse, workers)
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID1, 1*1024*1024*1024))
+			if err != nil {
+				errs <- err
+				return
+			}
+			resps <- resp
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	close(resps)
+
+	for err := range errs {
+		t.Fatalf("CreateVolume returned error under same-volume concurrency: %v", err)
+	}
+	for resp := range resps {
+		if resp.GetVolume().GetVolumeId() != testVolumeID1 {
+			t.Fatalf("unexpected volume response: %#v", resp.GetVolume())
+		}
+	}
+	if got := mockRDS.MutationCount("create_volume"); got != 1 {
+		t.Fatalf("create_volume mutations = %d, want 1", got)
+	}
+	if got := mockRDS.MutationCount("resize_volume"); got != 0 {
+		t.Fatalf("resize_volume mutations = %d, want 0", got)
 	}
 }
 
