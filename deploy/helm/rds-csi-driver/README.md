@@ -156,6 +156,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `node.image.tag` | Node image tag (defaults to Chart.appVersion) | `""` |
 | `node.image.pullPolicy` | Image pull policy | `Always` |
 | `node.logLevel` | Log verbosity level (0-10) | `5` |
+| `node.orphanCleanup.enabled` | Run startup cleanup for managed orphaned NVMe sessions | `false` |
 | `node.resources.requests.cpu` | CPU request | `10m` |
 | `node.resources.requests.memory` | Memory request | `128Mi` |
 | `node.resources.limits.cpu` | CPU limit | `200m` |

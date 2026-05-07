@@ -54,6 +54,9 @@ spec:
             - "-node-id=$(NODE_ID)"
             - "-node"
             - "-v={{ .Values.node.logLevel }}"
+            {{- if .Values.node.orphanCleanup.enabled }}
+            - "-node-orphan-cleanup"
+            {{- end }}
             {{- if .Values.monitoring.enabled }}
             - "-metrics-address=:{{ .Values.monitoring.port }}"
             {{- end }}

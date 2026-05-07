@@ -66,11 +66,11 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 
 ## Current Status
 
-The node plugin runs this cleanup once on startup. The Helm and raw manifests
-set `CSI_MANAGED_NQN_PREFIX`, and `CleanupOrphanedConnections` now validates
-that the prefix is non-empty and syntactically valid before listing or
-disconnecting any subsystem. The cleaner also skips NQNs that do not match that
-prefix.
+The node plugin no longer runs this cleanup by default. Startup cleanup requires
+the explicit `-node-orphan-cleanup` flag. The Helm and raw manifests set
+`CSI_MANAGED_NQN_PREFIX`, and `CleanupOrphanedConnections` validates that the
+prefix is non-empty and syntactically valid before listing or disconnecting any
+subsystem. The cleaner also skips NQNs that do not match that prefix.
 
 ## Required Guardrails
 
@@ -121,6 +121,7 @@ if err := ValidateNQNPrefix(oc.managedNQNPrefix); err != nil {
 ## Mitigation
 
 **Do not weaken these controls:**
+- Do NOT enable `-node-orphan-cleanup` as ambient default behavior
 - Do NOT run node orphan cleanup with an empty `CSI_MANAGED_NQN_PREFIX`
 - Do NOT use a broad prefix such as `nqn.`
 - Do NOT add periodic node orphan cleanup without rate limiting and explicit

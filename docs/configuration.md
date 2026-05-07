@@ -76,6 +76,20 @@ env:
         key: nqn-prefix
 ```
 
+### Node Startup Orphan Cleanup
+
+The node plugin can scan for managed NVMe/TCP sessions that appear connected
+but no longer have a working block device. This cleanup may disconnect managed
+NVMe sessions, so it is disabled by default and should be enabled only during an
+explicit remediation or audit window.
+
+**Flag:** `-node-orphan-cleanup`
+**Default:** `false`
+
+When disabled, the node plugin logs that startup orphan cleanup is disabled and
+does not enumerate or disconnect NVMe subsystems. When enabled, it still filters
+by `CSI_MANAGED_NQN_PREFIX` before considering any disconnect.
+
 ### Circuit Breaker
 
 The driver uses per-volume circuit breakers to prevent retry storms on repeatedly

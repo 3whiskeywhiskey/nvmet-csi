@@ -49,6 +49,9 @@ var (
 	controllerMode = flag.Bool("controller", false, "Run in controller mode")
 	nodeMode       = flag.Bool("node", false, "Run in node mode")
 
+	// Node cleanup flags
+	nodeOrphanCleanup = flag.Bool("node-orphan-cleanup", false, "Run startup cleanup for managed orphaned NVMe connections")
+
 	// Orphan reconciler flags
 	enableOrphanReconciler = flag.Bool("enable-orphan-reconciler", false, "Enable orphan volume detection and cleanup")
 	orphanCheckInterval    = flag.Duration("orphan-check-interval", 1*time.Hour, "Interval between orphan checks")
@@ -184,9 +187,10 @@ func main() {
 		EnableNode:                    *nodeMode,
 	}
 
-	// Cleanup orphaned NVMe connections on node startup
-	// This prevents accumulation of orphaned connections after node restarts
-	if *nodeMode {
+	// Cleanup orphaned NVMe connections on node startup only when explicitly
+	// enabled. The cleanup can disconnect managed NVMe sessions, so keep it as
+	// an auditable remediation action instead of ambient startup behavior.
+	if *nodeMode && *nodeOrphanCleanup {
 		klog.Info("Running orphan NVMe connection cleanup on startup")
 
 		// Create a connector for cleanup (same as node server uses internally)
@@ -204,6 +208,8 @@ func main() {
 			klog.Warningf("Orphan NVMe cleanup failed (non-fatal): %v", err)
 		}
 		cancel()
+	} else if *nodeMode {
+		klog.Info("Startup orphan NVMe connection cleanup disabled")
 	}
 
 	// Create driver
