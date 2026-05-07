@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
@@ -146,11 +148,132 @@ func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 	}
 }
 
+func TestListVolumesAggregatesKnownBackends(t *testing.T) {
+	localVolumeID := "pvc-11111111-1111-1111-1111-111111111111"
+	sshVolumeID := "pvc-22222222-2222-2222-2222-222222222222"
+	driver := &Driver{
+		name: DriverName,
+		k8sClient: fake.NewSimpleClientset(
+			testPersistentVolume(localVolumeID, map[string]string{
+				"backend":       storagebackend.TypeLinuxZOLNVMET,
+				"executor":      storagebackend.ExecutorLocal,
+				"zfsPool":       "tank/local",
+				"targetAddress": "10.42.0.10",
+			}),
+			testPersistentVolume(sshVolumeID, map[string]string{
+				"backend":       storagebackend.TypeLinuxZOLNVMET,
+				"executor":      storagebackend.ExecutorSSH,
+				"zfsPool":       "tank/remote",
+				"targetAddress": "10.42.0.11",
+				"sshTarget":     "storage@r740xd",
+			}),
+		),
+		backendFactory: func(selection BackendSelection) (storagebackend.Backend, error) {
+			return &testBackend{
+				name:    selection.Type,
+				address: selection.TargetAddr,
+				listVolumes: []storagebackend.Volume{
+					{ID: "vol-" + selection.TargetAddr, SizeBytes: minVolumeSizeBytes},
+				},
+			}, nil
+		},
+	}
+	cs := NewControllerServer(driver)
+
+	resp, err := cs.ListVolumes(context.Background(), &csi.ListVolumesRequest{})
+	if err != nil {
+		t.Fatalf("ListVolumes() error = %v", err)
+	}
+	if got := len(resp.GetEntries()); got != 2 {
+		t.Fatalf("expected two volume entries across known backends, got %d", got)
+	}
+	if resp.GetEntries()[0].GetVolume().GetVolumeId() != "vol-10.42.0.10" ||
+		resp.GetEntries()[1].GetVolume().GetVolumeId() != "vol-10.42.0.11" {
+		t.Fatalf("unexpected aggregated entries: %#v", resp.GetEntries())
+	}
+}
+
+func TestDeleteSnapshotResolvesBackendBeforeMutating(t *testing.T) {
+	snapshotID := "snap-11111111-1111-1111-1111-111111111111-at-abcdef"
+	targetBackend := &testBackend{
+		name:    storagebackend.TypeLinuxZOLNVMET,
+		address: "10.42.0.11",
+		snapshots: map[string]storagebackend.Snapshot{
+			snapshotID: {
+				ID:             snapshotID,
+				SourceVolumeID: "pvc-22222222-2222-2222-2222-222222222222",
+				SizeBytes:      minVolumeSizeBytes,
+				CreatedAt:      time.Now(),
+			},
+		},
+	}
+	otherBackend := &testBackend{
+		name:      storagebackend.TypeLinuxZOLNVMET,
+		address:   "10.42.0.10",
+		snapshots: map[string]storagebackend.Snapshot{},
+	}
+
+	driver := &Driver{
+		name: DriverName,
+		k8sClient: fake.NewSimpleClientset(
+			testPersistentVolume("pvc-11111111-1111-1111-1111-111111111111", map[string]string{
+				"backend":       storagebackend.TypeLinuxZOLNVMET,
+				"executor":      storagebackend.ExecutorLocal,
+				"zfsPool":       "tank/local",
+				"targetAddress": "10.42.0.10",
+			}),
+			testPersistentVolume("pvc-22222222-2222-2222-2222-222222222222", map[string]string{
+				"backend":       storagebackend.TypeLinuxZOLNVMET,
+				"executor":      storagebackend.ExecutorSSH,
+				"zfsPool":       "tank/remote",
+				"targetAddress": "10.42.0.11",
+				"sshTarget":     "storage@r740xd",
+			}),
+		),
+		backendFactory: func(selection BackendSelection) (storagebackend.Backend, error) {
+			if selection.TargetAddr == "10.42.0.11" {
+				return targetBackend, nil
+			}
+			return otherBackend, nil
+		},
+	}
+	cs := NewControllerServer(driver)
+
+	_, err := cs.DeleteSnapshot(context.Background(), &csi.DeleteSnapshotRequest{SnapshotId: snapshotID})
+	if err != nil {
+		t.Fatalf("DeleteSnapshot() error = %v", err)
+	}
+	if len(otherBackend.deletedSnapshots) != 0 {
+		t.Fatalf("non-owner backend was mutated: %#v", otherBackend.deletedSnapshots)
+	}
+	if got := targetBackend.deletedSnapshots; len(got) != 1 || got[0] != snapshotID {
+		t.Fatalf("owner backend deletion not recorded: %#v", got)
+	}
+}
+
 type testBackend struct {
-	name            string
-	address         string
-	normalizeCreate func(storagebackend.CreateVolumeRequest) storagebackend.CreateVolumeRequest
-	volumes         map[string]storagebackend.Volume
+	name             string
+	address          string
+	normalizeCreate  func(storagebackend.CreateVolumeRequest) storagebackend.CreateVolumeRequest
+	volumes          map[string]storagebackend.Volume
+	listVolumes      []storagebackend.Volume
+	snapshots        map[string]storagebackend.Snapshot
+	deletedSnapshots []string
+}
+
+func testPersistentVolume(volumeID string, attributes map[string]string) *corev1.PersistentVolume {
+	return &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: "pv-" + volumeID},
+		Spec: corev1.PersistentVolumeSpec{
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				CSI: &corev1.CSIPersistentVolumeSource{
+					Driver:           DriverName,
+					VolumeHandle:     volumeID,
+					VolumeAttributes: attributes,
+				},
+			},
+		},
+	}
 }
 
 func (b *testBackend) Name() string {
@@ -195,7 +318,7 @@ func (b *testBackend) GetVolume(_ context.Context, volumeID string) (*storagebac
 }
 
 func (b *testBackend) ListVolumes(context.Context) ([]storagebackend.Volume, error) {
-	return nil, nil
+	return b.listVolumes, nil
 }
 
 func (b *testBackend) ResizeVolume(context.Context, string, int64) error {
@@ -210,16 +333,29 @@ func (b *testBackend) CreateSnapshot(context.Context, storagebackend.CreateSnaps
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (b *testBackend) DeleteSnapshot(context.Context, string) error {
-	return fmt.Errorf("not implemented")
+func (b *testBackend) DeleteSnapshot(_ context.Context, snapshotID string) error {
+	b.deletedSnapshots = append(b.deletedSnapshots, snapshotID)
+	if b.snapshots != nil {
+		delete(b.snapshots, snapshotID)
+	}
+	return nil
 }
 
-func (b *testBackend) GetSnapshot(context.Context, string) (*storagebackend.Snapshot, error) {
+func (b *testBackend) GetSnapshot(_ context.Context, snapshotID string) (*storagebackend.Snapshot, error) {
+	if b.snapshots != nil {
+		if snapshot, ok := b.snapshots[snapshotID]; ok {
+			return &snapshot, nil
+		}
+	}
 	return nil, &storagebackend.SnapshotNotFoundError{}
 }
 
 func (b *testBackend) ListSnapshots(context.Context) ([]storagebackend.Snapshot, error) {
-	return nil, nil
+	snapshots := make([]storagebackend.Snapshot, 0, len(b.snapshots))
+	for _, snapshot := range b.snapshots {
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, nil
 }
 
 func (b *testBackend) RestoreSnapshot(context.Context, string, storagebackend.CreateVolumeRequest) error {

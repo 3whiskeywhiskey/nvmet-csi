@@ -1070,7 +1070,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	}
 
 	params := req.GetParameters()
-	storageBackend, _, err := cs.driver.controllerBackendForParams(params)
+	storageBackend, selection, err := cs.driver.controllerBackendForParams(params)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
 	}
@@ -1093,6 +1093,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		// Snapshot exists -- check if same source volume (idempotent) or different (conflict)
 		if existingSnapshot.SourceVolumeID == sourceVolumeID {
 			klog.V(2).Infof("Snapshot %s already exists for source %s (idempotent)", snapshotID, sourceVolumeID)
+			cs.driver.rememberSnapshotBackendSelection(snapshotID, selection)
 			return &csi.CreateSnapshotResponse{
 				Snapshot: &csi.Snapshot{
 					SnapshotId:     snapshotID,
@@ -1142,6 +1143,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	}
 
 	klog.V(2).Infof("Created snapshot %s from volume %s", snapshotID, sourceVolumeID)
+	cs.driver.rememberSnapshotBackendSelection(snapshotID, selection)
 
 	// 7. Return response — /disk add copy-from is atomic (CoW), so ready_to_use is always true.
 	return &csi.CreateSnapshotResponse{
@@ -1170,13 +1172,17 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 	}
 
-	storageBackend := cs.driver.controllerBackend()
-	if storageBackend == nil {
-		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	resolved, found, err := cs.driver.controllerBackendForSnapshot(ctx, snapshotID)
+	if err != nil {
+		return nil, mapBackendError("resolve snapshot backend", err)
+	}
+	if !found {
+		klog.V(4).Infof("Snapshot %s not found on any known backend (idempotent delete)", snapshotID)
+		return &csi.DeleteSnapshotResponse{}, nil
 	}
 
 	// 2. Delete snapshot via backend (idempotent)
-	if err := storageBackend.DeleteSnapshot(ctx, snapshotID); err != nil {
+	if err := resolved.backend.DeleteSnapshot(ctx, snapshotID); err != nil {
 		// Map connection errors
 		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
 			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
@@ -1184,6 +1190,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		return nil, status.Errorf(codes.Internal, "failed to delete snapshot: %v", err)
 	}
 
+	cs.driver.forgetSnapshotBackendSelection(snapshotID)
 	klog.V(2).Infof("Deleted snapshot %s", snapshotID)
 	return &csi.DeleteSnapshotResponse{}, nil
 }
@@ -1193,11 +1200,6 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 	klog.V(4).Infof("ListSnapshots CSI call (snapshot_id=%s, source_volume_id=%s, max_entries=%d, starting_token=%s)",
 		req.GetSnapshotId(), req.GetSourceVolumeId(), req.GetMaxEntries(), req.GetStartingToken())
 
-	storageBackend := cs.driver.controllerBackend()
-	if storageBackend == nil {
-		return nil, status.Error(codes.Internal, "storage backend not initialized")
-	}
-
 	// Handle single snapshot lookup by ID
 	if req.GetSnapshotId() != "" {
 		snapshotID := req.GetSnapshotId()
@@ -1206,11 +1208,14 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 			return &csi.ListSnapshotsResponse{}, nil
 		}
 
-		snap, err := storageBackend.GetSnapshot(ctx, snapshotID)
+		resolved, found, err := cs.driver.controllerBackendForSnapshot(ctx, snapshotID)
 		if err != nil {
-			// Not found -> return empty response (not error)
+			return nil, mapBackendError("resolve snapshot backend", err)
+		}
+		if !found {
 			return &csi.ListSnapshotsResponse{}, nil
 		}
+		snap := resolved.snapshot
 
 		return &csi.ListSnapshotsResponse{
 			Entries: []*csi.ListSnapshotsResponse_Entry{
@@ -1227,24 +1232,51 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 		}, nil
 	}
 
-	// Fetch all snapshots from backend
-	allSnapshots, err := storageBackend.ListSnapshots(ctx)
-	if err != nil {
-		if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
-			return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
+	var allSnapshots []backend.Snapshot
+	if req.GetSourceVolumeId() != "" {
+		storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, req.GetSourceVolumeId())
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
 		}
-		return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
+		if storageBackend == nil {
+			return nil, status.Error(codes.Internal, "storage backend not initialized")
+		}
+		snapshots, err := storageBackend.ListSnapshots(ctx)
+		if err != nil {
+			if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+				return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
+			}
+			return nil, status.Errorf(codes.Internal, "failed to list snapshots: %v", err)
+		}
+		allSnapshots = snapshots
+	} else {
+		knownBackends, err := cs.driver.controllerBackendsForKnownSelections(ctx)
+		if err != nil {
+			return nil, mapBackendError("resolve known backends", err)
+		}
+		for _, resolved := range knownBackends {
+			snapshots, err := resolved.backend.ListSnapshots(ctx)
+			if err != nil {
+				if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+					return nil, status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
+				}
+				return nil, status.Errorf(codes.Internal, "failed to list snapshots from backend %s: %v", resolved.backend.Name(), err)
+			}
+			for _, snapshot := range snapshots {
+				cs.driver.rememberSnapshotBackendSelection(snapshot.ID, resolved.selection)
+				allSnapshots = append(allSnapshots, snapshot)
+			}
+		}
 	}
 
-	// Filter by source volume if specified.
 	// SourceVolume is populated by parseSnapshotInfo from the source-volume= field in
-	// RDS /disk print output. Snapshots without a source-volume field are excluded from
+	// backend output. Snapshots without a source-volume field are excluded from
 	// source-based filtering (they cannot be matched to a source volume).
 	if req.GetSourceVolumeId() != "" {
-		filtered := make([]backend.Snapshot, 0)
-		for _, s := range allSnapshots {
-			if s.SourceVolumeID == req.GetSourceVolumeId() {
-				filtered = append(filtered, s)
+		filtered := make([]backend.Snapshot, 0, len(allSnapshots))
+		for _, snapshot := range allSnapshots {
+			if snapshot.SourceVolumeID == req.GetSourceVolumeId() {
+				filtered = append(filtered, snapshot)
 			}
 		}
 		allSnapshots = filtered
@@ -1395,17 +1427,23 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	klog.V(4).Info("ListVolumes called")
 
-	storageBackend := cs.driver.controllerBackend()
-	if storageBackend == nil {
-		return nil, status.Error(codes.Internal, "storage backend not initialized")
+	knownBackends, err := cs.driver.controllerBackendsForKnownSelections(ctx)
+	if err != nil {
+		return nil, mapBackendError("resolve known backends", err)
 	}
 
-	// Query all volumes from backend
-	volumes, err := storageBackend.ListVolumes(ctx)
-	if err != nil {
-		klog.Errorf("Failed to list volumes from backend %s: %v", storageBackend.Name(), err)
-		return nil, status.Errorf(codes.Internal, "failed to list volumes: %v", err)
+	var volumes []backend.Volume
+	for _, resolved := range knownBackends {
+		backendVolumes, err := resolved.backend.ListVolumes(ctx)
+		if err != nil {
+			klog.Errorf("Failed to list volumes from backend %s: %v", resolved.backend.Name(), err)
+			return nil, status.Errorf(codes.Internal, "failed to list volumes from backend %s: %v", resolved.backend.Name(), err)
+		}
+		volumes = append(volumes, backendVolumes...)
 	}
+	sort.Slice(volumes, func(i, j int) bool {
+		return volumes[i].ID < volumes[j].ID
+	})
 
 	// Convert to CSI format
 	var entries []*csi.ListVolumesResponse_Entry
@@ -1434,6 +1472,16 @@ func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi
 }
 
 // Helper functions
+
+func mapBackendError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+		return status.Errorf(codes.Unavailable, "%s: storage backend unavailable: %v", operation, err)
+	}
+	return status.Errorf(codes.Internal, "%s: %v", operation, err)
+}
 
 // validateVolumeCapabilities checks if the requested capabilities are supported
 func (cs *ControllerServer) validateVolumeCapabilities(caps []*csi.VolumeCapability) error {

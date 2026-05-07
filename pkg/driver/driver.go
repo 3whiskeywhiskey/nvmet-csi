@@ -65,6 +65,9 @@ type Driver struct {
 	volumeBackendMu         sync.Mutex
 	volumeBackendSelections map[string]BackendSelection
 
+	snapshotBackendMu         sync.Mutex
+	snapshotBackendSelections map[string]BackendSelection
+
 	// NVMe connector (interface allows different implementations: real, mock)
 	nvmeConnector nvme.Connector
 
@@ -193,14 +196,15 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	}
 
 	driver := &Driver{
-		name:                    config.DriverName,
-		version:                 config.Version,
-		nodeID:                  config.NodeID,
-		k8sClient:               config.K8sClient,
-		metrics:                 config.Metrics,
-		managedNQNPrefix:        config.ManagedNQNPrefix,
-		backends:                map[string]storagebackend.Backend{},
-		volumeBackendSelections: map[string]BackendSelection{},
+		name:                      config.DriverName,
+		version:                   config.Version,
+		nodeID:                    config.NodeID,
+		k8sClient:                 config.K8sClient,
+		metrics:                   config.Metrics,
+		managedNQNPrefix:          config.ManagedNQNPrefix,
+		backends:                  map[string]storagebackend.Backend{},
+		volumeBackendSelections:   map[string]BackendSelection{},
+		snapshotBackendSelections: map[string]BackendSelection{},
 	}
 
 	// Initialize RDS client if controller is enabled and an RDS address is
