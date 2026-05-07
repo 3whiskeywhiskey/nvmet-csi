@@ -985,7 +985,7 @@ func (c *sshClient) GetDiskMetrics(slot string) (*DiskMetrics, error) {
 
 	// Use "once" to get snapshot, not continuous stream
 	// Continuous output uses terminal control sequences that break parsing
-	cmd := fmt.Sprintf(`/disk monitor-traffic %s once`, slot)
+	cmd := buildDiskMonitorTrafficCommand(slot)
 
 	output, err := c.runCommand(cmd)
 	if err != nil {
@@ -999,6 +999,10 @@ func (c *sshClient) GetDiskMetrics(slot string) (*DiskMetrics, error) {
 
 	metrics.Slot = slot
 	return metrics, nil
+}
+
+func buildDiskMonitorTrafficCommand(slot string) string {
+	return fmt.Sprintf(`/disk monitor-traffic disk=%s once`, slot)
 }
 
 // parseDiskMetrics parses /disk monitor-traffic output into DiskMetrics

@@ -180,7 +180,7 @@ monitoring:
 
 ## Limitations
 
-1. **"once" modifier verified:** The `/disk monitor-traffic <slot> once` command works correctly
+1. **"once" modifier verified:** The `/disk monitor-traffic disk=<slot> once` command works correctly
    on RouterOS 7.1+ (exits cleanly after one snapshot). No need for output parsing.
 2. **Single disk only:** Currently monitors one storage pool. Multiple disk support requires
    repeated SSH commands and increases cardinality.
@@ -198,10 +198,10 @@ monitoring:
 ### SSH Command Format
 ```bash
 # Correct format (no user prefix, use mgmt IP)
-ssh 10.42.241.3 '/disk monitor-traffic storage-pool once'
+ssh 10.42.241.3 '/disk monitor-traffic disk=storage-pool once'
 
 # Incorrect (user prefix causes issues)
-ssh admin@10.42.68.1 '/disk monitor-traffic storage-pool once'
+ssh admin@10.42.68.1 '/disk monitor-traffic disk=storage-pool once'
 ```
 
 ### SNMP Configuration
@@ -221,7 +221,7 @@ snmp := &gosnmp.GoSNMP{
 
 ## Open Questions for Hardware Validation
 
-1. ✅ Does `/disk monitor-traffic <slot> once` work on RouterOS 7.1+? **CONFIRMED: YES**
+1. ✅ Does `/disk monitor-traffic disk=<slot> once` work on RouterOS 7.1+? **CONFIRMED: YES**
 2. What is the SSH command overhead on RDS CPU? Measure before/after enabling metrics.
 3. What are realistic alert thresholds for RAID6 Btrfs on RDS? Baseline during normal operation.
 4. What are normal temperature/fan/PSU ranges for this hardware? Baseline during normal operation.

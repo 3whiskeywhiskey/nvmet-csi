@@ -43,6 +43,13 @@ func TestClassifyRouterOSCommand(t *testing.T) {
 			wantCommand: CommandClassObserve,
 		},
 		{
+			name:        "slash path monitor traffic observes",
+			command:     "/disk/monitor-traffic disk=pvc-test once",
+			wantFamily:  "disk",
+			wantAction:  "monitor_traffic",
+			wantCommand: CommandClassObserve,
+		},
+		{
 			name:        "unknown empty command",
 			command:     "   ",
 			wantFamily:  "unknown",

@@ -33,20 +33,35 @@ func ClassifyRouterOSCommand(command string) CommandClassification {
 		return CommandClassification{Family: "unknown", Action: "unknown", Class: CommandClassUnknown}
 	}
 
-	family := strings.TrimPrefix(fields[0], "/")
-	if family == "" {
-		family = "unknown"
-	}
-	action := "unknown"
-	if len(fields) > 1 {
-		action = strings.ToLower(fields[1])
-	}
+	family, action := routerOSCommandFamilyAction(fields)
 
 	return CommandClassification{
 		Family: sanitizeCommandLabel(family),
 		Action: sanitizeCommandLabel(action),
 		Class:  classifyRouterOSAction(action),
 	}
+}
+
+func routerOSCommandFamilyAction(fields []string) (string, string) {
+	family := strings.TrimPrefix(fields[0], "/")
+	action := "unknown"
+
+	if strings.Contains(family, "/") {
+		parts := strings.Split(family, "/")
+		family = parts[0]
+		if len(parts) > 1 && parts[1] != "" {
+			action = strings.ToLower(parts[1])
+		}
+	}
+
+	if family == "" {
+		family = "unknown"
+	}
+	if action == "unknown" && len(fields) > 1 && !strings.Contains(fields[1], "=") {
+		action = strings.ToLower(fields[1])
+	}
+
+	return family, action
 }
 
 func classifyRouterOSAction(action string) CommandClass {

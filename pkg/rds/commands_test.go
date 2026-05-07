@@ -195,6 +195,8 @@ func TestValidateSlotName(t *testing.T) {
 	}{
 		{"valid alphanumeric", "pvc-abc123", false},
 		{"valid with hyphens", "pvc-a1b2-c3d4", false},
+		{"valid storage pool slot", "storage-pool", false},
+		{"valid numeric disk id", "0", false},
 		{"empty slot", "", true},
 		{"with space", "pvc abc", true},
 		{"with semicolon", "pvc-abc; rm -rf", true},
@@ -1399,6 +1401,41 @@ func TestParseDiskMetrics(t *testing.T) {
 			}
 			if result.ActiveTimeMs != tt.expected.ActiveTimeMs {
 				t.Errorf("ActiveTimeMs: got %v, want %v", result.ActiveTimeMs, tt.expected.ActiveTimeMs)
+			}
+		})
+	}
+}
+
+func TestBuildDiskMonitorTrafficCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		slot string
+		want string
+	}{
+		{
+			name: "storage pool slot uses keyed disk parameter",
+			slot: "storage-pool",
+			want: "/disk monitor-traffic disk=storage-pool once",
+		},
+		{
+			name: "numeric disk id uses keyed disk parameter",
+			slot: "0",
+			want: "/disk monitor-traffic disk=0 once",
+		},
+		{
+			name: "pvc slot uses keyed disk parameter",
+			slot: "pvc-test-123",
+			want: "/disk monitor-traffic disk=pvc-test-123 once",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateSlotName(tt.slot); err != nil {
+				t.Fatalf("test slot should be valid: %v", err)
+			}
+			if got := buildDiskMonitorTrafficCommand(tt.slot); got != tt.want {
+				t.Fatalf("buildDiskMonitorTrafficCommand(%q) = %q, want %q", tt.slot, got, tt.want)
 			}
 		})
 	}
