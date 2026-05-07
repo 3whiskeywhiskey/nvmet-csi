@@ -175,6 +175,120 @@ func TestApplyVolumePlanDryRunDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestCommandHostPlansReportCommands(t *testing.T) {
+	recorder := &recordingExecutor{
+		outputs: map[string]string{},
+		errs: map[string]error{
+			"zfs get -H -p -o value volsize tank/nvmet/pvc-test-volume": errors.New("cannot open 'tank/nvmet/pvc-test-volume': dataset does not exist"),
+		},
+	}
+	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", ConfigFSRoot: "/config/nvmet"}, recorder)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+	storageBackend := newTestBackend(t, commandHost)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Backend != backend.TypeLinuxZOLNVMET {
+		t.Fatalf("expected backend metadata %q, got %q", backend.TypeLinuxZOLNVMET, plan.Backend)
+	}
+	if plan.Action != backend.VolumeActionCreate {
+		t.Fatalf("expected create plan, got %s", plan.Action)
+	}
+	if len(plan.Commands) != 7 {
+		t.Fatalf("expected 7 create commands, got %d: %v", len(plan.Commands), plan.Commands)
+	}
+	if plan.Commands[0] != "zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume" {
+		t.Fatalf("unexpected first command: %q", plan.Commands[0])
+	}
+
+	result, err := storageBackend.ApplyVolumePlan(context.Background(), plan, backend.VolumeApplyOptions{DryRun: true})
+	if err != nil {
+		t.Fatalf("ApplyVolumePlan(dry-run) error = %v", err)
+	}
+	if result.Applied {
+		t.Fatal("dry-run result should not report applied")
+	}
+	if result.Backend != backend.TypeLinuxZOLNVMET || result.Reason != plan.Reason {
+		t.Fatalf("unexpected result metadata: %+v", result)
+	}
+	if !reflect.DeepEqual(result.Commands, plan.Commands) {
+		t.Fatalf("dry-run commands differ:\nplan=%v\nresult=%v", plan.Commands, result.Commands)
+	}
+}
+
+func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
+	nqn := "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume"
+	state := VolumeState{
+		ID:              "pvc-test-volume",
+		Dataset:         "tank/nvmet/pvc-test-volume",
+		DevicePath:      "/dev/zvol/tank/nvmet/pvc-test-volume",
+		SizeBytes:       10 << 30,
+		NQN:             nqn,
+		Port:            4420,
+		ExportDevice:    "/dev/zvol/tank/nvmet/pvc-test-volume",
+		PortEntryExists: true,
+		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + nqn,
+	}
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, &planningMemoryHost{memoryHost: host})
+	desired := testCreateRequest(state.ID, state.SizeBytes)
+
+	host.volumes[state.ID] = state
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionRepair {
+		t.Fatalf("expected repair plan, got %s", plan.Action)
+	}
+	if len(plan.Commands) == 0 || !strings.HasPrefix(plan.Commands[len(plan.Commands)-1], "sh -c test -L ") {
+		t.Fatalf("expected repair command report, got %v", plan.Commands)
+	}
+
+	larger := desired
+	larger.SizeBytes = 12 << 30
+	host.volumes[state.ID] = VolumeState{
+		ID:              state.ID,
+		Dataset:         state.Dataset,
+		DevicePath:      state.DevicePath,
+		SizeBytes:       state.SizeBytes,
+		NQN:             state.NQN,
+		Port:            state.Port,
+		Exported:        true,
+		NamespaceReady:  true,
+		ExportDevice:    state.DevicePath,
+		PortEntryExists: true,
+		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + state.NQN,
+		Status:          "ready",
+	}
+	plan, err = storageBackend.BuildEnsureVolumePlan(context.Background(), larger)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan(resize) error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionResize {
+		t.Fatalf("expected resize plan, got %s", plan.Action)
+	}
+	if len(plan.Commands) != 1 || plan.Commands[0] != "zfs set volsize=12884901888 tank/nvmet/pvc-test-volume" {
+		t.Fatalf("unexpected resize command report: %v", plan.Commands)
+	}
+
+	plan, err = storageBackend.BuildDeleteVolumePlan(context.Background(), state.ID)
+	if err != nil {
+		t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionDelete {
+		t.Fatalf("expected delete plan, got %s", plan.Action)
+	}
+	if len(plan.Commands) != 5 || plan.Commands[len(plan.Commands)-1] != "zfs destroy tank/nvmet/pvc-test-volume" {
+		t.Fatalf("unexpected delete command report: %v", plan.Commands)
+	}
+}
+
 func TestBuildDeleteVolumePlanIdempotent(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -429,6 +543,10 @@ type memoryHost struct {
 	volumes map[string]VolumeState
 }
 
+type planningMemoryHost struct {
+	*memoryHost
+}
+
 func newMemoryHost() *memoryHost {
 	return &memoryHost{volumes: map[string]VolumeState{}}
 }
@@ -499,6 +617,26 @@ func (h *memoryHost) ResizeVolume(_ context.Context, volumeID string, sizeBytes 
 
 func (h *memoryHost) GetCapacity(context.Context) (*backend.Capacity, error) {
 	return &backend.Capacity{TotalBytes: 100 << 30, FreeBytes: 80 << 30, UsedBytes: 20 << 30}, nil
+}
+
+func (h *planningMemoryHost) CreateVolumeCommands(spec VolumeSpec) []Command {
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	return commandHost.CreateVolumeCommands(spec)
+}
+
+func (h *planningMemoryHost) RepairVolumeCommands(spec VolumeSpec) []Command {
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	return commandHost.RepairVolumeCommands(spec)
+}
+
+func (h *planningMemoryHost) DeleteVolumeCommands(state VolumeState) []Command {
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	return commandHost.DeleteVolumeCommands(state)
+}
+
+func (h *planningMemoryHost) ResizeVolumeCommands(volumeID string, sizeBytes int64) []Command {
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	return commandHost.ResizeVolumeCommands(volumeID, sizeBytes)
 }
 
 type recordingExecutor struct {
