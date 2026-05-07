@@ -3,6 +3,7 @@ package rds
 import (
 	"errors"
 	"fmt"
+	pathpkg "path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -395,16 +396,29 @@ func (c *sshClient) ListFiles(path string) ([]FileInfo, error) {
 }
 
 // DeleteFile deletes a file on RDS
-func (c *sshClient) DeleteFile(path string) error {
-	klog.V(4).Infof("Deleting file: %s", path)
+func (c *sshClient) DeleteFile(filePath string) error {
+	klog.V(4).Infof("Deleting file: %s", filePath)
 
 	// SECURITY: Validate path to prevent command injection
-	if err := utils.ValidateFilePath(path); err != nil {
+	if err := utils.ValidateFilePath(filePath); err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
+	normalizedPath := normalizeFilePath(filePath)
+	unlock := c.volumeLocks.lock("file:" + normalizedPath)
+	defer unlock()
+
+	exists, err := c.fileExists(normalizedPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		klog.V(4).Infof("File %s already deleted", normalizedPath)
+		return nil
+	}
+
 	// RouterOS file paths don't include leading / in commands
-	searchPath := strings.TrimPrefix(path, "/")
+	searchPath := strings.TrimPrefix(normalizedPath, "/")
 
 	// Build /file remove command
 	cmd := fmt.Sprintf(`/file remove [find name="%s"]`, searchPath)
@@ -420,8 +434,29 @@ func (c *sshClient) DeleteFile(path string) error {
 		return fmt.Errorf("error deleting file: %s", output)
 	}
 
-	klog.V(4).Infof("Successfully deleted file: %s", path)
+	klog.V(4).Infof("Successfully deleted file: %s", normalizedPath)
 	return nil
+}
+
+func normalizeFilePath(filePath string) string {
+	normalized := pathpkg.Clean(filePath)
+	if !strings.HasPrefix(normalized, "/") {
+		normalized = "/" + normalized
+	}
+	return normalized
+}
+
+func (c *sshClient) fileExists(filePath string) (bool, error) {
+	files, err := c.ListFiles(pathpkg.Dir(filePath))
+	if err != nil {
+		return false, fmt.Errorf("failed to observe file %s before deletion: %w", filePath, err)
+	}
+	for _, file := range files {
+		if normalizeFilePath(file.Path) == filePath && file.Type != "directory" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // parseVolumeInfo parses RouterOS disk print output for a single volume
