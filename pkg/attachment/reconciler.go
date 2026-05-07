@@ -9,8 +9,11 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	storagev1listers "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/klog/v2"
 
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
@@ -27,14 +30,19 @@ type EventPoster interface {
 // AttachmentReconciler periodically checks for stale attachments and cleans them up.
 // Stale attachments occur when a node is deleted without proper cleanup of attached volumes.
 type AttachmentReconciler struct {
-	manager     *AttachmentManager
-	k8sClient   kubernetes.Interface
-	nodeLister  corev1listers.NodeLister             // Cached node lister (avoids API calls)
-	pvLister    corev1listers.PersistentVolumeLister // Cached PV lister (avoids API calls)
-	interval    time.Duration
-	gracePeriod time.Duration
-	metrics     *observability.Metrics
-	eventPoster EventPoster // Optional, may be nil
+	manager                       *AttachmentManager
+	k8sClient                     kubernetes.Interface
+	nodeLister                    corev1listers.NodeLister             // Cached node lister (avoids API calls)
+	pvLister                      corev1listers.PersistentVolumeLister // Cached PV lister (avoids API calls)
+	volumeAttachmentLister        storagev1listers.VolumeAttachmentLister
+	interval                      time.Duration
+	gracePeriod                   time.Duration
+	staleVolumeAttachmentCleanup  bool
+	staleVolumeAttachmentDelete   bool
+	staleVolumeAttachmentMinConfs int
+	staleVolumeAttachmentSeen     map[string]staleVolumeAttachmentCandidate
+	metrics                       *observability.Metrics
+	eventPoster                   EventPoster // Optional, may be nil
 
 	// Control channels
 	stopCh    chan struct{}
@@ -45,14 +53,18 @@ type AttachmentReconciler struct {
 
 // ReconcilerConfig holds configuration for the AttachmentReconciler.
 type ReconcilerConfig struct {
-	Manager     *AttachmentManager
-	K8sClient   kubernetes.Interface
-	NodeLister  corev1listers.NodeLister             // Required: cached node lister to avoid API throttling
-	PVLister    corev1listers.PersistentVolumeLister // Required: cached PV lister to avoid API throttling
-	Interval    time.Duration                        // Default: 5 minutes
-	GracePeriod time.Duration                        // Default: 30 seconds
-	Metrics     *observability.Metrics
-	EventPoster EventPoster // Optional, may be nil - for posting lifecycle events
+	Manager                       *AttachmentManager
+	K8sClient                     kubernetes.Interface
+	NodeLister                    corev1listers.NodeLister             // Required: cached node lister to avoid API throttling
+	PVLister                      corev1listers.PersistentVolumeLister // Required: cached PV lister to avoid API throttling
+	VolumeAttachmentLister        storagev1listers.VolumeAttachmentLister
+	Interval                      time.Duration // Default: 5 minutes
+	GracePeriod                   time.Duration // Default: 30 seconds
+	StaleVolumeAttachmentCleanup  bool
+	StaleVolumeAttachmentDelete   bool
+	StaleVolumeAttachmentMinConfs int
+	Metrics                       *observability.Metrics
+	EventPoster                   EventPoster // Optional, may be nil - for posting lifecycle events
 }
 
 // NewAttachmentReconciler creates a new AttachmentReconciler.
@@ -69,23 +81,34 @@ func NewAttachmentReconciler(config ReconcilerConfig) (*AttachmentReconciler, er
 	if config.PVLister == nil {
 		return nil, fmt.Errorf("pvLister is required (use informer to avoid API throttling)")
 	}
+	if config.StaleVolumeAttachmentCleanup && config.VolumeAttachmentLister == nil {
+		return nil, fmt.Errorf("volumeAttachmentLister is required when stale VolumeAttachment cleanup is enabled")
+	}
 	if config.Interval <= 0 {
 		config.Interval = 5 * time.Minute
 	}
 	if config.GracePeriod <= 0 {
 		config.GracePeriod = 30 * time.Second
 	}
+	if config.StaleVolumeAttachmentMinConfs <= 0 {
+		config.StaleVolumeAttachmentMinConfs = 2
+	}
 
 	return &AttachmentReconciler{
-		manager:     config.Manager,
-		k8sClient:   config.K8sClient,
-		nodeLister:  config.NodeLister,
-		pvLister:    config.PVLister,
-		interval:    config.Interval,
-		gracePeriod: config.GracePeriod,
-		metrics:     config.Metrics,
-		eventPoster: config.EventPoster,
-		triggerCh:   make(chan struct{}, 1), // Buffered size 1 for deduplication
+		manager:                       config.Manager,
+		k8sClient:                     config.K8sClient,
+		nodeLister:                    config.NodeLister,
+		pvLister:                      config.PVLister,
+		volumeAttachmentLister:        config.VolumeAttachmentLister,
+		interval:                      config.Interval,
+		gracePeriod:                   config.GracePeriod,
+		staleVolumeAttachmentCleanup:  config.StaleVolumeAttachmentCleanup,
+		staleVolumeAttachmentDelete:   config.StaleVolumeAttachmentDelete,
+		staleVolumeAttachmentMinConfs: config.StaleVolumeAttachmentMinConfs,
+		staleVolumeAttachmentSeen:     make(map[string]staleVolumeAttachmentCandidate),
+		metrics:                       config.Metrics,
+		eventPoster:                   config.EventPoster,
+		triggerCh:                     make(chan struct{}, 1), // Buffered size 1 for deduplication
 	}, nil
 }
 
@@ -102,7 +125,8 @@ func (r *AttachmentReconciler) Start(ctx context.Context) error {
 	r.doneCh = make(chan struct{})
 	r.mu.Unlock()
 
-	klog.Infof("Starting attachment reconciler (interval=%v, grace_period=%v)", r.interval, r.gracePeriod)
+	klog.Infof("Starting attachment reconciler (interval=%v, grace_period=%v, stale_volumeattachment_cleanup=%t, stale_volumeattachment_delete=%t, stale_volumeattachment_min_confirmations=%d)",
+		r.interval, r.gracePeriod, r.staleVolumeAttachmentCleanup, r.staleVolumeAttachmentDelete, r.staleVolumeAttachmentMinConfs)
 
 	go r.run(ctx)
 
@@ -269,6 +293,10 @@ func (r *AttachmentReconciler) reconcile(ctx context.Context) {
 	} else {
 		klog.V(4).Infof("Attachment reconciliation complete: no stale attachments (duration=%v)", duration)
 	}
+
+	if r.staleVolumeAttachmentCleanup {
+		r.reconcileStaleVolumeAttachments(ctx)
+	}
 }
 
 // nodeExists checks if a Kubernetes node exists using the cached node lister.
@@ -315,4 +343,123 @@ func (r *AttachmentReconciler) postStaleAttachmentClearedEvent(ctx context.Conte
 	if err := r.eventPoster.PostStaleAttachmentCleared(ctx, claimRef.Namespace, claimRef.Name, volumeID, staleNodeID); err != nil {
 		klog.Warningf("Failed to post stale attachment cleared event for volume %s: %v", volumeID, err)
 	}
+}
+
+type staleVolumeAttachmentCandidate struct {
+	name          string
+	volumeID      string
+	nodeID        string
+	confirmations int
+	firstSeen     time.Time
+	lastSeen      time.Time
+	reason        string
+}
+
+func (r *AttachmentReconciler) reconcileStaleVolumeAttachments(ctx context.Context) {
+	startTime := time.Now()
+
+	if r.volumeAttachmentLister == nil {
+		klog.Warning("Stale VolumeAttachment cleanup enabled without a VolumeAttachment lister; skipping")
+		return
+	}
+
+	attachments, err := r.volumeAttachmentLister.List(labels.Everything())
+	if err != nil {
+		klog.Warningf("Failed to list VolumeAttachments from cache: %v", err)
+		return
+	}
+
+	now := time.Now()
+	observed := make(map[string]staleVolumeAttachmentCandidate)
+	planned := make([]staleVolumeAttachmentCandidate, 0)
+
+	for _, va := range attachments {
+		if ctx.Err() != nil {
+			klog.V(2).Info("Stale VolumeAttachment reconciliation interrupted by context cancellation")
+			return
+		}
+		if va.Spec.Attacher != driverName {
+			continue
+		}
+		if va.DeletionTimestamp != nil {
+			continue
+		}
+		if va.Spec.Source.PersistentVolumeName == nil || *va.Spec.Source.PersistentVolumeName == "" {
+			klog.V(4).Infof("Skipping VolumeAttachment %s with empty PersistentVolumeName", va.Name)
+			continue
+		}
+		if va.Spec.NodeName == "" {
+			klog.V(4).Infof("Skipping VolumeAttachment %s with empty node name", va.Name)
+			continue
+		}
+
+		volumeID := *va.Spec.Source.PersistentVolumeName
+		if _, err := r.pvLister.Get(volumeID); err != nil {
+			if errors.IsNotFound(err) {
+				klog.V(4).Infof("Skipping stale VolumeAttachment candidate %s: PV %s no longer exists", va.Name, volumeID)
+				continue
+			}
+			klog.Warningf("Failed to check PV %s for VolumeAttachment %s: %v (skipping)", volumeID, va.Name, err)
+			continue
+		}
+
+		nodeExists, err := r.nodeExists(ctx, va.Spec.NodeName)
+		if err != nil {
+			klog.Warningf("Failed to check node %s for VolumeAttachment %s: %v (skipping)", va.Spec.NodeName, va.Name, err)
+			continue
+		}
+		if nodeExists {
+			continue
+		}
+
+		if age := now.Sub(va.CreationTimestamp.Time); age < r.gracePeriod {
+			klog.V(4).Infof("Skipping VolumeAttachment %s for deleted node %s: age %v is within grace period %v", va.Name, va.Spec.NodeName, age, r.gracePeriod)
+			continue
+		}
+
+		candidate := staleVolumeAttachmentCandidate{
+			name:     va.Name,
+			volumeID: volumeID,
+			nodeID:   va.Spec.NodeName,
+			lastSeen: now,
+			reason:   "VolumeAttachment points at a node that no longer exists",
+		}
+		if previous, ok := r.staleVolumeAttachmentSeen[va.Name]; ok {
+			candidate.confirmations = previous.confirmations + 1
+			candidate.firstSeen = previous.firstSeen
+		} else {
+			candidate.confirmations = 1
+			candidate.firstSeen = now
+		}
+		observed[va.Name] = candidate
+		if candidate.confirmations >= r.staleVolumeAttachmentMinConfs {
+			planned = append(planned, candidate)
+		}
+	}
+
+	r.staleVolumeAttachmentSeen = observed
+
+	for _, candidate := range planned {
+		if !r.staleVolumeAttachmentDelete {
+			klog.Infof("[DRY-RUN] Would delete stale VolumeAttachment: name=%s volume=%s node=%s confirmations=%d reason=%q",
+				candidate.name, candidate.volumeID, candidate.nodeID, candidate.confirmations, candidate.reason)
+			continue
+		}
+
+		klog.Infof("Deleting stale VolumeAttachment: name=%s volume=%s node=%s confirmations=%d reason=%q",
+			candidate.name, candidate.volumeID, candidate.nodeID, candidate.confirmations, candidate.reason)
+		if err := r.k8sClient.StorageV1().VolumeAttachments().Delete(ctx, candidate.name, metav1.DeleteOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			klog.Errorf("Failed to delete stale VolumeAttachment %s for volume %s: %v", candidate.name, candidate.volumeID, err)
+			continue
+		}
+		if r.metrics != nil {
+			r.metrics.RecordReconcileAction("delete_stale_volumeattachment")
+		}
+	}
+
+	klog.V(2).Infof("Stale VolumeAttachment reconciliation complete (duration=%v, candidates=%d, planned_deletes=%d, dry_run=%t)",
+		time.Since(startTime), len(observed), len(planned), !r.staleVolumeAttachmentDelete)
 }

@@ -151,9 +151,12 @@ type DriverConfig struct {
 	OrphanMinConfirmations int
 
 	// Attachment reconciler settings
-	EnableAttachmentReconciler  bool
-	AttachmentReconcileInterval time.Duration // Default: 5 minutes
-	AttachmentGracePeriod       time.Duration // Default: 30 seconds
+	EnableAttachmentReconciler    bool
+	AttachmentReconcileInterval   time.Duration // Default: 5 minutes
+	AttachmentGracePeriod         time.Duration // Default: 30 seconds
+	StaleVolumeAttachmentCleanup  bool
+	StaleVolumeAttachmentDelete   bool
+	StaleVolumeAttachmentMinConfs int
 
 	// VMI serialization settings (for kubevirt concurrent operation mitigation)
 	EnableVMISerialization bool          // Enable per-VMI operation locks
@@ -354,16 +357,21 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		// Get listers from informer factory (cached, no API calls)
 		nodeLister := driver.informerFactory.Core().V1().Nodes().Lister()
 		pvLister := driver.informerFactory.Core().V1().PersistentVolumes().Lister()
+		vaLister := driver.informerFactory.Storage().V1().VolumeAttachments().Lister()
 
 		reconcilerConfig := attachment.ReconcilerConfig{
-			Manager:     driver.attachmentManager,
-			K8sClient:   config.K8sClient,
-			NodeLister:  nodeLister,
-			PVLister:    pvLister,
-			Interval:    config.AttachmentReconcileInterval,
-			GracePeriod: config.AttachmentGracePeriod,
-			Metrics:     config.Metrics,
-			EventPoster: eventPoster,
+			Manager:                       driver.attachmentManager,
+			K8sClient:                     config.K8sClient,
+			NodeLister:                    nodeLister,
+			PVLister:                      pvLister,
+			VolumeAttachmentLister:        vaLister,
+			Interval:                      config.AttachmentReconcileInterval,
+			GracePeriod:                   config.AttachmentGracePeriod,
+			StaleVolumeAttachmentCleanup:  config.StaleVolumeAttachmentCleanup,
+			StaleVolumeAttachmentDelete:   config.StaleVolumeAttachmentDelete,
+			StaleVolumeAttachmentMinConfs: config.StaleVolumeAttachmentMinConfs,
+			Metrics:                       config.Metrics,
+			EventPoster:                   eventPoster,
 		}
 
 		attachmentReconciler, err := attachment.NewAttachmentReconciler(reconcilerConfig)
@@ -376,8 +384,8 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		if driver.attachmentGracePeriod <= 0 {
 			driver.attachmentGracePeriod = 30 * time.Second
 		}
-		klog.Infof("Attachment reconciler enabled with cached informers (interval=%v, grace_period=%v)",
-			config.AttachmentReconcileInterval, config.AttachmentGracePeriod)
+		klog.Infof("Attachment reconciler enabled with cached informers (interval=%v, grace_period=%v, stale_volumeattachment_cleanup=%t, stale_volumeattachment_delete=%t)",
+			config.AttachmentReconcileInterval, config.AttachmentGracePeriod, config.StaleVolumeAttachmentCleanup, config.StaleVolumeAttachmentDelete)
 	}
 
 	// Initialize VMI grouper for per-VMI operation serialization

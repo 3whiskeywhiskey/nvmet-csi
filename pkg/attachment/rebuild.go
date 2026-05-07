@@ -191,7 +191,7 @@ func (am *AttachmentManager) rebuildVolumeState(ctx context.Context, volumeID st
 // This is the authoritative source for attachment state (managed by external-attacher).
 // VolumeAttachment objects are preferred over PV annotations because they are:
 // - Managed by external-attacher (authoritative)
-// - Never stale (external-attacher keeps them updated)
+// - The Kubernetes attachment object that can block reattach when stale
 // - Support proper dual-attach tracking for RWX
 func (am *AttachmentManager) RebuildStateFromVolumeAttachments(ctx context.Context) error {
 	if am.k8sClient == nil {

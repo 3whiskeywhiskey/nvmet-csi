@@ -75,6 +75,15 @@ spec:
             {{- end }}
             - "-attachment-grace-period={{ .Values.controller.attachmentGracePeriod }}"
             - "-attachment-reconcile-interval={{ .Values.controller.attachmentReconcileInterval }}"
+            {{- if .Values.controller.staleVolumeAttachmentCleanup.enabled }}
+            - "-enable-stale-volumeattachment-cleanup"
+            - "-stale-volumeattachment-min-confirmations={{ .Values.controller.staleVolumeAttachmentCleanup.minConfirmations }}"
+            {{- if .Values.controller.staleVolumeAttachmentCleanup.dryRun }}
+            - "-stale-volumeattachment-dry-run=true"
+            {{- else }}
+            - "-stale-volumeattachment-dry-run=false"
+            {{- end }}
+            {{- end }}
             {{- if .Values.controller.vmiSerialization.enabled }}
             - "-enable-vmi-serialization"
             - "-vmi-cache-ttl={{ .Values.controller.vmiSerialization.cacheTTL }}"

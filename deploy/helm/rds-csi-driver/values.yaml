@@ -113,6 +113,13 @@ controller:
   # Attachment reconciliation interval
   attachmentReconcileInterval: 5m
 
+  # Stale Kubernetes VolumeAttachment cleanup for deleted nodes.
+  # Disabled by default; enable first in dry-run and inspect logs before active deletion.
+  staleVolumeAttachmentCleanup:
+    enabled: false
+    dryRun: true
+    minConfirmations: 2
+
   # VMI serialization (KubeVirt concurrent operation mitigation)
   vmiSerialization:
     enabled: false

@@ -103,6 +103,25 @@
         "priorityClassName": {
           "type": "string",
           "description": "Priority class for controller pod"
+        },
+        "staleVolumeAttachmentCleanup": {
+          "type": "object",
+          "description": "Guarded cleanup of stale Kubernetes VolumeAttachment objects for deleted nodes",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable stale VolumeAttachment cleanup"
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Log planned stale VolumeAttachment deletes without deleting"
+            },
+            "minConfirmations": {
+              "type": "integer",
+              "description": "Consecutive reconciliation passes required before deleting a stale VolumeAttachment",
+              "minimum": 1
+            }
+          }
         }
       }
     },
