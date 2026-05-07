@@ -29,6 +29,7 @@ type sshClient struct {
 	hostKeyCallback    ssh.HostKeyCallback
 	insecureSkipVerify bool
 	sessionMu          sync.Mutex // Protects concurrent session creation
+	volumeLocks        *targetLockManager
 	commandObserver    CommandObserver
 }
 
@@ -77,6 +78,7 @@ func newSSHClient(config ClientConfig) (*sshClient, error) {
 		timeout:            config.Timeout,
 		hostKeyCallback:    hostKeyCallback,
 		insecureSkipVerify: config.InsecureSkipVerify,
+		volumeLocks:        newTargetLockManager(),
 		commandObserver:    config.CommandObserver,
 	}, nil
 }

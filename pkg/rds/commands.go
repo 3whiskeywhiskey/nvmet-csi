@@ -15,9 +15,26 @@ import (
 
 // CreateVolume creates a file-backed NVMe/TCP volume on RDS
 func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
+	opts = normalizeCreateVolumeOptions(opts)
+
 	// Validate options
 	if err := validateCreateVolumeOptions(opts); err != nil {
 		return fmt.Errorf("invalid volume options: %w", err)
+	}
+
+	unlock := c.volumeLocks.lock(opts.Slot)
+	defer unlock()
+
+	existing, exists, err := c.observeVolumeForCreate(opts.Slot)
+	if err != nil {
+		return err
+	}
+	if exists {
+		if volumeMatchesCreateOptions(existing, opts) {
+			klog.V(3).Infof("Volume %s already exists with requested state, skipping create", opts.Slot)
+			return nil
+		}
+		return fmt.Errorf("volume %s already exists with different state: %s", opts.Slot, createVolumeConflictReason(existing, opts))
 	}
 
 	// Convert size to human-readable format (e.g., "50G", "100G")
@@ -35,7 +52,7 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 	)
 
 	// Execute command with retry
-	_, err := c.runCommandWithRetry(cmd, 3)
+	_, err = c.runCommandWithRetry(cmd, 3)
 	if err != nil {
 		return fmt.Errorf("failed to create volume: %w", err)
 	}
@@ -48,6 +65,69 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 	klog.V(2).Infof("Created volume %s", opts.Slot)
 	klog.V(4).Infof("Created volume %s (path=%s, size=%d, nqn=%s)", opts.Slot, opts.FilePath, opts.FileSizeBytes, opts.NVMETCPNQN)
 	return nil
+}
+
+func normalizeCreateVolumeOptions(opts CreateVolumeOptions) CreateVolumeOptions {
+	if opts.NVMETCPPort == 0 {
+		opts.NVMETCPPort = 4420
+	}
+	return opts
+}
+
+func (c *sshClient) observeVolumeForCreate(slot string) (*VolumeInfo, bool, error) {
+	existing, err := c.GetVolume(slot)
+	if err == nil {
+		return existing, true, nil
+	}
+
+	var notFound *VolumeNotFoundError
+	if errors.As(err, &notFound) || errors.Is(err, utils.ErrVolumeNotFound) {
+		return nil, false, nil
+	}
+	return nil, false, fmt.Errorf("failed to observe existing volume %s before create: %w", slot, err)
+}
+
+func volumeMatchesCreateOptions(actual *VolumeInfo, desired CreateVolumeOptions) bool {
+	if actual == nil {
+		return false
+	}
+	if actual.Type != "" && actual.Type != "file" {
+		return false
+	}
+	if actual.Status != "" && actual.Status != "ready" {
+		return false
+	}
+	return actual.FilePath == desired.FilePath &&
+		actual.FileSizeBytes == desired.FileSizeBytes &&
+		actual.Mount == desired.Mount &&
+		actual.NVMETCPExport &&
+		actual.NVMETCPPort == desired.NVMETCPPort &&
+		actual.NVMETCPNQN == desired.NVMETCPNQN
+}
+
+func createVolumeConflictReason(actual *VolumeInfo, desired CreateVolumeOptions) string {
+	switch {
+	case actual == nil:
+		return "existing volume details unavailable"
+	case actual.Type != "" && actual.Type != "file":
+		return fmt.Sprintf("type differs (existing: %q, requested: %q)", actual.Type, "file")
+	case actual.FilePath != desired.FilePath:
+		return fmt.Sprintf("file path differs (existing: %q, requested: %q)", actual.FilePath, desired.FilePath)
+	case actual.FileSizeBytes != desired.FileSizeBytes:
+		return fmt.Sprintf("file size differs (existing: %d, requested: %d)", actual.FileSizeBytes, desired.FileSizeBytes)
+	case actual.Mount != desired.Mount:
+		return fmt.Sprintf("mount setting differs (existing: %t, requested: %t)", actual.Mount, desired.Mount)
+	case !actual.NVMETCPExport:
+		return "NVMe/TCP export is disabled"
+	case actual.NVMETCPPort != desired.NVMETCPPort:
+		return fmt.Sprintf("NVMe/TCP port differs (existing: %d, requested: %d)", actual.NVMETCPPort, desired.NVMETCPPort)
+	case actual.NVMETCPNQN != desired.NVMETCPNQN:
+		return fmt.Sprintf("NVMe/TCP NQN differs (existing: %q, requested: %q)", actual.NVMETCPNQN, desired.NVMETCPNQN)
+	case actual.Status != "" && actual.Status != "ready":
+		return fmt.Sprintf("status is %q", actual.Status)
+	default:
+		return "unknown difference"
+	}
 }
 
 // ResizeVolume resizes an existing volume on RDS

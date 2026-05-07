@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -180,12 +181,21 @@ func TestConcurrentSameVolume(t *testing.T) {
 
 	wg.Wait()
 
-	// Exactly one should succeed (idempotency)
-	if successCount.Load() != 1 {
-		t.Errorf("expected exactly 1 success, got %d", successCount.Load())
+	if successCount.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent creates to succeed, got %d successes", successCount.Load())
 	}
-	if failCount.Load() != int32(numGoroutines-1) {
-		t.Errorf("expected %d failures, got %d", numGoroutines-1, failCount.Load())
+	if failCount.Load() != 0 {
+		t.Errorf("expected 0 failures, got %d", failCount.Load())
+	}
+
+	adds := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/disk add ") && strings.Contains(entry.Command, "slot="+volumeID) {
+			adds++
+		}
+	}
+	if adds != 1 {
+		t.Errorf("expected exactly 1 /disk add for idempotent concurrent create, got %d", adds)
 	}
 
 	// Verify state: exactly one volume
