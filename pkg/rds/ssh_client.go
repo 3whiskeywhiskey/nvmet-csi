@@ -29,6 +29,7 @@ type sshClient struct {
 	hostKeyCallback    ssh.HostKeyCallback
 	insecureSkipVerify bool
 	sessionMu          sync.Mutex // Protects concurrent session creation
+	commandObserver    CommandObserver
 }
 
 // newSSHClient creates a new SSH-based RDS client
@@ -76,6 +77,7 @@ func newSSHClient(config ClientConfig) (*sshClient, error) {
 		timeout:            config.Timeout,
 		hostKeyCallback:    hostKeyCallback,
 		insecureSkipVerify: config.InsecureSkipVerify,
+		commandObserver:    config.CommandObserver,
 	}, nil
 }
 
@@ -173,8 +175,29 @@ func (c *sshClient) IsConnected() bool {
 
 // runCommand executes a RouterOS CLI command via SSH
 func (c *sshClient) runCommand(command string) (string, error) {
+	start := time.Now()
+	classification := ClassifyRouterOSCommand(command)
+	var err error
+	defer func() {
+		if c.commandObserver == nil {
+			return
+		}
+		status := "success"
+		if err != nil {
+			status = "failure"
+		}
+		c.commandObserver.RecordRDSCommand(
+			classification.Family,
+			classification.Action,
+			string(classification.Class),
+			status,
+			time.Since(start),
+		)
+	}()
+
 	if c.sshClient == nil {
-		return "", fmt.Errorf("not connected to RDS")
+		err = fmt.Errorf("not connected to RDS")
+		return "", err
 	}
 
 	klog.V(5).Infof("Executing RouterOS command: %s", command)
@@ -195,13 +218,16 @@ func (c *sshClient) runCommand(command string) (string, error) {
 	session.Stderr = &stderr
 
 	// Run command
-	if err := session.Run(command); err != nil {
+	err = session.Run(command)
+	if err != nil {
 		// Check if it's an exit error (command failed)
 		var exitErr *ssh.ExitError
 		if errors.As(err, &exitErr) {
-			return stdout.String(), fmt.Errorf("command failed (exit %d): %s", exitErr.ExitStatus(), stderr.String())
+			err = fmt.Errorf("command failed (exit %d): %s", exitErr.ExitStatus(), stderr.String())
+			return stdout.String(), err
 		}
-		return "", fmt.Errorf("failed to run command: %w", err)
+		err = fmt.Errorf("failed to run command: %w", err)
+		return "", err
 	}
 
 	output := stdout.String()

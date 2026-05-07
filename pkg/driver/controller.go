@@ -175,6 +175,12 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return cs.createVolumeResponse(volumeID, plan.Actual.FileSizeBytes, params, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.FilePath), nil
 	}
 
+	if plan.Action == reconciler.VolumeActionResize && plan.Actual != nil {
+		return nil, status.Errorf(codes.AlreadyExists,
+			"volume %s already exists with different capacity (existing: %d, requested: %d)",
+			volumeID, plan.Actual.FileSizeBytes, requiredBytes)
+	}
+
 	if plan.Action == reconciler.VolumeActionConflict {
 		return nil, status.Errorf(codes.FailedPrecondition, "unsafe volume reconciliation for %s: %s", volumeID, plan.Reason)
 	}

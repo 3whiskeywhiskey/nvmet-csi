@@ -1048,3 +1048,59 @@ func TestRDSMetrics_NotRegisteredWithoutCall(t *testing.T) {
 		t.Error("rds metrics should not appear without SetRDSMonitoring call")
 	}
 }
+
+func TestRecordRDSCommand(t *testing.T) {
+	m := NewMetrics()
+
+	m.RecordRDSCommand("disk", "print", "observe", "success", 25*time.Millisecond)
+	m.RecordRDSCommand("disk", "add", "mutate", "failure", 50*time.Millisecond)
+
+	body := scrapeMetrics(t, m)
+	if !strings.Contains(body, `rds_csi_rds_commands_total{action="print",class="observe",family="disk",status="success"} 1`) {
+		t.Error("expected successful observe command counter")
+	}
+	if !strings.Contains(body, `rds_csi_rds_commands_total{action="add",class="mutate",family="disk",status="failure"} 1`) {
+		t.Error("expected failed mutate command counter")
+	}
+	if !strings.Contains(body, "rds_csi_rds_command_duration_seconds_bucket") {
+		t.Error("expected command duration histogram")
+	}
+}
+
+func TestNilMetricsRDSObserversDoNotPanic(t *testing.T) {
+	var m *Metrics
+
+	m.RecordRDSMutation("create_volume", nil, false, time.Millisecond)
+	m.RecordRDSMutationRateLimitWait("create_volume", time.Millisecond)
+	m.RecordRDSCommand("disk", "print", "observe", "success", time.Millisecond)
+	m.RecordRDSMutationAudit("create_volume", "vol-a", "success", false, time.Millisecond)
+
+	if events := m.RecentRDSAudit(); events != nil {
+		t.Fatalf("RecentRDSAudit() = %#v, want nil", events)
+	}
+}
+
+func TestRDSMutationAuditRing(t *testing.T) {
+	m := NewMetrics()
+	m.rdsAuditLimit = 2
+
+	m.RecordRDSMutationAudit("create_volume", "vol-a", "success", false, time.Millisecond)
+	m.RecordRDSMutationAudit("delete_volume", "vol-b", "failure", false, 2*time.Millisecond)
+	m.RecordRDSMutationAudit("resize_volume", "vol-c", "success", true, 3*time.Millisecond)
+
+	events := m.RecentRDSAudit()
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2", len(events))
+	}
+	if events[0].Operation != "delete_volume" || events[0].Target != "vol-b" {
+		t.Fatalf("oldest retained event = %+v, want delete_volume vol-b", events[0])
+	}
+	if events[1].Operation != "resize_volume" || !events[1].DryRun {
+		t.Fatalf("newest retained event = %+v, want dry-run resize_volume", events[1])
+	}
+
+	events[0].Operation = "mutated-copy"
+	if got := m.RecentRDSAudit()[0].Operation; got != "delete_volume" {
+		t.Fatalf("RecentRDSAudit returned mutable backing slice, got %q", got)
+	}
+}

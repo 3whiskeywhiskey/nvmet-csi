@@ -319,7 +319,7 @@ func TestCreateVolume_PlannerIdempotentNoMutation(t *testing.T) {
 	}
 }
 
-func TestCreateVolume_PlannerResizesSmallerExistingVolume(t *testing.T) {
+func TestCreateVolume_PlannerRejectsCapacityMismatch(t *testing.T) {
 	ctx := context.Background()
 	cs, mockRDS := testControllerServer(t)
 	nqn, err := utils.VolumeIDToNQN(testVolumeID2)
@@ -342,26 +342,30 @@ func TestCreateVolume_PlannerResizesSmallerExistingVolume(t *testing.T) {
 		Status:        "ready",
 	})
 
-	resp, err := cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID2, 2*1024*1024*1024))
-	if err != nil {
-		t.Fatalf("CreateVolume failed: %v", err)
+	_, err = cs.CreateVolume(ctx, testCreateVolumeRequest(testVolumeID2, 2*1024*1024*1024))
+	if err == nil {
+		t.Fatal("expected capacity mismatch error")
 	}
-	if resp.GetVolume().GetCapacityBytes() != 2*1024*1024*1024 {
-		t.Fatalf("capacity = %d, want 2GiB", resp.GetVolume().GetCapacityBytes())
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got %T %v", err, err)
+	}
+	if st.Code() != codes.AlreadyExists {
+		t.Fatalf("code = %v, want AlreadyExists", st.Code())
 	}
 	if mockRDS.MutationCount("create_volume") != 0 {
 		t.Fatalf("create_volume mutations = %d, want 0", mockRDS.MutationCount("create_volume"))
 	}
-	if mockRDS.MutationCount("resize_volume") != 1 {
-		t.Fatalf("resize_volume mutations = %d, want 1", mockRDS.MutationCount("resize_volume"))
+	if mockRDS.MutationCount("resize_volume") != 0 {
+		t.Fatalf("resize_volume mutations = %d, want 0", mockRDS.MutationCount("resize_volume"))
 	}
 
 	volume, err := mockRDS.GetVolume(testVolumeID2)
 	if err != nil {
 		t.Fatalf("GetVolume failed: %v", err)
 	}
-	if volume.FileSizeBytes != 2*1024*1024*1024 {
-		t.Fatalf("stored size = %d, want 2GiB", volume.FileSizeBytes)
+	if volume.FileSizeBytes != 1*1024*1024*1024 {
+		t.Fatalf("stored size = %d, want 1GiB", volume.FileSizeBytes)
 	}
 }
 

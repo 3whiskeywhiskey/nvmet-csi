@@ -46,6 +46,16 @@ type HardwareHealthSnapshot struct {
 	DiskPoolUsedBytes float64
 }
 
+// RDSAuditEvent is a recent guarded RDS mutation decision.
+type RDSAuditEvent struct {
+	Timestamp time.Time
+	Operation string
+	Target    string
+	Status    string
+	DryRun    bool
+	Duration  time.Duration
+}
+
 // Metrics holds all Prometheus metrics for the RDS CSI driver.
 type Metrics struct {
 	registry *prometheus.Registry
@@ -93,6 +103,11 @@ type Metrics struct {
 	rdsMutationTotal     *prometheus.CounterVec
 	rdsMutationDuration  *prometheus.HistogramVec
 	rdsMutationWait      *prometheus.HistogramVec
+	rdsCommandTotal      *prometheus.CounterVec
+	rdsCommandDuration   *prometheus.HistogramVec
+	rdsAuditMu           sync.Mutex
+	rdsAuditEvents       []RDSAuditEvent
+	rdsAuditLimit        int
 
 	// RDS monitoring callbacks (SSH + SNMP)
 	rdsDiskMetricsFunc     func() (*DiskHealthSnapshot, error)     // Callback for RDS disk performance metrics (SSH)
@@ -327,6 +342,29 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"operation"},
 		),
+
+		rdsCommandTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "commands_total",
+				Help:      "Total RouterOS commands by family, action, class, and status",
+			},
+			[]string{"family", "action", "class", "status"},
+		),
+
+		rdsCommandDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: "rds",
+				Name:      "command_duration_seconds",
+				Help:      "Duration of RouterOS commands in seconds by family, action, and class",
+				Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
+			},
+			[]string{"family", "action", "class"},
+		),
+
+		rdsAuditLimit: 128,
 	}
 
 	// Register all metrics with the custom registry
@@ -356,6 +394,8 @@ func NewMetrics() *Metrics {
 		m.rdsMutationTotal,
 		m.rdsMutationDuration,
 		m.rdsMutationWait,
+		m.rdsCommandTotal,
+		m.rdsCommandDuration,
 	)
 
 	return m
@@ -756,6 +796,10 @@ func (m *Metrics) RecordReconnectAttempt(status string, duration time.Duration) 
 
 // RecordRDSMutation records a guarded RouterOS/RDS mutation attempt.
 func (m *Metrics) RecordRDSMutation(operation string, err error, dryRun bool, duration time.Duration) {
+	if m == nil {
+		return
+	}
+
 	status := "success"
 	if err != nil {
 		status = "failure"
@@ -771,5 +815,61 @@ func (m *Metrics) RecordRDSMutation(operation string, err error, dryRun bool, du
 
 // RecordRDSMutationRateLimitWait records wait time before a guarded RDS mutation.
 func (m *Metrics) RecordRDSMutationRateLimitWait(operation string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+
 	m.rdsMutationWait.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordRDSCommand records one RouterOS command observed by the RDS SSH client.
+func (m *Metrics) RecordRDSCommand(family, action, class, status string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+
+	m.rdsCommandTotal.WithLabelValues(family, action, class, status).Inc()
+	m.rdsCommandDuration.WithLabelValues(family, action, class).Observe(duration.Seconds())
+}
+
+// RecordRDSMutationAudit stores a bounded recent history of guarded mutations.
+func (m *Metrics) RecordRDSMutationAudit(operation, target, status string, dryRun bool, duration time.Duration) {
+	if m == nil {
+		return
+	}
+
+	m.rdsAuditMu.Lock()
+	defer m.rdsAuditMu.Unlock()
+
+	event := RDSAuditEvent{
+		Timestamp: time.Now(),
+		Operation: operation,
+		Target:    target,
+		Status:    status,
+		DryRun:    dryRun,
+		Duration:  duration,
+	}
+	if m.rdsAuditLimit <= 0 {
+		m.rdsAuditLimit = 128
+	}
+	if len(m.rdsAuditEvents) >= m.rdsAuditLimit {
+		copy(m.rdsAuditEvents, m.rdsAuditEvents[1:])
+		m.rdsAuditEvents[len(m.rdsAuditEvents)-1] = event
+		return
+	}
+	m.rdsAuditEvents = append(m.rdsAuditEvents, event)
+}
+
+// RecentRDSAudit returns a newest-last copy of recent guarded RDS mutations.
+func (m *Metrics) RecentRDSAudit() []RDSAuditEvent {
+	if m == nil {
+		return nil
+	}
+
+	m.rdsAuditMu.Lock()
+	defer m.rdsAuditMu.Unlock()
+
+	events := make([]RDSAuditEvent, len(m.rdsAuditEvents))
+	copy(events, m.rdsAuditEvents)
+	return events
 }

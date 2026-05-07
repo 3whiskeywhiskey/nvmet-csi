@@ -14,6 +14,26 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+type recordingCommandObserver struct {
+	records []recordedCommand
+}
+
+type recordedCommand struct {
+	family string
+	action string
+	class  string
+	status string
+}
+
+func (o *recordingCommandObserver) RecordRDSCommand(family, action, class, status string, duration time.Duration) {
+	o.records = append(o.records, recordedCommand{
+		family: family,
+		action: action,
+		class:  class,
+		status: status,
+	})
+}
+
 // ============================================================================
 // Part A: Pure function tests (no SSH connection needed)
 // ============================================================================
@@ -131,6 +151,22 @@ func TestNewSSHClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunCommandRecordsCommandFailure(t *testing.T) {
+	observer := &recordingCommandObserver{}
+	client := &sshClient{
+		address:         "10.42.68.1",
+		commandObserver: observer,
+	}
+
+	_, err := client.runCommand("/disk add type=file slot=pvc-test")
+	require.Error(t, err)
+	require.Len(t, observer.records, 1)
+	require.Equal(t, "disk", observer.records[0].family)
+	require.Equal(t, "add", observer.records[0].action)
+	require.Equal(t, string(CommandClassMutate), observer.records[0].class)
+	require.Equal(t, "failure", observer.records[0].status)
 }
 
 func TestIsRetryableError(t *testing.T) {

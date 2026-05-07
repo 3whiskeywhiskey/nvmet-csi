@@ -193,6 +193,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 			PrivateKey:         config.RDSPrivateKey,
 			HostKey:            config.RDSHostKey,
 			InsecureSkipVerify: config.RDSInsecureSkipVerify,
+			CommandObserver:    config.Metrics,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create RDS client: %w", err)

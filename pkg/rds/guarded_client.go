@@ -15,6 +15,11 @@ type MutationObserver interface {
 	RecordRDSMutationRateLimitWait(operation string, duration time.Duration)
 }
 
+// MutationAuditObserver records recent guarded mutation decisions for operators.
+type MutationAuditObserver interface {
+	RecordRDSMutationAudit(operation, target, status string, dryRun bool, duration time.Duration)
+}
+
 // GuardedClientConfig controls mutation guardrails around an RDS client.
 type GuardedClientConfig struct {
 	MinInterval time.Duration
@@ -145,7 +150,15 @@ func (c *GuardedClient) mutate(operation string, target string, fn func() error)
 
 	defer func() {
 		if c.observer != nil {
-			c.observer.RecordRDSMutation(operation, err, c.dryRun, time.Since(start))
+			duration := time.Since(start)
+			c.observer.RecordRDSMutation(operation, err, c.dryRun, duration)
+			if auditObserver, ok := c.observer.(MutationAuditObserver); ok {
+				status := "success"
+				if err != nil {
+					status = "failure"
+				}
+				auditObserver.RecordRDSMutationAudit(operation, target, status, c.dryRun, duration)
+			}
 		}
 	}()
 

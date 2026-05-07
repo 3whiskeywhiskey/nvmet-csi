@@ -58,6 +58,9 @@ type ClientConfig struct {
 	HostKey            []byte      // SSH host public key for verification (required for production)
 	HostKeyCallback    interface{} // ssh.HostKeyCallback - custom host key verification (for SSH)
 	InsecureSkipVerify bool        // Skip host key verification (INSECURE - for testing only)
+
+	// CommandObserver receives per-command RouterOS SSH telemetry.
+	CommandObserver CommandObserver
 }
 
 // NewClient creates a new RDS client based on the configuration
