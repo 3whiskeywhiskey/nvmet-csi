@@ -16,6 +16,7 @@ func TestNewMetrics(t *testing.T) {
 	m := NewMetrics()
 	if m == nil {
 		t.Fatal("NewMetrics returned nil")
+		return
 	}
 	if m.registry == nil {
 		t.Error("registry is nil")

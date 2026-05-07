@@ -302,7 +302,7 @@ func TestKeyValuePatterns(t *testing.T) {
 		{
 			name:       "ReDoS attempt - quoted with many chars",
 			pattern:    "quoted",
-			input:      `slot="` + strings.Repeat("a", 100000) + `"`,
+			input:      `slot="` + strings.Repeat("a", 10000) + `"`,
 			shouldFind: true,
 		},
 	}

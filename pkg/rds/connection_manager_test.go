@@ -20,6 +20,7 @@ func TestNewConnectionManager(t *testing.T) {
 
 	if cm == nil {
 		t.Fatal("NewConnectionManager returned nil")
+		return
 	}
 
 	if cm.client != mockClient {
@@ -126,8 +127,8 @@ func TestStartMonitor_DetectsDisconnection(t *testing.T) {
 	mockClient := NewMockClient()
 	mockClient.SetConnected(true)
 
-	// Set persistent error to prevent automatic reconnection in this test
-	disconnectDetected := false
+	// Set persistent error to prevent automatic reconnection in this test.
+	reconnectCalled := make(chan struct{}, 1)
 
 	cm, err := NewConnectionManager(ConnectionManagerConfig{
 		Client:          mockClient,
@@ -135,7 +136,10 @@ func TestStartMonitor_DetectsDisconnection(t *testing.T) {
 		MaxInterval:     200 * time.Millisecond,
 		MaxElapsedTime:  1 * time.Second, // Give up quickly in this test
 		OnReconnect: func() {
-			disconnectDetected = true
+			select {
+			case reconnectCalled <- struct{}{}:
+			default:
+			}
 		},
 	})
 	if err != nil {
@@ -164,8 +168,10 @@ func TestStartMonitor_DetectsDisconnection(t *testing.T) {
 	time.Sleep(6 * time.Second)
 
 	// Monitor should have attempted reconnection and failed
-	if disconnectDetected {
+	select {
+	case <-reconnectCalled:
 		t.Error("expected reconnection to fail, but OnReconnect was called")
+	default:
 	}
 
 	// Stop monitor
@@ -176,13 +182,16 @@ func TestReconnection_WithBackoff(t *testing.T) {
 	mockClient := NewMockClient()
 	mockClient.SetConnected(true)
 
-	reconnectCalled := false
+	reconnectCalled := make(chan struct{}, 1)
 	cm, err := NewConnectionManager(ConnectionManagerConfig{
 		Client:          mockClient,
 		InitialInterval: 100 * time.Millisecond,
 		MaxInterval:     500 * time.Millisecond,
 		OnReconnect: func() {
-			reconnectCalled = true
+			select {
+			case reconnectCalled <- struct{}{}:
+			default:
+			}
 		},
 	})
 	if err != nil {
@@ -205,17 +214,15 @@ func TestReconnection_WithBackoff(t *testing.T) {
 	// Now clear the persistent error so Connect() can succeed
 	mockClient.ClearError()
 
-	// Wait for reconnection
-	time.Sleep(3 * time.Second)
+	select {
+	case <-reconnectCalled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("expected OnReconnect callback to be called")
+	}
 
 	// Should be reconnected
 	if !cm.IsConnected() {
 		t.Error("expected reconnection to succeed")
-	}
-
-	// OnReconnect callback should be called
-	if !reconnectCalled {
-		t.Error("expected OnReconnect callback to be called")
 	}
 
 	cm.Stop()
@@ -339,11 +346,11 @@ func TestReconnect_ManualFailure(t *testing.T) {
 func TestOnReconnectCallback(t *testing.T) {
 	mockClient := NewMockClient()
 
-	callbackCalled := false
+	callbackCalled := make(chan struct{})
 	cm, err := NewConnectionManager(ConnectionManagerConfig{
 		Client: mockClient,
 		OnReconnect: func() {
-			callbackCalled = true
+			close(callbackCalled)
 		},
 	})
 	if err != nil {
@@ -360,10 +367,9 @@ func TestOnReconnectCallback(t *testing.T) {
 	// Trigger reconnection
 	cm.attemptReconnection(ctx)
 
-	// Give callback goroutine time to execute
-	time.Sleep(100 * time.Millisecond)
-
-	if !callbackCalled {
+	select {
+	case <-callbackCalled:
+	case <-ctx.Done():
 		t.Error("expected OnReconnect callback to be called")
 	}
 }

@@ -455,6 +455,7 @@ func TestNewMountRecoverer(t *testing.T) {
 
 	if recoverer == nil {
 		t.Fatal("Expected non-nil recoverer")
+		return
 	}
 
 	if recoverer.config.MaxAttempts != config.MaxAttempts {

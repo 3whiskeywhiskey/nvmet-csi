@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -139,8 +138,8 @@ var _ = AfterSuite(func() {
 		if err == nil {
 			for _, entry := range listResp.Entries {
 				volumeID := entry.Volume.VolumeId
-				// Delete volumes that start with our test run ID
-				if strings.HasPrefix(volumeID, testRunID) {
+				// Delete volumes created by this test run.
+				if isTestVolumeName(volumeID) {
 					klog.Infof("Cleaning up test volume: %s", volumeID)
 					_, _ = controllerClient.DeleteVolume(ctx, &csi.DeleteVolumeRequest{
 						VolumeId: volumeID,

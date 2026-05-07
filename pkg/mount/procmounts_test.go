@@ -359,6 +359,7 @@ func TestGetMountInfo_FindsExistingMount(t *testing.T) {
 
 	if info == nil {
 		t.Fatal("Expected non-nil MountInfo")
+		return
 	}
 
 	if info.Target != "/" {

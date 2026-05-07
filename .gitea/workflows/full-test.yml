@@ -1,8 +1,7 @@
 name: Full Test Suite
 
-# Comprehensive testing on PRs and pushes with .go changes
-# Goal: <15 minutes for thorough validation
-# Pure shell commands - no JavaScript actions (act_runner k8s has no Node.js)
+# Comprehensive testing on PRs and pushes with .go changes.
+# Runs on the nix-ephemeral act_runner; this repository brings its own flake.
 
 on:
   pull_request:
@@ -15,134 +14,97 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
+      - 'flake.nix'
+      - 'flake.lock'
       - '.gitea/workflows/full-test.yml'
 
-jobs:
-  verify-and-test:
-    name: Code Quality & Unit Tests
-    runs-on: golang
-    steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make bc
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NIX_BUILDER_REMOTE: nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_BUILDER_STORE: ssh-ng://nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
+  NIX_CONFIG: |
+    builders = @/etc/nix/machines
+    builders-use-substitutes = true
+    download-attempts = 10
+    fallback = true
+    max-jobs = 0
 
+jobs:
+  ci:
+    name: Full Test Suite
+    runs-on:
+      - nix-ephemeral
+    steps:
       - name: Checkout code
         run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone --depth=1 --branch ${{ github.ref_name }} ${{ github.server_url }}/${{ github.repository }}.git .
+          repo_dir="/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          rm -rf "${repo_dir}"
+          mkdir -p "${repo_dir}"
+          cd "${repo_dir}"
+          git init .
+          git remote add origin "http://gitea-http:3000/${GITHUB_REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 | tr -d '\n')"
+          git -c http.extraHeader="Authorization: Basic ${auth}" fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
 
-      - name: Install dependencies
+      - name: Refresh remote Nix builder certificate
         run: |
-          go mod download
-          make install-tools
+          if command -v refresh-nix-builder-ssh-cert >/dev/null 2>&1; then
+            refresh-nix-builder-ssh-cert
+          else
+            echo "refresh-nix-builder-ssh-cert is unavailable; runner image or Flux manifest is stale" >&2
+            exit 1
+          fi
 
-      - name: Run verification (fmt, vet, lint)
-        run: make verify
+          builder_host="${NIX_BUILDER_HOST:-${NIX_BUILDER_REMOTE#*@}}"
+          ssh_dir="/root/.ssh"
+          mkdir -p "$ssh_dir"
+          chmod 700 "$ssh_dir"
+          ssh-keygen -R "$builder_host" -f "$ssh_dir/known_hosts" >/dev/null 2>&1 || true
+          ssh-keyscan -T 10 "$builder_host" > "$ssh_dir/known_hosts"
+          chmod 644 "$ssh_dir/known_hosts"
 
-      - name: Run unit tests
-        run: make test
+      - name: Smoke remote Nix builder
+        run: |
+          ssh -o BatchMode=yes "$NIX_BUILDER_REMOTE" true
+          nix store ping --store "$NIX_BUILDER_STORE"
+
+      - name: Show toolchain
+        run: |
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          nix develop .#agent -c go version
+          nix develop .#agent -c golangci-lint version
+          nix develop .#agent -c make --version
+
+      - name: Run verification
+        run: |
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          nix develop .#agent -c make verify
 
       - name: Generate coverage report
-        run: make test-coverage
+        run: |
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          nix develop .#agent -c make test-coverage
 
       - name: Check coverage threshold
         run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          echo "Coverage: ${COVERAGE}%"
-
-          if (( $(echo "$COVERAGE < 65" | bc -l) )); then
-            echo "::error::Coverage ${COVERAGE}% is below 65% threshold"
-            exit 1
-          fi
-
-          echo "::notice::Coverage ${COVERAGE}% meets 65% threshold"
-
-  sanity-tests:
-    name: CSI Sanity Tests
-    runs-on: golang
-    steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make
-
-      - name: Checkout code
-        run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone --depth=1 --branch ${{ github.ref_name }} ${{ github.server_url }}/${{ github.repository }}.git .
-
-      - name: Install dependencies
-        run: go mod download
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          nix develop .#agent -c bash scripts/check-coverage-threshold.sh 65
 
       - name: Run CSI sanity tests
         run: |
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
           echo "Running CSI sanity tests with 15 minute timeout..."
-          go test -v -race -timeout 15m ./test/sanity/... 2>&1 | tee sanity-output.log
-        continue-on-error: true
-        id: sanity
-
-      - name: Check sanity test result
-        if: steps.sanity.outcome == 'failure'
-        run: |
-          echo "CSI sanity tests failed - see logs above"
-          exit 1
-
-  e2e-tests:
-    name: E2E Tests
-    runs-on: golang
-    steps:
-      - name: Install build deps
-        run: apt-get update -qq && apt-get install -y -qq make
-
-      - name: Checkout code
-        run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone --depth=1 --branch ${{ github.ref_name }} ${{ github.server_url }}/${{ github.repository }}.git .
+          nix develop .#agent -c bash -lc 'go test -v -race -timeout 15m ./test/sanity/... 2>&1 | tee sanity-output.log'
 
       - name: Run E2E tests
-        run: make e2e-test
-
-  mock-stress-tests:
-    name: Mock RDS Stress Tests
-    runs-on: golang
-    steps:
-      - name: Checkout code
         run: |
-          git config --global credential.helper store
-          echo "https://token:${{ github.token }}@$(echo '${{ github.server_url }}' | sed 's|https\?://||')" > ~/.git-credentials
-          git clone --depth=1 --branch ${{ github.ref_name }} ${{ github.server_url }}/${{ github.repository }}.git .
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          nix develop .#agent -c make e2e-test
 
       - name: Run mock stress tests
         run: |
+          cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
           echo "Running concurrent stress tests..."
-          go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
+          nix develop .#agent -c go test -v -race -timeout 5m ./test/mock/... -run TestConcurrent
           echo "Mock stress tests passed"
-
-  test-summary:
-    name: Test Summary
-    runs-on: golang
-    needs: [verify-and-test, sanity-tests, e2e-tests, mock-stress-tests]
-    if: always()
-    steps:
-      - name: Generate summary
-        run: |
-          echo "Test Results Summary"
-          echo ""
-          echo "| Test Suite | Status |"
-          echo "|------------|--------|"
-          echo "| Code Quality & Unit Tests | ${{ needs.verify-and-test.result }} |"
-          echo "| CSI Sanity Tests | ${{ needs.sanity-tests.result }} |"
-          echo "| E2E Tests | ${{ needs.e2e-tests.result }} |"
-          echo "| Mock Stress Tests | ${{ needs.mock-stress-tests.result }} |"
-          echo ""
-
-          if [ "${{ needs.verify-and-test.result }}" = "success" ] && \
-             [ "${{ needs.sanity-tests.result }}" = "success" ] && \
-             [ "${{ needs.e2e-tests.result }}" = "success" ] && \
-             [ "${{ needs.mock-stress-tests.result }}" = "success" ]; then
-            echo "All tests passed! Ready for review."
-            exit 0
-          else
-            echo "Some tests failed. Please review the logs."
-            exit 1
-          fi
