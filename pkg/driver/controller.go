@@ -447,6 +447,19 @@ func deleteVolumeStatusError(err error) error {
 	return status.Errorf(codes.Internal, "failed to verify volume existence: %v", err)
 }
 
+func expandVolumeStatusError(err error) error {
+	if stderrors.Is(err, utils.ErrConnectionFailed) || stderrors.Is(err, utils.ErrOperationTimeout) {
+		return status.Errorf(codes.Unavailable, "storage backend unavailable: %v", err)
+	}
+	if stderrors.Is(err, utils.ErrResourceExhausted) {
+		return status.Errorf(codes.ResourceExhausted, "insufficient storage on backend for expansion: %v", err)
+	}
+	if backend.IsVolumeNotFound(err) {
+		return status.Errorf(codes.NotFound, "volume not found: %v", err)
+	}
+	return status.Errorf(codes.Internal, "failed to resize volume on backend: %v", err)
+}
+
 // ValidateVolumeCapabilities validates that the requested capabilities are supported
 func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	volumeID := req.GetVolumeId()
@@ -1417,15 +1430,41 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		}, nil
 	}
 
-	// Resize volume on backend
+	expandOpts := backend.CreateVolumeRequest{
+		ID:          volumeID,
+		Path:        existingVolume.Path,
+		SizeBytes:   requiredBytes,
+		NVMETCPPort: existingVolume.NVMETCPPort,
+		NVMETCPNQN:  existingVolume.NVMETCPNQN,
+	}
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(ctx, expandOpts)
+	if err != nil {
+		return nil, expandVolumeStatusError(err)
+	}
+	klog.V(3).Infof("ControllerExpandVolume plan for %s: action=%s reason=%q", volumeID, plan.Action, plan.Reason)
+
+	switch plan.Action {
+	case backend.VolumeActionNoop:
+		klog.V(4).Infof("Volume %s already matches requested expansion size after planning", volumeID)
+		return &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         requiredBytes,
+			NodeExpansionRequired: false,
+		}, nil
+	case backend.VolumeActionResize:
+	case backend.VolumeActionCreate:
+		return nil, status.Errorf(codes.NotFound, "volume %s disappeared during expansion planning", volumeID)
+	case backend.VolumeActionConflict:
+		return nil, status.Errorf(codes.FailedPrecondition, "unsafe volume expansion for %s: %s", volumeID, plan.Reason)
+	default:
+		return nil, status.Errorf(codes.FailedPrecondition, "unexpected expansion plan for %s: action=%s reason=%s", volumeID, plan.Action, plan.Reason)
+	}
+
+	// Resize volume on backend through the observed plan.
 	klog.V(4).Infof("Expanding volume %s from %d to %d bytes", volumeID, existingVolume.SizeBytes, requiredBytes)
 
-	if err := storageBackend.ResizeVolume(ctx, volumeID, requiredBytes); err != nil {
-		// Check if this is a capacity error
-		if stderrors.Is(err, utils.ErrResourceExhausted) {
-			return nil, status.Errorf(codes.ResourceExhausted, "insufficient storage on backend for expansion: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to resize volume on backend: %v", err)
+	if _, err := storageBackend.ApplyVolumePlan(ctx, plan, backend.VolumeApplyOptions{}); err != nil {
+		return nil, expandVolumeStatusError(err)
 	}
 
 	// Backend layer already logged "Resized volume X" at V(2) - no duplicate needed.
