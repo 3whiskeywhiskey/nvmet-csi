@@ -543,6 +543,87 @@ func TestConcurrentSameSnapshotMutations(t *testing.T) {
 	}
 }
 
+// TestConcurrentSameFileDelete validates idempotency: concurrent DeleteFile with same backing file.
+func TestConcurrentSameFileDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping stress test in short mode")
+	}
+
+	setupStressTestBasePaths(t)
+
+	server, err := NewMockRDSServer(0)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:            server.Address(),
+		Port:               server.Port(),
+		User:               "admin",
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	volumeID := "concurrent-file-delete"
+	filePath := fmt.Sprintf("/storage-pool/test/%s.img", volumeID)
+	if err := client.CreateVolume(rds.CreateVolumeOptions{
+		Slot:          volumeID,
+		FilePath:      filePath,
+		FileSizeBytes: 1 * 1024 * 1024 * 1024,
+		NVMETCPPort:   4420,
+		NVMETCPNQN:    fmt.Sprintf("nqn.2000-02.com.mikrotik:%s", volumeID),
+	}); err != nil {
+		t.Fatalf("failed to create volume: %v", err)
+	}
+	server.ClearCommandHistory()
+
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	var successCount, failCount atomic.Int32
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := client.DeleteFile(filePath); err != nil {
+				failCount.Add(1)
+			} else {
+				successCount.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if successCount.Load() != int32(numGoroutines) {
+		t.Errorf("expected all concurrent idempotent file deletes to succeed, got %d successes", successCount.Load())
+	}
+	if failCount.Load() != 0 {
+		t.Errorf("expected 0 file delete failures, got %d", failCount.Load())
+	}
+
+	removes := 0
+	for _, entry := range server.GetCommandHistory() {
+		if strings.HasPrefix(entry.Command, "/file remove ") && strings.Contains(entry.Command, strings.TrimPrefix(filePath, "/")) {
+			removes++
+		}
+	}
+	if removes != 1 {
+		t.Errorf("expected exactly 1 /file remove for idempotent concurrent file delete, got %d", removes)
+	}
+
+	_ = client.DeleteVolume(volumeID)
+}
+
 // TestConcurrentCreateDelete validates concurrent create and delete operations
 func TestConcurrentCreateDelete(t *testing.T) {
 	if testing.Short() {
