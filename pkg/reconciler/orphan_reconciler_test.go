@@ -326,7 +326,7 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 		files: []rds.FileInfo{
 			{Name: "pvc-active.img", Path: "/storage-pool/metal-csi/pvc-active.img", SizeBytes: 10 << 30, Type: "file"},
 			{Name: "pvc-orphan.img", Path: "/storage-pool/metal-csi/pvc-orphan.img", SizeBytes: 20 << 30, Type: "file"},
-			{Name: "pvc-file-orphan.img", Path: "/storage-pool/metal-csi/pvc-file-orphan.img", SizeBytes: 5 << 30, Type: "file"},
+			{Name: "pvc-file-orphan.img", Path: "/storage-pool/metal-csi/pvc-file-orphan.img", SizeBytes: 5 << 30, Type: "file", CreatedAt: time.Now().Add(-time.Hour)},
 			{Name: "notes.txt", Path: "/storage-pool/metal-csi/notes.txt", SizeBytes: 1, Type: "file"},
 		},
 		deletedVolumes: []string{},
@@ -381,6 +381,109 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 	}
 	if len(mockRDS.deletedVolumes) != 0 || len(mockRDS.deletedFiles) != 0 {
 		t.Fatalf("BuildInventory mutated RDS: deletedVolumes=%v deletedFiles=%v", mockRDS.deletedVolumes, mockRDS.deletedFiles)
+	}
+}
+
+func TestOrphanReconciler_FileCleanupGuardrails(t *testing.T) {
+	oldEnough := time.Now().Add(-time.Hour)
+	recent := time.Now()
+	tests := []struct {
+		name                string
+		file                rds.FileInfo
+		wantInventoryOrphan bool
+		wantPlannedMutation bool
+		wantDeleted         bool
+	}{
+		{
+			name: "manual image ignored",
+			file: rds.FileInfo{
+				Name:      "manual-backup.img",
+				Path:      "/storage-pool/metal-csi/manual-backup.img",
+				SizeBytes: 5 << 30,
+				Type:      "file",
+				CreatedAt: oldEnough,
+			},
+		},
+		{
+			name: "directory image ignored",
+			file: rds.FileInfo{
+				Name:      "pvc-directory.img",
+				Path:      "/storage-pool/metal-csi/pvc-directory.img",
+				SizeBytes: 0,
+				Type:      "directory",
+				CreatedAt: oldEnough,
+			},
+		},
+		{
+			name: "unknown age not planned",
+			file: rds.FileInfo{
+				Name:      "pvc-unknown-age.img",
+				Path:      "/storage-pool/metal-csi/pvc-unknown-age.img",
+				SizeBytes: 5 << 30,
+				Type:      "file",
+			},
+			wantInventoryOrphan: true,
+		},
+		{
+			name: "recent file not planned",
+			file: rds.FileInfo{
+				Name:      "pvc-recent.img",
+				Path:      "/storage-pool/metal-csi/pvc-recent.img",
+				SizeBytes: 5 << 30,
+				Type:      "file",
+				CreatedAt: recent,
+			},
+			wantInventoryOrphan: true,
+		},
+		{
+			name: "old CSI image planned and deleted",
+			file: rds.FileInfo{
+				Name:      "pvc-old.img",
+				Path:      "/storage-pool/metal-csi/pvc-old.img",
+				SizeBytes: 5 << 30,
+				Type:      "file",
+				CreatedAt: oldEnough,
+			},
+			wantInventoryOrphan: true,
+			wantPlannedMutation: true,
+			wantDeleted:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRDS := &mockRDSClient{
+				files: []rds.FileInfo{tt.file},
+			}
+			reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
+				RDSClient:            mockRDS,
+				K8sClient:            fake.NewSimpleClientset(),
+				GracePeriod:          time.Minute,
+				DryRun:               false,
+				Enabled:              true,
+				BasePath:             "/storage-pool/metal-csi",
+				MinimumConfirmations: 1,
+			})
+			if err != nil {
+				t.Fatalf("NewOrphanReconciler() failed: %v", err)
+			}
+
+			inventory, err := reconciler.BuildInventory(context.Background())
+			if err != nil {
+				t.Fatalf("BuildInventory() failed: %v", err)
+			}
+			if got := len(inventory.FileOrphans) == 1; got != tt.wantInventoryOrphan {
+				t.Fatalf("file orphan found = %t, want %t: %+v", got, tt.wantInventoryOrphan, inventory.FileOrphans)
+			}
+			if got := hasOrphanMutation(inventory.PlannedMutations, OrphanMutationDeleteFile, tt.file.Path); got != tt.wantPlannedMutation {
+				t.Fatalf("planned delete = %t, want %t: %+v", got, tt.wantPlannedMutation, inventory.PlannedMutations)
+			}
+
+			reconciler.applyOrphanInventory(inventory)
+			if got := containsString(mockRDS.deletedFiles, tt.file.Path); got != tt.wantDeleted {
+				t.Fatalf("deleted file = %t, want %t: deletedFiles=%v", got, tt.wantDeleted, mockRDS.deletedFiles)
+			}
+		})
 	}
 }
 
@@ -467,8 +570,8 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 				// Note: Mock returns normalized paths (with leading /) as parseFileInfo() would
 				// In production, RouterOS /file print returns paths without /, but parseFileInfo() adds it
 				{Name: "pvc-123.img", Path: "/storage-pool/metal-csi/pvc-123.img", SizeBytes: 10737418240, Type: "file"},
-				{Name: "pvc-orphan1.img", Path: "/storage-pool/metal-csi/pvc-orphan1.img", SizeBytes: 10737418240, Type: "file"},
-				{Name: "pvc-orphan2.img", Path: "/storage-pool/metal-csi/pvc-orphan2.img", SizeBytes: 10737418240, Type: "file"},
+				{Name: "pvc-orphan1.img", Path: "/storage-pool/metal-csi/pvc-orphan1.img", SizeBytes: 10737418240, Type: "file", CreatedAt: time.Now().Add(-time.Hour)},
+				{Name: "pvc-orphan2.img", Path: "/storage-pool/metal-csi/pvc-orphan2.img", SizeBytes: 10737418240, Type: "file", CreatedAt: time.Now().Add(-time.Hour)},
 			},
 			k8sPVs: []*v1.PersistentVolume{
 				{
@@ -592,4 +695,22 @@ func activePV(name, volumeHandle string) *v1.PersistentVolume {
 			},
 		},
 	}
+}
+
+func hasOrphanMutation(mutations []OrphanMutation, action OrphanMutationAction, target string) bool {
+	for _, mutation := range mutations {
+		if mutation.Action == action && mutation.Target == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

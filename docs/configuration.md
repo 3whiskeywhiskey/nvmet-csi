@@ -146,6 +146,10 @@ args:
 - **orphan-min-confirmations:** Consecutive inventories required before cleanup is planned (default: 2)
 - **orphan-dry-run:** Log orphans without deleting (default: true, set false to enable cleanup)
 
+File orphan cleanup only plans deletes for `pvc-*.img` files with known
+timestamps older than the grace period. Manual `.img` files and unknown-age
+files are left alone.
+
 See [docs/orphan-reconciler.md](orphan-reconciler.md) for details.
 
 ## RDS Mutation Guardrails
