@@ -33,8 +33,10 @@ func TestParseBackendSelection(t *testing.T) {
 		{
 			name: "linux zol nvmet local",
 			params: map[string]string{
-				"backend":  backend.TypeLinuxZOLNVMET,
-				"executor": backend.ExecutorLocal,
+				"backend":       backend.TypeLinuxZOLNVMET,
+				"executor":      backend.ExecutorLocal,
+				"zfsPool":       "tank/nvmet",
+				"targetAddress": "10.42.0.10",
 			},
 			wantType: backend.TypeLinuxZOLNVMET,
 			wantExec: backend.ExecutorLocal,
@@ -42,8 +44,11 @@ func TestParseBackendSelection(t *testing.T) {
 		{
 			name: "linux zol nvmet ssh",
 			params: map[string]string{
-				"backend":  backend.TypeLinuxZOLNVMET,
-				"executor": backend.ExecutorSSH,
+				"backend":       backend.TypeLinuxZOLNVMET,
+				"executor":      backend.ExecutorSSH,
+				"zfsPool":       "tank/nvmet",
+				"targetAddress": "10.42.0.10",
+				"sshTarget":     "storage@r740xd",
 			},
 			wantType: backend.TypeLinuxZOLNVMET,
 			wantExec: backend.ExecutorSSH,
@@ -87,8 +92,37 @@ func TestParseBackendSelectionInvalid(t *testing.T) {
 			params: map[string]string{
 				"backend":  backend.TypeLinuxZOLNVMET,
 				"executor": "routeros",
+				"zfsPool":  "tank/nvmet",
 			},
 			errorContains: "requires executor",
+		},
+		{
+			name: "linux missing zfs pool rejected",
+			params: map[string]string{
+				"backend":       backend.TypeLinuxZOLNVMET,
+				"executor":      backend.ExecutorLocal,
+				"targetAddress": "10.42.0.10",
+			},
+			errorContains: "requires zfsPool",
+		},
+		{
+			name: "linux missing target address rejected",
+			params: map[string]string{
+				"backend":  backend.TypeLinuxZOLNVMET,
+				"executor": backend.ExecutorLocal,
+				"zfsPool":  "tank/nvmet",
+			},
+			errorContains: "requires targetAddress or nvmeAddress",
+		},
+		{
+			name: "linux ssh missing target rejected",
+			params: map[string]string{
+				"backend":       backend.TypeLinuxZOLNVMET,
+				"executor":      backend.ExecutorSSH,
+				"zfsPool":       "tank/nvmet",
+				"targetAddress": "10.42.0.10",
+			},
+			errorContains: "requires sshTarget",
 		},
 	}
 

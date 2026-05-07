@@ -318,6 +318,42 @@ storageClasses:
     accessModes:
       - ReadWriteMany
 
+  # Linux ZoL + kernel nvmet StorageClass example.
+  # This is disabled by default. For local executor mode, schedule the CSI
+  # controller onto the ZoL host and grant the pod access to zfs + configfs.
+  - name: nvmet-zol-local
+    enabled: false
+    isDefault: false
+    backend: linux-zol-nvmet
+    executor: local
+    zfsPool: tank/nvmet
+    targetAddress: ""
+    fsType: ext4
+    nvmeAddress: ""
+    nvmePort: "4420"
+    volumeBindingMode: WaitForFirstConsumer
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    mountOptions: []
+
+  # Remote ZoL host over SSH. This follows the same trusted SSH key pattern as
+  # RouterOS/RDS, but emits Linux zfs/configfs commands instead.
+  - name: nvmet-zol-ssh
+    enabled: false
+    isDefault: false
+    backend: linux-zol-nvmet
+    executor: ssh
+    zfsPool: tank/nvmet
+    targetAddress: ""
+    sshTarget: storage@r740xd
+    fsType: ext4
+    nvmeAddress: ""
+    nvmePort: "4420"
+    volumeBindingMode: WaitForFirstConsumer
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    mountOptions: []
+
 # VolumeSnapshotClass configuration
 snapshotClass:
   # Enable VolumeSnapshotClass creation

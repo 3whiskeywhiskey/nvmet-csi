@@ -88,11 +88,6 @@ func main() {
 		klog.Fatal("Must specify at least one of --controller or --node")
 	}
 
-	// Validate required flags
-	if *controllerMode && *rdsAddress == "" {
-		klog.Fatal("--rds-address is required in controller mode")
-	}
-
 	if *nodeMode && *nodeID == "" {
 		klog.Fatal("--node-id is required in node mode")
 	}
@@ -101,7 +96,7 @@ func main() {
 	var privateKey []byte
 	var hostKey []byte
 	var err error
-	if *controllerMode {
+	if *controllerMode && *rdsAddress != "" {
 		privateKey, err = os.ReadFile(*rdsKeyFile)
 		if err != nil {
 			klog.Fatalf("Failed to read SSH key from %s: %v", *rdsKeyFile, err)
@@ -123,11 +118,15 @@ func main() {
 		} else if *rdsInsecure {
 			klog.Warning("SECURITY WARNING: SSH host key verification is disabled. This is INSECURE and should only be used for testing!")
 		}
+	} else if *controllerMode {
+		klog.Info("No RDS address configured; RouterOS/RDS backend will be unavailable unless configured later")
 	}
 
-	// Create Kubernetes client if needed (for orphan reconciler, attachment tracking, or VMI serialization)
+	// Create Kubernetes client if needed. The controller uses it for durable
+	// backend resolution from PersistentVolume attributes during operations that
+	// do not carry StorageClass parameters, such as DeleteVolume and expansion.
 	var k8sClient kubernetes.Interface
-	if *controllerMode && (*enableOrphanReconciler || *enableVMISerialization) {
+	if *controllerMode {
 		k8sClient, err = createKubernetesClient(*kubeconfig)
 		if err != nil {
 			klog.Fatalf("Failed to create Kubernetes client: %v", err)

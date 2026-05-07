@@ -105,7 +105,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// Get parameters from StorageClass
 	params := req.GetParameters()
-	if err := cs.validateBackendSelection(params); err != nil {
+	storageBackend, selection, err := cs.driver.controllerBackendForParams(params)
+	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
 	}
 	volumeBasePath := defaultVolumeBasePath
@@ -143,7 +144,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Errorf(codes.Internal, "failed to generate file path: %v", err)
 	}
 
-	storageBackend := cs.driver.controllerBackend()
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -182,7 +182,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	if plan.Action == backend.VolumeActionNoop && plan.Actual != nil {
 		klog.V(2).Infof("Volume %s already matches desired state (idempotent)", volumeID)
-		return cs.createVolumeResponse(volumeID, plan.Actual.SizeBytes, params, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.Path), nil
+		cs.driver.rememberVolumeBackendSelection(volumeID, selection)
+		return cs.createVolumeResponse(volumeID, plan.Actual.SizeBytes, params, selection, nvmeParams, migrationTimeout, plan.Actual.NVMETCPPort, plan.Actual.NVMETCPNQN, plan.Actual.Path), nil
 	}
 
 	if plan.Action == backend.VolumeActionResize && plan.Actual != nil {
@@ -207,27 +208,39 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// Log volume create success
 	secLogger.LogVolumeCreate(volumeID, req.GetName(), security.OutcomeSuccess, nil, time.Since(startTime))
+	cs.driver.rememberVolumeBackendSelection(volumeID, selection)
 
 	// Return volume information
-	return cs.createVolumeResponse(volumeID, requiredBytes, params, nvmeParams, migrationTimeout, nvmePort, nqn, filePath), nil
+	if plan.Desired != nil {
+		requiredBytes = plan.Desired.SizeBytes
+		nvmePort = plan.Desired.NVMETCPPort
+		nqn = plan.Desired.NVMETCPNQN
+		filePath = plan.Desired.Path
+	}
+	return cs.createVolumeResponse(volumeID, requiredBytes, params, selection, nvmeParams, migrationTimeout, nvmePort, nqn, filePath), nil
 }
 
-func (cs *ControllerServer) createVolumeResponse(volumeID string, capacityBytes int64, params map[string]string, nvmeParams NVMEConnectionParams, migrationTimeout time.Duration, nvmePort int, nqn, filePath string) *csi.CreateVolumeResponse {
+func (cs *ControllerServer) createVolumeResponse(volumeID string, capacityBytes int64, params map[string]string, selection BackendSelection, nvmeParams NVMEConnectionParams, migrationTimeout time.Duration, nvmePort int, nqn, filePath string) *csi.CreateVolumeResponse {
+	volumeContext := map[string]string{
+		"rdsAddress":              cs.getRDSAddress(params),
+		"nvmeAddress":             cs.getNVMEAddress(params),
+		"nvmePort":                fmt.Sprintf("%d", nvmePort),
+		"nqn":                     nqn,
+		"volumePath":              filePath,
+		"ctrlLossTmo":             fmt.Sprintf("%d", nvmeParams.CtrlLossTmo),
+		"reconnectDelay":          fmt.Sprintf("%d", nvmeParams.ReconnectDelay),
+		"keepAliveTmo":            fmt.Sprintf("%d", nvmeParams.KeepAliveTmo),
+		"migrationTimeoutSeconds": fmt.Sprintf("%.0f", migrationTimeout.Seconds()),
+	}
+	for key, value := range selection.volumeContext() {
+		volumeContext[key] = value
+	}
+
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      volumeID,
 			CapacityBytes: capacityBytes,
-			VolumeContext: map[string]string{
-				"rdsAddress":              cs.getRDSAddress(params),
-				"nvmeAddress":             cs.getNVMEAddress(params),
-				"nvmePort":                fmt.Sprintf("%d", nvmePort),
-				"nqn":                     nqn,
-				"volumePath":              filePath,
-				"ctrlLossTmo":             fmt.Sprintf("%d", nvmeParams.CtrlLossTmo),
-				"reconnectDelay":          fmt.Sprintf("%d", nvmeParams.ReconnectDelay),
-				"keepAliveTmo":            fmt.Sprintf("%d", nvmeParams.KeepAliveTmo),
-				"migrationTimeoutSeconds": fmt.Sprintf("%.0f", migrationTimeout.Seconds()),
-			},
+			VolumeContext: volumeContext,
 		},
 	}
 }
@@ -241,14 +254,20 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	requiredBytes int64,
 ) (*csi.CreateVolumeResponse, error) {
 	klog.V(4).Infof("Creating volume %s from snapshot %s", volumeID, snapshotID)
-	storageBackend := cs.driver.controllerBackend()
-	if storageBackend == nil {
-		return nil, status.Error(codes.Internal, "storage backend not initialized")
-	}
 
 	// Validate snapshot ID
 	if err := utils.ValidateSnapshotID(snapshotID); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
+	}
+
+	// Get parameters
+	params := req.GetParameters()
+	storageBackend, selection, err := cs.driver.controllerBackendForParams(params)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
+	if storageBackend == nil {
+		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
 
 	// Verify snapshot exists
@@ -265,11 +284,6 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 		requiredBytes = snapshotInfo.SizeBytes
 	}
 
-	// Get parameters
-	params := req.GetParameters()
-	if err := cs.validateBackendSelection(params); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
-	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok {
 		volumeBasePath = path
@@ -318,31 +332,17 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	}
 
 	klog.V(2).Infof("Restored volume %s from snapshot %s", volumeID, snapshotID)
+	cs.driver.rememberVolumeBackendSelection(volumeID, selection)
 
-	return &csi.CreateVolumeResponse{
-		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: requiredBytes,
-			VolumeContext: map[string]string{
-				"rdsAddress":              cs.getRDSAddress(params),
-				"nvmeAddress":             cs.getNVMEAddress(params),
-				"nvmePort":                fmt.Sprintf("%d", nvmePort),
-				"nqn":                     nqn,
-				"volumePath":              filePath,
-				"ctrlLossTmo":             fmt.Sprintf("%d", nvmeParams.CtrlLossTmo),
-				"reconnectDelay":          fmt.Sprintf("%d", nvmeParams.ReconnectDelay),
-				"keepAliveTmo":            fmt.Sprintf("%d", nvmeParams.KeepAliveTmo),
-				"migrationTimeoutSeconds": fmt.Sprintf("%.0f", migrationTimeout.Seconds()),
-			},
-			ContentSource: &csi.VolumeContentSource{
-				Type: &csi.VolumeContentSource_Snapshot{
-					Snapshot: &csi.VolumeContentSource_SnapshotSource{
-						SnapshotId: snapshotID,
-					},
-				},
+	resp := cs.createVolumeResponse(volumeID, requiredBytes, params, selection, nvmeParams, migrationTimeout, nvmePort, nqn, filePath)
+	resp.Volume.ContentSource = &csi.VolumeContentSource{
+		Type: &csi.VolumeContentSource_Snapshot{
+			Snapshot: &csi.VolumeContentSource_SnapshotSource{
+				SnapshotId: snapshotID,
 			},
 		},
-	}, nil
+	}
+	return resp, nil
 }
 
 // DeleteVolume removes a volume from the selected storage backend.
@@ -360,7 +360,10 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID: %v", err)
 	}
 
-	storageBackend := cs.driver.controllerBackend()
+	storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -399,6 +402,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// Log volume delete success
 	secLogger.LogVolumeDelete(volumeID, "", security.OutcomeSuccess, nil, time.Since(startTime))
+	cs.driver.forgetVolumeBackendSelection(volumeID)
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -435,7 +439,10 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}
 
 	// Check if volume exists
-	storageBackend := cs.driver.controllerBackend()
+	storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -463,7 +470,8 @@ func (cs *ControllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacit
 
 	// Get parameters
 	params := req.GetParameters()
-	if err := cs.validateBackendSelection(params); err != nil {
+	storageBackend, _, err := cs.driver.controllerBackendForParams(params)
+	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
 	}
 	volumeBasePath := defaultVolumeBasePath
@@ -471,7 +479,6 @@ func (cs *ControllerServer) GetCapacity(ctx context.Context, req *csi.GetCapacit
 		volumeBasePath = path
 	}
 
-	storageBackend := cs.driver.controllerBackend()
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -676,10 +683,14 @@ func (cs *ControllerServer) ControllerPublishVolume(ctx context.Context, req *cs
 		}
 	}
 
-	storageBackend := cs.driver.controllerBackend()
+	storageBackend, selection, err := cs.driver.controllerBackendForParams(req.GetVolumeContext())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
+	cs.driver.rememberVolumeBackendSelection(volumeID, selection)
 
 	// Verify volume exists on backend
 	volume, err := storageBackend.GetVolume(ctx, volumeID)
@@ -1058,7 +1069,11 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
 	}
 
-	storageBackend := cs.driver.controllerBackend()
+	params := req.GetParameters()
+	storageBackend, _, err := cs.driver.controllerBackendForParams(params)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -1104,10 +1119,6 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 
 	// 5. Determine base path for snapshot file storage
 	// Snapshots are stored in the same base directory as volumes (paramVolumePath).
-	params := req.GetParameters()
-	if err := cs.validateBackendSelection(params); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
-	}
 	volumeBasePath := defaultVolumeBasePath
 	if path, ok := params[paramVolumePath]; ok && path != "" {
 		volumeBasePath = path
@@ -1324,7 +1335,10 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		return nil, status.Errorf(codes.OutOfRange, "required bytes %d exceeds maximum %d", requiredBytes, maxVolumeSizeBytes)
 	}
 
-	storageBackend := cs.driver.controllerBackend()
+	storageBackend, _, err := cs.driver.controllerBackendForVolume(ctx, volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid backend selection: %v", err)
+	}
 	if storageBackend == nil {
 		return nil, status.Error(codes.Internal, "storage backend not initialized")
 	}
@@ -1421,21 +1435,6 @@ func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi
 
 // Helper functions
 
-func (cs *ControllerServer) validateBackendSelection(params map[string]string) error {
-	selection, err := ParseBackendSelection(params)
-	if err != nil {
-		return err
-	}
-	storageBackend := cs.driver.controllerBackend()
-	if storageBackend == nil {
-		return fmt.Errorf("storage backend not initialized")
-	}
-	if selection.Type != storageBackend.Name() {
-		return fmt.Errorf("selected backend %q is not available in this controller (active backend: %q)", selection.Type, storageBackend.Name())
-	}
-	return nil
-}
-
 // validateVolumeCapabilities checks if the requested capabilities are supported
 func (cs *ControllerServer) validateVolumeCapabilities(caps []*csi.VolumeCapability) error {
 	for _, cap := range caps {
@@ -1479,6 +1478,12 @@ func (cs *ControllerServer) getRDSAddress(params map[string]string) string {
 	if addr, ok := params[paramRDSAddress]; ok {
 		return addr
 	}
+	if addr, ok := params[paramTargetAddr]; ok {
+		return addr
+	}
+	if addr, ok := params[paramNVMEAddress]; ok {
+		return addr
+	}
 	// Fall back to driver's RDS client address
 	if storageBackend := cs.driver.controllerBackend(); storageBackend != nil {
 		return storageBackend.Address()
@@ -1490,6 +1495,9 @@ func (cs *ControllerServer) getRDSAddress(params map[string]string) string {
 func (cs *ControllerServer) getNVMEAddress(params map[string]string) string {
 	// Prefer nvmeAddress if specified (for separate storage network)
 	if addr, ok := params[paramNVMEAddress]; ok {
+		return addr
+	}
+	if addr, ok := params[paramTargetAddr]; ok {
 		return addr
 	}
 	// Fall back to backend address if nvmeAddress not specified.
