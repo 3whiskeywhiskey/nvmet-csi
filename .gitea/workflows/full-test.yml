@@ -89,15 +89,7 @@ jobs:
       - name: Check coverage threshold
         run: |
           cd "/tmp/nvmet-csi-${GITHUB_RUN_ID}-${GITHUB_JOB}"
-          COVERAGE="$(nix develop .#agent -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
-          echo "Coverage: ${COVERAGE}%"
-
-          if (( $(echo "$COVERAGE < 65" | bc -l) )); then
-            echo "::error::Coverage ${COVERAGE}% is below 65% threshold"
-            exit 1
-          fi
-
-          echo "::notice::Coverage ${COVERAGE}% meets 65% threshold"
+          nix develop .#agent -c bash scripts/check-coverage-threshold.sh 65
 
       - name: Run CSI sanity tests
         run: |

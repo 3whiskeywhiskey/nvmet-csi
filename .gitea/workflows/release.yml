@@ -94,13 +94,7 @@ jobs:
         run: |
           cd "/tmp/nvmet-csi-release-test-${GITHUB_RUN_ID}"
           nix develop .#agent -c make test-coverage
-          COVERAGE="$(nix develop .#agent -c go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')"
-          echo "Coverage: ${COVERAGE}%"
-
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "Coverage ${COVERAGE}% is below 60% threshold"
-            exit 1
-          fi
+          nix develop .#agent -c bash scripts/check-coverage-threshold.sh 60
 
   build-release:
     name: Build Release Binary
