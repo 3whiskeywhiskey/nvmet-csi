@@ -93,6 +93,7 @@ type Metrics struct {
 	attachmentOpDuration      *prometheus.HistogramVec
 	attachmentGracePeriodUsed prometheus.Counter
 	attachmentStaleCleared    prometheus.Counter
+	staleVACleanupTotal       *prometheus.CounterVec
 
 	// Migration operation metrics
 	migrationsTotal   *prometheus.CounterVec
@@ -271,6 +272,16 @@ func NewMetrics() *Metrics {
 			Help:      "Total stale attachments cleared by reconciler",
 		}),
 
+		staleVACleanupTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: "attachment",
+				Name:      "stale_volumeattachment_cleanup_total",
+				Help:      "Total stale VolumeAttachment cleanup observations by result and dry-run mode",
+			},
+			[]string{"result", "dry_run"},
+		),
+
 		migrationsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
@@ -409,6 +420,7 @@ func NewMetrics() *Metrics {
 		m.attachmentOpDuration,
 		m.attachmentGracePeriodUsed,
 		m.attachmentStaleCleared,
+		m.staleVACleanupTotal,
 		m.migrationsTotal,
 		m.migrationDuration,
 		m.activeMigrations,
@@ -813,6 +825,36 @@ func (m *Metrics) RecordGracePeriodUsed() {
 // RecordStaleAttachmentCleared records when reconciler cleared a stale attachment.
 func (m *Metrics) RecordStaleAttachmentCleared() {
 	m.attachmentStaleCleared.Inc()
+}
+
+// RecordStaleVolumeAttachmentCandidate records a stale VolumeAttachment candidate.
+func (m *Metrics) RecordStaleVolumeAttachmentCandidate(dryRun bool) {
+	m.staleVACleanupTotal.WithLabelValues("candidate", dryRunLabel(dryRun)).Inc()
+}
+
+// RecordStaleVolumeAttachmentPlanned records a cleanup plan for a stale VolumeAttachment.
+func (m *Metrics) RecordStaleVolumeAttachmentPlanned(dryRun bool) {
+	m.staleVACleanupTotal.WithLabelValues("planned", dryRunLabel(dryRun)).Inc()
+}
+
+// RecordStaleVolumeAttachmentDeleteAttempt records an active stale VolumeAttachment delete attempt.
+func (m *Metrics) RecordStaleVolumeAttachmentDeleteAttempt() {
+	m.staleVACleanupTotal.WithLabelValues("delete_attempt", "false").Inc()
+}
+
+// RecordStaleVolumeAttachmentDeleteSuccess records a successful stale VolumeAttachment delete.
+func (m *Metrics) RecordStaleVolumeAttachmentDeleteSuccess() {
+	m.staleVACleanupTotal.WithLabelValues("delete_success", "false").Inc()
+}
+
+// RecordStaleVolumeAttachmentDeleteFailure records a failed stale VolumeAttachment delete.
+func (m *Metrics) RecordStaleVolumeAttachmentDeleteFailure() {
+	m.staleVACleanupTotal.WithLabelValues("delete_failure", "false").Inc()
+}
+
+// RecordStaleVolumeAttachmentDeleteNotFound records a stale VolumeAttachment that disappeared before deletion.
+func (m *Metrics) RecordStaleVolumeAttachmentDeleteNotFound() {
+	m.staleVACleanupTotal.WithLabelValues("delete_not_found", "false").Inc()
 }
 
 // RecordReconcileAction records a reconciliation action.

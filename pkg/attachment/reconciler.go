@@ -432,7 +432,13 @@ func (r *AttachmentReconciler) reconcileStaleVolumeAttachments(ctx context.Conte
 			candidate.firstSeen = now
 		}
 		observed[va.Name] = candidate
+		if r.metrics != nil {
+			r.metrics.RecordStaleVolumeAttachmentCandidate(!r.staleVolumeAttachmentDelete)
+		}
 		if candidate.confirmations >= r.staleVolumeAttachmentMinConfs {
+			if r.metrics != nil {
+				r.metrics.RecordStaleVolumeAttachmentPlanned(!r.staleVolumeAttachmentDelete)
+			}
 			planned = append(planned, candidate)
 		}
 	}
@@ -448,14 +454,24 @@ func (r *AttachmentReconciler) reconcileStaleVolumeAttachments(ctx context.Conte
 
 		klog.Infof("Deleting stale VolumeAttachment: name=%s volume=%s node=%s confirmations=%d reason=%q",
 			candidate.name, candidate.volumeID, candidate.nodeID, candidate.confirmations, candidate.reason)
+		if r.metrics != nil {
+			r.metrics.RecordStaleVolumeAttachmentDeleteAttempt()
+		}
 		if err := r.k8sClient.StorageV1().VolumeAttachments().Delete(ctx, candidate.name, metav1.DeleteOptions{}); err != nil {
 			if errors.IsNotFound(err) {
+				if r.metrics != nil {
+					r.metrics.RecordStaleVolumeAttachmentDeleteNotFound()
+				}
 				continue
 			}
 			klog.Errorf("Failed to delete stale VolumeAttachment %s for volume %s: %v", candidate.name, candidate.volumeID, err)
+			if r.metrics != nil {
+				r.metrics.RecordStaleVolumeAttachmentDeleteFailure()
+			}
 			continue
 		}
 		if r.metrics != nil {
+			r.metrics.RecordStaleVolumeAttachmentDeleteSuccess()
 			r.metrics.RecordReconcileAction("delete_stale_volumeattachment")
 		}
 	}
