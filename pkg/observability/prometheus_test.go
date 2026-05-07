@@ -554,6 +554,58 @@ func TestRecordEventPosted_ReasonLabels(t *testing.T) {
 	}
 }
 
+func TestRecordStaleVolumeAttachmentCleanupOutcomes(t *testing.T) {
+	m := NewMetrics()
+
+	m.RecordStaleVolumeAttachmentCandidate(true)
+	m.RecordStaleVolumeAttachmentPlanned(true)
+	m.RecordStaleVolumeAttachmentCandidate(false)
+	m.RecordStaleVolumeAttachmentPlanned(false)
+	m.RecordStaleVolumeAttachmentDeleteAttempt()
+	m.RecordStaleVolumeAttachmentDeleteSuccess()
+	m.RecordStaleVolumeAttachmentDeleteFailure()
+	m.RecordStaleVolumeAttachmentDeleteNotFound()
+
+	handler := m.Handler()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "candidate",
+		"dry_run": "true",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "planned",
+		"dry_run": "true",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "candidate",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "planned",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "delete_attempt",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "delete_success",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "delete_failure",
+		"dry_run": "false",
+	}, "1")
+	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+		"result":  "delete_not_found",
+		"dry_run": "false",
+	}, "1")
+}
+
 func TestMetricsNamespace(t *testing.T) {
 	m := NewMetrics()
 

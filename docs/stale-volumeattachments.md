@@ -68,3 +68,15 @@ Use this before considering node mount surgery or RouterOS/RDS intervention:
 
 This does not require an RDS reboot and should not require direct host mount
 changes.
+
+## Metrics
+
+Prometheus exposes `rds_csi_attachment_stale_volumeattachment_cleanup_total`
+with fixed `result` and `dry_run` labels. Expected results are:
+
+- `candidate`: a stale `VolumeAttachment` matched the safety rules.
+- `planned`: the candidate reached the configured confirmation threshold.
+- `delete_attempt`: active cleanup attempted a Kubernetes delete.
+- `delete_success`: active cleanup deleted the object.
+- `delete_failure`: active cleanup failed to delete the object.
+- `delete_not_found`: the object disappeared before active cleanup deleted it.

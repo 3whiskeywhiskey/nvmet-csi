@@ -229,6 +229,10 @@ Node orphan cleanup emits:
 - `rds_csi_orphans_cleaned_total`: successful orphaned NVMe disconnects.
 - `rds_csi_orphan_cleanup_total{action,result,dry_run}`: fixed-label counters for detected managed orphans, dry-run skips, actual disconnect attempts, failures, successes, and per-pass limit hits.
 
+Stale `VolumeAttachment` cleanup emits:
+
+- `rds_csi_attachment_stale_volumeattachment_cleanup_total{result,dry_run}`: fixed-label counters for candidates, planned dry-run deletes, active delete attempts, successes, failures, and already-gone objects.
+
 ## Security Configuration
 
 ### SSH Host Key Verification

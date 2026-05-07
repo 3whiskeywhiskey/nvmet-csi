@@ -2,6 +2,8 @@ package attachment
 
 import (
 	"context"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
+
+	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
 )
 
 // createTestListers creates test node and PV listers from a fake clientset
@@ -41,6 +45,33 @@ func createTestListersWithVolumeAttachments(clientset *fake.Clientset, objects .
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 	return nodeLister, pvLister, vaLister
+}
+
+func requireStaleVAMetric(t *testing.T, metrics *observability.Metrics, labels ...string) {
+	t.Helper()
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, "rds_csi_attachment_stale_volumeattachment_cleanup_total{") || !strings.HasSuffix(line, " 1") {
+			continue
+		}
+		matched := true
+		for _, label := range labels {
+			if !strings.Contains(line, label) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return
+		}
+	}
+
+	t.Fatalf("expected stale VolumeAttachment cleanup metric with labels %v, got:\n%s", labels, body)
 }
 
 func TestNewAttachmentReconciler_RequiresManager(t *testing.T) {
@@ -622,6 +653,7 @@ func TestReconciler_StaleVolumeAttachmentRequiresConfirmations(t *testing.T) {
 	pv := testPersistentVolume(volumeID)
 	k8sClient := fake.NewSimpleClientset(pv, va)
 	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+	metrics := observability.NewMetrics()
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:                       NewAttachmentManager(nil),
@@ -634,6 +666,7 @@ func TestReconciler_StaleVolumeAttachmentRequiresConfirmations(t *testing.T) {
 		StaleVolumeAttachmentCleanup:  true,
 		StaleVolumeAttachmentDelete:   true,
 		StaleVolumeAttachmentMinConfs: 2,
+		Metrics:                       metrics,
 	})
 	if err != nil {
 		t.Fatalf("NewAttachmentReconciler failed: %v", err)
@@ -643,11 +676,15 @@ func TestReconciler_StaleVolumeAttachmentRequiresConfirmations(t *testing.T) {
 	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
 		t.Fatalf("VolumeAttachment should survive first confirmation pass: %v", err)
 	}
+	requireStaleVAMetric(t, metrics, `result="candidate"`, `dry_run="false"`)
 
 	r.reconcile(ctx)
 	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err == nil {
 		t.Fatal("VolumeAttachment should be deleted after second confirmation pass")
 	}
+	requireStaleVAMetric(t, metrics, `result="planned"`, `dry_run="false"`)
+	requireStaleVAMetric(t, metrics, `result="delete_attempt"`, `dry_run="false"`)
+	requireStaleVAMetric(t, metrics, `result="delete_success"`, `dry_run="false"`)
 }
 
 func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
@@ -657,6 +694,7 @@ func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
 	pv := testPersistentVolume(volumeID)
 	k8sClient := fake.NewSimpleClientset(pv, va)
 	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
+	metrics := observability.NewMetrics()
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:                       NewAttachmentManager(nil),
@@ -669,6 +707,7 @@ func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
 		StaleVolumeAttachmentCleanup:  true,
 		StaleVolumeAttachmentDelete:   false,
 		StaleVolumeAttachmentMinConfs: 1,
+		Metrics:                       metrics,
 	})
 	if err != nil {
 		t.Fatalf("NewAttachmentReconciler failed: %v", err)
@@ -678,6 +717,8 @@ func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
 	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, va.Name, metav1.GetOptions{}); err != nil {
 		t.Fatalf("dry-run cleanup should not delete VolumeAttachment: %v", err)
 	}
+	requireStaleVAMetric(t, metrics, `result="candidate"`, `dry_run="true"`)
+	requireStaleVAMetric(t, metrics, `result="planned"`, `dry_run="true"`)
 }
 
 func TestReconciler_StaleVolumeAttachmentPreservesLiveNode(t *testing.T) {
