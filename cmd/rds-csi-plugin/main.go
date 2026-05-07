@@ -50,7 +50,8 @@ var (
 	nodeMode       = flag.Bool("node", false, "Run in node mode")
 
 	// Node cleanup flags
-	nodeOrphanCleanup = flag.Bool("node-orphan-cleanup", false, "Run startup cleanup for managed orphaned NVMe connections")
+	nodeOrphanCleanup               = flag.Bool("node-orphan-cleanup", false, "Run startup cleanup for managed orphaned NVMe connections")
+	nodeOrphanCleanupMaxDisconnects = flag.Int("node-orphan-cleanup-max-disconnects", nvme.DefaultOrphanCleanupMaxDisconnects, "Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass (<=0 allows all)")
 
 	// Orphan reconciler flags
 	enableOrphanReconciler = flag.Bool("enable-orphan-reconciler", false, "Enable orphan volume detection and cleanup")
@@ -196,6 +197,7 @@ func main() {
 		// Create a connector for cleanup (same as node server uses internally)
 		cleanupConnector := nvme.NewConnector()
 		cleaner := nvme.NewOrphanCleaner(cleanupConnector, managedNQNPrefix)
+		cleaner.SetMaxDisconnects(*nodeOrphanCleanupMaxDisconnects)
 
 		// Pass metrics to cleaner for recording orphan cleanup
 		if promMetrics != nil {

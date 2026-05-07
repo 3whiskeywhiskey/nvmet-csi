@@ -9,12 +9,18 @@ import (
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
 )
 
+const (
+	// DefaultOrphanCleanupMaxDisconnects bounds cleanup blast radius per pass.
+	DefaultOrphanCleanupMaxDisconnects = 4
+)
+
 // OrphanCleaner detects and removes orphaned NVMe subsystem connections
 type OrphanCleaner struct {
 	connector        Connector
 	resolver         *DeviceResolver
 	metrics          *observability.Metrics
 	managedNQNPrefix string
+	maxDisconnects   int
 }
 
 // SetMetrics sets the Prometheus metrics for recording orphan cleanup
@@ -29,7 +35,14 @@ func NewOrphanCleaner(connector Connector, managedNQNPrefix string) *OrphanClean
 		connector:        connector,
 		resolver:         connector.GetResolver(),
 		managedNQNPrefix: managedNQNPrefix,
+		maxDisconnects:   DefaultOrphanCleanupMaxDisconnects,
 	}
+}
+
+// SetMaxDisconnects bounds disconnect attempts per cleanup pass.
+// Values <= 0 allow all detected managed orphans to be disconnected.
+func (oc *OrphanCleaner) SetMaxDisconnects(maxDisconnects int) {
+	oc.maxDisconnects = maxDisconnects
 }
 
 // CleanupOrphanedConnections scans for and disconnects orphaned NVMe subsystems.
@@ -51,6 +64,7 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 	klog.V(4).Infof("Found %d connected NVMe subsystems", len(nqns))
 
 	orphanCount := 0
+	disconnectAttempts := 0
 	for _, nqn := range nqns {
 		// CRITICAL: Only manage volumes matching configured NQN prefix
 		// This prevents accidentally disconnecting system volumes (nixos-*, etc.)
@@ -81,6 +95,11 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 
 		klog.Warningf("Found orphaned subsystem: %s", nqn)
 		orphanCount++
+		if oc.maxDisconnects > 0 && disconnectAttempts >= oc.maxDisconnects {
+			klog.Warningf("Orphan cleanup disconnect limit reached (max=%d); leaving remaining managed orphans for a later explicit cleanup pass", oc.maxDisconnects)
+			break
+		}
+		disconnectAttempts++
 
 		// Attempt to disconnect
 		if err := oc.connector.DisconnectWithContext(ctx, nqn); err != nil {
@@ -96,7 +115,7 @@ func (oc *OrphanCleaner) CleanupOrphanedConnections(ctx context.Context) error {
 	}
 
 	if orphanCount > 0 {
-		klog.Infof("Orphan cleanup complete: found %d orphaned subsystems", orphanCount)
+		klog.Infof("Orphan cleanup complete: found %d orphaned subsystems, attempted %d disconnects", orphanCount, disconnectAttempts)
 	} else {
 		klog.V(2).Info("Orphan cleanup complete: no orphaned subsystems found")
 	}
