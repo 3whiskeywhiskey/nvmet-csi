@@ -33,6 +33,7 @@ const (
 	VolumeActionCreate   VolumeAction = "create"
 	VolumeActionDelete   VolumeAction = "delete"
 	VolumeActionResize   VolumeAction = "resize"
+	VolumeActionRepair   VolumeAction = "repair"
 	VolumeActionConflict VolumeAction = "conflict"
 )
 

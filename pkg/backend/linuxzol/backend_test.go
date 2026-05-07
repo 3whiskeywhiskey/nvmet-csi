@@ -79,6 +79,81 @@ func TestBuildEnsureVolumePlanNoopResizeAndConflict(t *testing.T) {
 	}
 }
 
+func TestBuildEnsureVolumePlanRepairsIncompleteExport(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:             spec.ID,
+		Dataset:        spec.Dataset,
+		DevicePath:     spec.DevicePath,
+		SizeBytes:      spec.SizeBytes,
+		NQN:            spec.NQN,
+		Port:           spec.Port,
+		Exported:       false,
+		NamespaceReady: false,
+		Status:         "not-exported",
+	}
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionRepair {
+		t.Fatalf("expected repair plan, got %s", plan.Action)
+	}
+	if !strings.Contains(plan.Reason, "nvmet export is incomplete") {
+		t.Fatalf("unexpected repair reason: %q", plan.Reason)
+	}
+
+	result, err := storageBackend.ApplyVolumePlan(context.Background(), plan, backend.VolumeApplyOptions{})
+	if err != nil {
+		t.Fatalf("ApplyVolumePlan() error = %v", err)
+	}
+	if !result.Applied {
+		t.Fatal("expected repair to be applied")
+	}
+
+	volume, err := storageBackend.GetVolume(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("GetVolume() error = %v", err)
+	}
+	if !volume.NVMETCPExport {
+		t.Fatalf("expected repaired export, got %+v", volume)
+	}
+}
+
+func TestBuildEnsureVolumePlanConflictsOnWrongExportDevice(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:           spec.ID,
+		Dataset:      spec.Dataset,
+		DevicePath:   spec.DevicePath,
+		SizeBytes:    spec.SizeBytes,
+		NQN:          spec.NQN,
+		Port:         spec.Port,
+		ExportDevice: "/dev/zvol/tank/nvmet/other-volume",
+		Status:       "not-exported",
+	}
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionConflict {
+		t.Fatalf("expected conflict plan, got %s", plan.Action)
+	}
+	if !strings.Contains(plan.Reason, "namespace device path differs") {
+		t.Fatalf("unexpected conflict reason: %q", plan.Reason)
+	}
+}
+
 func TestApplyVolumePlanDryRunDoesNotMutate(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -173,6 +248,17 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 	wantLast := "zfs destroy tank/nvmet/pvc-test-volume"
 	if deletion[len(deletion)-1] != wantLast {
 		t.Fatalf("expected final delete command %q, got %q", wantLast, deletion[len(deletion)-1])
+	}
+
+	repair := commandStrings(host.RepairVolumeCommands(stateToSpec(state)))
+	if len(repair) == 0 {
+		t.Fatal("expected repair commands")
+	}
+	if repair[0] != "mkdir -p /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1" {
+		t.Fatalf("unexpected first repair command: %q", repair[0])
+	}
+	if repair[len(repair)-1] != "sh -c test -L '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' || ln -s '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume'" {
+		t.Fatalf("unexpected final repair command: %q", repair[len(repair)-1])
 	}
 }
 
@@ -286,15 +372,32 @@ func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
 
 func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 	h.volumes[spec.ID] = VolumeState{
-		ID:         spec.ID,
-		Dataset:    spec.Dataset,
-		DevicePath: spec.DevicePath,
-		SizeBytes:  spec.SizeBytes,
-		NQN:        spec.NQN,
-		Port:       spec.Port,
-		Exported:   true,
-		Status:     "ready",
+		ID:             spec.ID,
+		Dataset:        spec.Dataset,
+		DevicePath:     spec.DevicePath,
+		SizeBytes:      spec.SizeBytes,
+		NQN:            spec.NQN,
+		Port:           spec.Port,
+		Exported:       true,
+		NamespaceReady: true,
+		ExportDevice:   spec.DevicePath,
+		PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+		Status:         "ready",
 	}
+	return nil
+}
+
+func (h *memoryHost) RepairVolume(_ context.Context, spec VolumeSpec) error {
+	volume, ok := h.volumes[spec.ID]
+	if !ok {
+		return &backend.VolumeNotFoundError{ID: spec.ID}
+	}
+	volume.Exported = true
+	volume.NamespaceReady = true
+	volume.ExportDevice = spec.DevicePath
+	volume.PortLinkTarget = defaultConfigFSRoot + "/subsystems/" + spec.NQN
+	volume.Status = "ready"
+	h.volumes[spec.ID] = volume
 	return nil
 }
 
@@ -338,6 +441,17 @@ func commandStrings(commands []Command) []string {
 		out = append(out, cmd.String())
 	}
 	return out
+}
+
+func stateToSpec(state VolumeState) VolumeSpec {
+	return VolumeSpec{
+		ID:         state.ID,
+		Dataset:    state.Dataset,
+		DevicePath: state.DevicePath,
+		SizeBytes:  state.SizeBytes,
+		NQN:        state.NQN,
+		Port:       state.Port,
+	}
 }
 
 func ExampleCommand_String() {

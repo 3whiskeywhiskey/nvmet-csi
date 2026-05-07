@@ -70,8 +70,11 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 	if actual.Port != spec.Port {
 		return conflictPlan(spec, actual, "NVMe/TCP port differs"), nil
 	}
-	if !actual.Exported {
-		return conflictPlan(spec, actual, "NVMe/TCP export is disabled"), nil
+	if actual.ExportDevice != "" && actual.ExportDevice != spec.DevicePath {
+		return conflictPlan(spec, actual, "nvmet namespace device path differs"), nil
+	}
+	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(spec.NQN) {
+		return conflictPlan(spec, actual, "nvmet port link target differs"), nil
 	}
 	if actual.SizeBytes > spec.SizeBytes {
 		return conflictPlan(spec, actual, "actual zvol is larger than desired"), nil
@@ -82,6 +85,17 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 			Action:   backend.VolumeActionResize,
 			VolumeID: desired.ID,
 			Reason:   "zvol exists and is smaller than desired",
+			Desired:  &normalized,
+			Actual:   volumeFromState(actual),
+			Native:   spec,
+		}, nil
+	}
+	if !actual.Exported {
+		normalized := requestFromSpec(spec, desired.Parameters)
+		return &backend.VolumePlan{
+			Action:   backend.VolumeActionRepair,
+			VolumeID: desired.ID,
+			Reason:   "zvol exists but nvmet export is incomplete",
 			Desired:  &normalized,
 			Actual:   volumeFromState(actual),
 			Native:   spec,
@@ -165,6 +179,17 @@ func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan,
 			return result, nil
 		}
 		if err := b.host.ResizeVolume(ctx, spec.ID, spec.SizeBytes); err != nil {
+			return nil, err
+		}
+	case backend.VolumeActionRepair:
+		spec, err := b.specFromPlan(plan)
+		if err != nil {
+			return nil, err
+		}
+		if opts.DryRun {
+			return result, nil
+		}
+		if err := b.host.RepairVolume(ctx, spec); err != nil {
 			return nil, err
 		}
 	case backend.VolumeActionDelete:
