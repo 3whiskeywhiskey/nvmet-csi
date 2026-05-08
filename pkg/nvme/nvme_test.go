@@ -1,6 +1,7 @@
 package nvme
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,18 +28,50 @@ func mockExecCommand(stdout, stderr string, exitCode int) func(string, ...string
 	}
 }
 
+func mockExecCommandWithDisconnectFailure(listOutput string) func(string, ...string) *exec.Cmd {
+	return func(command string, args ...string) *exec.Cmd {
+		cs := []string{"-test.run=TestHelperProcess", "--", command}
+		cs = append(cs, args...)
+		cmd := exec.Command(os.Args[0], cs...)
+		cmd.Env = []string{
+			"GO_WANT_HELPER_PROCESS=1",
+			"STDOUT=" + listOutput,
+			"STDERR=",
+			"EXIT_CODE=0",
+			"DISCONNECT_STDERR=disconnect failed",
+			"DISCONNECT_EXIT_CODE=1",
+		}
+		return cmd
+	}
+}
+
 // TestHelperProcess is used by mockExecCommand to simulate command execution
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
 	}
 
+	exitCodeEnv := "EXIT_CODE"
+	stdoutEnv := "STDOUT"
+	stderrEnv := "STDERR"
+	for i, arg := range os.Args {
+		if arg != "--" || i+2 >= len(os.Args) {
+			continue
+		}
+		if os.Args[i+1] == "nvme" && os.Args[i+2] == "disconnect" && os.Getenv("DISCONNECT_EXIT_CODE") != "" {
+			exitCodeEnv = "DISCONNECT_EXIT_CODE"
+			stdoutEnv = "DISCONNECT_STDOUT"
+			stderrEnv = "DISCONNECT_STDERR"
+		}
+		break
+	}
+
 	// Output mock data
-	_, _ = os.Stdout.WriteString(os.Getenv("STDOUT"))
-	_, _ = os.Stderr.WriteString(os.Getenv("STDERR"))
+	_, _ = os.Stdout.WriteString(os.Getenv(stdoutEnv))
+	_, _ = os.Stderr.WriteString(os.Getenv(stderrEnv))
 
 	// Exit with specified code
-	exitCode, _ := strconv.Atoi(os.Getenv("EXIT_CODE"))
+	exitCode, _ := strconv.Atoi(os.Getenv(exitCodeEnv))
 	os.Exit(exitCode)
 }
 
@@ -180,6 +213,45 @@ func TestIsConnected(t *testing.T) {
 				t.Errorf("Expected IsConnected=%v, got %v", tt.expected, connected)
 			}
 		})
+	}
+}
+
+func TestConnectWithConfigOrphanedSubsystemReturnsDisconnectError(t *testing.T) {
+	nqn := "nqn.2000-02.com.mikrotik:pvc-orphan-repair"
+	c := &connector{
+		execCommand: mockExecCommandWithDisconnectFailure(
+			`{"Subsystems":[{"NQN":"` + nqn + `"}]}`,
+		),
+		config:           DefaultConfig(),
+		metrics:          &Metrics{},
+		activeOperations: make(map[string]*operationTracker),
+		resolver: NewDeviceResolverWithConfig(ResolverConfig{
+			SysfsRoot: t.TempDir(),
+			TTL:       10 * time.Second,
+		}),
+	}
+	c.resolver.SetIsConnectedFn(func(nqn string) (bool, error) {
+		return c.IsConnected(nqn)
+	})
+
+	_, err := c.ConnectWithConfig(context.Background(), Target{
+		Transport:     "tcp",
+		NQN:           nqn,
+		TargetAddress: "10.0.0.1",
+		TargetPort:    4420,
+	}, DefaultConnectionConfig())
+	if err == nil {
+		t.Fatal("ConnectWithConfig() expected disconnect error for orphaned subsystem")
+	}
+	if !strings.Contains(err.Error(), "failed to disconnect orphaned subsystem") {
+		t.Fatalf("ConnectWithConfig() error = %v, want orphan disconnect failure", err)
+	}
+
+	c.metrics.mu.RLock()
+	connectErrors := c.metrics.connectErrors
+	c.metrics.mu.RUnlock()
+	if connectErrors != 1 {
+		t.Fatalf("connectErrors = %d, want 1", connectErrors)
 	}
 }
 

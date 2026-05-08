@@ -559,7 +559,12 @@ func (c *connector) ConnectWithConfig(ctx context.Context, target Target, config
 		if orphaned {
 			klog.Warningf("NQN %s is orphaned, forcing disconnect and reconnect", target.NQN)
 			c.resolver.Invalidate(target.NQN)
-			_ = c.DisconnectWithContext(ctx, target.NQN)
+			if err := c.DisconnectWithContext(ctx, target.NQN); err != nil {
+				c.metrics.mu.Lock()
+				c.metrics.connectErrors++
+				c.metrics.mu.Unlock()
+				return "", fmt.Errorf("failed to disconnect orphaned subsystem %s before reconnect: %w", target.NQN, err)
+			}
 			// Fall through to connect logic below
 		} else {
 			// Not orphaned - return device path via resolver
