@@ -163,6 +163,29 @@ linuxZOLPreflight:
   nodeSelector: {}
   tolerations: []
 
+# Optional read-only Linux ZoL/nvmet volume plan. This renders a Job that
+# observes the target host and prints the exact reconciliation action and
+# commands for a disposable volume without applying mutations.
+linuxZOLPlan:
+  enabled: false
+  action: ensure
+  executor: host-namespace
+  zfsPool: ""
+  targetAddress: ""
+  nvmePort: "4420"
+  sshTarget: ""
+  deviceRoot: ""
+  configFSRoot: ""
+  volumeID: ""
+  sizeBytes: 1073741824
+  nqn: ""
+  nqnPrefix: ""
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  restartPolicy: Never
+  nodeSelector: {}
+  tolerations: []
+
 # Node DaemonSet configuration
 node:
   # Container image configuration

@@ -164,6 +164,13 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `linuxZOLPreflight.targetAddress` | NVMe/TCP target address to validate | `""` |
 | `linuxZOLPreflight.nvmePort` | NVMe/TCP port to validate | `4420` |
 | `linuxZOLPreflight.sshTarget` | SSH target for `executor=ssh` | `""` |
+| `linuxZOLPlan.enabled` | Render a read-only ZoL/nvmet dry-run plan Job | `false` |
+| `linuxZOLPlan.action` | Plan action: `ensure` or `delete` | `ensure` |
+| `linuxZOLPlan.executor` | Executor mode: `host-namespace`, `local`, or `ssh` | `host-namespace` |
+| `linuxZOLPlan.zfsPool` | ZFS pool or dataset to observe | `""` |
+| `linuxZOLPlan.targetAddress` | NVMe/TCP target address to plan | `""` |
+| `linuxZOLPlan.volumeID` | Disposable volume ID to plan | `""` |
+| `linuxZOLPlan.sizeBytes` | Desired size in bytes for `action=ensure` | `1073741824` |
 
 ### Node Plugin Settings
 
