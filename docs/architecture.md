@@ -123,6 +123,13 @@ executors. Delete/expand paths that do not carry StorageClass parameters recover
 backend selection from PersistentVolume attributes when Kubernetes API access is
 available.
 
+For Linux nvmet, the controller treats the TCP port as a stable shared object.
+Create and repair plans ensure the port directory and listener attributes
+(`addr_trtype=tcp`, `addr_adrfam`, `addr_traddr`, `addr_trsvcid`) before linking
+a subsystem. Empty or matching attributes may be written; non-empty mismatches
+are refused rather than rewritten, because changing a shared port could disrupt
+other volumes on the same target.
+
 ### CSI Controller Plugin
 
 **Deployment**: Kubernetes Deployment (1 replica, no horizontal scaling needed)

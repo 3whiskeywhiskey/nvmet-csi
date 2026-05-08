@@ -71,6 +71,8 @@ host and grant only the host access it needs:
 - `/dev/zvol` for zvol device paths;
 - host PID namespace access so the controller can enter the host mount namespace
   and use the host's matching ZFS userland;
+- a stable target address on the storage host matching the StorageClass
+  `targetAddress`/`nvmeAddress`;
 - node selector or affinity pinning to the storage host;
 - tolerations only if the storage host is tainted for infrastructure workloads.
 
@@ -96,6 +98,10 @@ matters more than a single migration surface.
 - Review planned commands for create, repair, resize, and delete.
 - Confirm plans are no-op after a successful create.
 - Confirm conflict states do not generate delete/recreate plans.
+- Confirm create and repair plans configure the Linux nvmet TCP port attributes:
+  `addr_trtype=tcp`, `addr_adrfam`, `addr_traddr`, and `addr_trsvcid`.
+- Confirm non-empty mismatched nvmet port attributes produce a conflict or a
+  guarded command failure, not an automatic rewrite of a shared port.
 - Confirm delete plans remove expected nvmet links before destroying zvols.
 
 ### Phase 2: Local ZoL Smoke Test
@@ -103,7 +109,8 @@ matters more than a single migration surface.
 - Install `nvmet-csi` side-by-side with only `nvmet-zol-r740xd` enabled.
 - Create one disposable PVC and one pod.
 - Verify zvol properties identify the CSI volume ID, NQN, and port.
-- Verify nvmet subsystem, namespace, and port link exist.
+- Verify nvmet subsystem, namespace, port listener attributes, and port link
+  exist.
 - Verify the node sees one NVMe/TCP session and the filesystem mounts.
 - Delete the pod and PVC; verify cleanup converges without repeated mutations.
 

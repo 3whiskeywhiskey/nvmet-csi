@@ -5,7 +5,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: nvmet-zol-r740xd-local
-provisioner: rds.csi.srvlab.io
+provisioner: nvmet.csi.whiskey.works
 parameters:
   backend: linux-zol-nvmet
   executor: host-namespace
@@ -23,7 +23,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: nvmet-zol-r740xd-ssh
-provisioner: rds.csi.srvlab.io
+provisioner: nvmet.csi.whiskey.works
 parameters:
   backend: linux-zol-nvmet
   executor: ssh

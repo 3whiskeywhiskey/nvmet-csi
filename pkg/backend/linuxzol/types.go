@@ -6,6 +6,7 @@ package linuxzol
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -43,6 +44,9 @@ func (c Config) validate() error {
 	if c.Pool == "" {
 		return fmt.Errorf("ZFS pool is required")
 	}
+	if c.Address == "" {
+		return fmt.Errorf("NVMe/TCP target address is required")
+	}
 	return nil
 }
 
@@ -70,6 +74,21 @@ func (c Config) portSubsystemPath(port int, nqn string) string {
 	return filepath.Join(c.portPath(port), "subsystems", linkNameForNQN(nqn))
 }
 
+func (c Config) portServiceID(port int) string {
+	return strconv.Itoa(port)
+}
+
+func (c Config) portTransport() string {
+	return "tcp"
+}
+
+func (c Config) portAddressFamily() string {
+	if ip := net.ParseIP(c.Address); ip != nil && ip.To4() == nil {
+		return "ipv6"
+	}
+	return "ipv4"
+}
+
 func linkNameForNQN(nqn string) string {
 	return strings.NewReplacer("/", "_").Replace(nqn)
 }
@@ -95,6 +114,10 @@ type VolumeState struct {
 	ExportDevice    string
 	PortEntryExists bool
 	PortLinkTarget  string
+	PortAddress     string
+	PortServiceID   string
+	PortTransport   string
+	PortAddressFam  string
 	Status          string
 }
 
@@ -111,7 +134,11 @@ func volumeFromState(state *VolumeState) *backend.Volume {
 		NVMETCPNQN:    state.NQN,
 		Status:        state.Status,
 		Attributes: map[string]string{
-			"linux.zfs.dataset": state.Dataset,
+			"linux.zfs.dataset":           state.Dataset,
+			"linux.nvmet.port.address":    state.PortAddress,
+			"linux.nvmet.port.service_id": state.PortServiceID,
+			"linux.nvmet.port.transport":  state.PortTransport,
+			"linux.nvmet.port.adrfam":     state.PortAddressFam,
 		},
 	}
 }
