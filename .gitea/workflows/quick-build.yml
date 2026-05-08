@@ -4,6 +4,7 @@ name: Quick Build
 # Runs on the nix-ephemeral act_runner; this repository brings its own flake.
 
 on:
+  workflow_dispatch:
   push:
     branches: [dev, main]
     paths-ignore:
