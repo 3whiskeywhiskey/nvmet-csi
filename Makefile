@@ -381,6 +381,8 @@ verify-helm:
 	grep -q -- "path: /sys/kernel/config" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "mountPath: /sys/kernel/config" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "kind: Job" /tmp/nvmet-zol-helm.yaml
+	grep -q -- '"helm.sh/hook": pre-install,pre-upgrade' /tmp/nvmet-zol-helm.yaml
+	grep -q -- '"helm.sh/hook-delete-policy": before-hook-creation' /tmp/nvmet-zol-helm.yaml
 	grep -q -- "app.kubernetes.io/component: linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
