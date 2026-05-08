@@ -39,7 +39,7 @@ data:
   rds-mutation-burst: "1"
   rds-mutation-timeout: "30s"
   # NQN prefix for CSI-managed volumes (safety filter)
-  nqn-prefix: "nqn.2000-02.com.mikrotik:pvc-"
+  nqn-prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
 
 ---
 # Controller Deployment

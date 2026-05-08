@@ -14,8 +14,11 @@ const (
 	// VolumeIDPrefix is prepended to all volume IDs
 	VolumeIDPrefix = "pvc-"
 
-	// NQNPrefix is the NVMe Qualified Name prefix for MikroTik
-	NQNPrefix = "nqn.2000-02.com.mikrotik"
+	// NQNPrefix is the default NVMe Qualified Name namespace for nvmet-csi.
+	NQNPrefix = "nqn.2026-05.works.whiskey.nvmet-csi"
+
+	// ManagedNQNPrefix is the default safety filter for CSI-managed volumes.
+	ManagedNQNPrefix = NQNPrefix + ":" + VolumeIDPrefix
 )
 
 var (
@@ -29,7 +32,7 @@ var (
 
 	// nqnPattern matches valid NVMe Qualified Names (NQN)
 	// Format: nqn.YYYY-MM.reversed.domain:identifier
-	// Example: nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789abc
+	// Example: nqn.2026-05.works.whiskey.nvmet-csi:pvc-12345678-1234-1234-1234-123456789abc
 	// SECURITY: This strict pattern prevents command injection via NQN parameter
 	nqnPattern = regexp.MustCompile(`^nqn\.[0-9]{4}-[0-9]{2}\.[a-z0-9.-]+:[a-z0-9._-]+$`)
 
@@ -135,16 +138,39 @@ func ValidateNQN(nqn string) error {
 	return nil
 }
 
-// VolumeIDToNQN converts a volume ID to an NVMe Qualified Name
+// VolumeIDToNQN converts a volume ID to an NVMe Qualified Name.
 func VolumeIDToNQN(volumeID string) (string, error) {
+	return VolumeIDToNQNWithPrefix(volumeID, NQNPrefix)
+}
+
+// VolumeIDToNQNWithPrefix converts a volume ID to an NVMe Qualified Name using
+// a caller-provided NQN namespace. A bare NQN namespace such as
+// "nqn.2026-05.works.whiskey.nvmet-csi" is converted to
+// "<namespace>:<volume-id>". For compatibility with safety-filter style
+// prefixes, values that already contain ":" are prepended directly, and a
+// trailing "pvc-" prefix consumes the volume ID's own "pvc-" prefix.
+func VolumeIDToNQNWithPrefix(volumeID, nqnPrefix string) (string, error) {
 	// Validate volume ID is safe (prevents command injection)
 	if err := ValidateVolumeID(volumeID); err != nil {
 		return "", err
 	}
 
+	prefix := strings.ToLower(strings.TrimSpace(nqnPrefix))
+	if prefix == "" {
+		prefix = NQNPrefix
+	}
+
 	// Convert to lowercase for NQN (NVMe spec requires lowercase)
 	volumeIDLower := strings.ToLower(volumeID)
-	nqn := fmt.Sprintf("%s:%s", NQNPrefix, volumeIDLower)
+	nqnVolumeID := volumeIDLower
+	if strings.HasSuffix(prefix, ":"+VolumeIDPrefix) && strings.HasPrefix(volumeIDLower, VolumeIDPrefix) {
+		nqnVolumeID = strings.TrimPrefix(volumeIDLower, VolumeIDPrefix)
+	}
+
+	nqn := fmt.Sprintf("%s:%s", strings.TrimSuffix(prefix, ":"), nqnVolumeID)
+	if strings.Contains(prefix, ":") {
+		nqn = prefix + nqnVolumeID
+	}
 
 	// SECURITY: Validate the generated NQN before returning
 	if err := ValidateNQN(nqn); err != nil {

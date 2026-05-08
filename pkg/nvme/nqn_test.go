@@ -21,7 +21,7 @@ func TestValidateNQNPrefix_EmptyPrefix(t *testing.T) {
 
 func TestValidateNQNPrefix_TooLong(t *testing.T) {
 	// Create a prefix longer than 223 bytes
-	longPrefix := "nqn.2000-02.com.mikrotik:" + strings.Repeat("a", 200)
+	longPrefix := "nqn.2026-05.works.whiskey.nvmet-csi:" + strings.Repeat("a", 200)
 	err := ValidateNQNPrefix(longPrefix)
 	if err == nil {
 		t.Fatal("Expected error for too-long prefix, got nil")
@@ -42,7 +42,7 @@ func TestValidateNQNPrefix_MissingNqnDot(t *testing.T) {
 }
 
 func TestValidateNQNPrefix_MissingColon(t *testing.T) {
-	err := ValidateNQNPrefix("nqn.2000-02.com.mikrotik")
+	err := ValidateNQNPrefix("nqn.2026-05.works.whiskey.nvmet-csi")
 	if err == nil {
 		t.Fatal("Expected error for prefix missing ':', got nil")
 	}
@@ -53,7 +53,7 @@ func TestValidateNQNPrefix_MissingColon(t *testing.T) {
 
 func TestValidateNQNPrefix_ValidPrefix(t *testing.T) {
 	validPrefixes := []string{
-		"nqn.2000-02.com.mikrotik:pvc-",
+		"nqn.2026-05.works.whiskey.nvmet-csi:pvc-",
 		"nqn.2014-08.org.nvmexpress:uuid:",
 		"nqn.1988-11.com.dell:PowerStore:",
 	}
@@ -73,32 +73,32 @@ func TestNQNMatchesPrefix_Matching(t *testing.T) {
 		expect bool
 	}{
 		{
-			nqn:    "nqn.2000-02.com.mikrotik:pvc-12345",
-			prefix: "nqn.2000-02.com.mikrotik:pvc-",
+			nqn:    "nqn.2026-05.works.whiskey.nvmet-csi:pvc-12345",
+			prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-",
 			expect: true,
 		},
 		{
-			nqn:    "nqn.2000-02.com.mikrotik:pvc-67890",
-			prefix: "nqn.2000-02.com.mikrotik:pvc-",
+			nqn:    "nqn.2026-05.works.whiskey.nvmet-csi:pvc-67890",
+			prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-",
 			expect: true,
 		},
 		{
-			nqn:    "nqn.2000-02.com.mikrotik:nixos-node1",
-			prefix: "nqn.2000-02.com.mikrotik:pvc-",
+			nqn:    "nqn.2026-05.works.whiskey.nvmet-csi:nixos-node1",
+			prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-",
 			expect: false,
 		},
 		{
-			nqn:    "nqn.2000-02.com.mikrotik:nixos-node2",
-			prefix: "nqn.2000-02.com.mikrotik:nixos-",
+			nqn:    "nqn.2026-05.works.whiskey.nvmet-csi:nixos-node2",
+			prefix: "nqn.2026-05.works.whiskey.nvmet-csi:nixos-",
 			expect: true,
 		},
 		{
 			nqn:    "nqn.2014-08.org.nvmexpress:uuid:12345",
-			prefix: "nqn.2000-02.com.mikrotik:pvc-",
+			prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-",
 			expect: false,
 		},
 		{
-			nqn:    "nqn.2000-02.com.mikrotik:pvc-12345",
+			nqn:    "nqn.2026-05.works.whiskey.nvmet-csi:pvc-12345",
 			prefix: "",
 			expect: false,
 		},
@@ -115,8 +115,8 @@ func TestNQNMatchesPrefix_Matching(t *testing.T) {
 
 func TestNQNMatchesPrefix_CaseSensitive(t *testing.T) {
 	// NVMe spec requires case-sensitive NQN comparison
-	nqn := "nqn.2000-02.com.mikrotik:pvc-12345"
-	prefix := "nqn.2000-02.com.mikrotik:PVC-" // uppercase PVC
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-12345"
+	prefix := "nqn.2026-05.works.whiskey.nvmet-csi:PVC-" // uppercase PVC
 
 	result := NQNMatchesPrefix(nqn, prefix)
 	if result {
@@ -149,7 +149,7 @@ func TestGetManagedNQNPrefix_NotSet(t *testing.T) {
 func TestGetManagedNQNPrefix_Invalid(t *testing.T) {
 	// Set invalid prefix (missing colon, but has nqn. prefix)
 	oldValue := os.Getenv(EnvManagedNQNPrefix)
-	os.Setenv(EnvManagedNQNPrefix, "nqn.2000-02.com.mikrotik")
+	os.Setenv(EnvManagedNQNPrefix, "nqn.2026-05.works.whiskey.nvmet-csi")
 	defer func() {
 		if oldValue != "" {
 			os.Setenv(EnvManagedNQNPrefix, oldValue)
@@ -171,7 +171,7 @@ func TestGetManagedNQNPrefix_Invalid(t *testing.T) {
 }
 
 func TestGetManagedNQNPrefix_Valid(t *testing.T) {
-	validPrefix := "nqn.2000-02.com.mikrotik:pvc-"
+	validPrefix := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
 
 	// Set valid prefix
 	oldValue := os.Getenv(EnvManagedNQNPrefix)

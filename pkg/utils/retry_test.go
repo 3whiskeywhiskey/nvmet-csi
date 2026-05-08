@@ -121,12 +121,12 @@ func TestIsRetryableError(t *testing.T) {
 		},
 		{
 			name:     "orphan disconnect failure is terminal even with retryable detail",
-			err:      errors.New("failed to disconnect orphaned subsystem nqn.2000-02.com.mikrotik:pvc-test before reconnect: resource temporarily unavailable"),
+			err:      errors.New("failed to disconnect orphaned subsystem nqn.2026-05.works.whiskey.nvmet-csi:pvc-test before reconnect: resource temporarily unavailable"),
 			expected: false,
 		},
 		{
 			name:     "device wait cleanup failure is terminal even with retryable detail",
-			err:      errors.New("device did not appear for subsystem nqn.2000-02.com.mikrotik:pvc-test and cleanup disconnect failed: wait error: connection timed out; cleanup error: resource temporarily unavailable"),
+			err:      errors.New("device did not appear for subsystem nqn.2026-05.works.whiskey.nvmet-csi:pvc-test and cleanup disconnect failed: wait error: connection timed out; cleanup error: resource temporarily unavailable"),
 			expected: false,
 		},
 		{

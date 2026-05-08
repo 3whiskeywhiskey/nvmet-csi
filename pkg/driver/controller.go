@@ -153,7 +153,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	migrationTimeout := ParseMigrationTimeout(params)
 
 	// Generate NQN
-	nqn, err := utils.VolumeIDToNQN(volumeID)
+	nqn, err := volumeIDToNQNFromParams(params, volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to generate NQN: %v", err)
 	}
@@ -265,6 +265,10 @@ func (cs *ControllerServer) createVolumeResponse(volumeID string, capacityBytes 
 	}
 }
 
+func volumeIDToNQNFromParams(params map[string]string, volumeID string) (string, error) {
+	return utils.VolumeIDToNQNWithPrefix(volumeID, params[paramNQNPrefix])
+}
+
 // createVolumeFromSnapshot handles CreateVolume with a snapshot source (restore workflow)
 func (cs *ControllerServer) createVolumeFromSnapshot(
 	ctx context.Context,
@@ -325,7 +329,7 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 	migrationTimeout := ParseMigrationTimeout(params)
 
 	// Generate NQN and file path for new volume
-	nqn, err := utils.VolumeIDToNQN(volumeID)
+	nqn, err := volumeIDToNQNFromParams(params, volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to generate NQN: %v", err)
 	}

@@ -10,6 +10,14 @@ fullnameOverride: ""
 # StorageClasses.
 driverName: "nvmet.csi.whiskey.works"
 
+# NQN namespace used when provisioning volumes unless a StorageClass overrides
+# nqnPrefix.
+nqnPrefix: "nqn.2026-05.works.whiskey.nvmet-csi"
+
+# NQN prefix used by the node plugin as a safety filter before disconnecting
+# stale or orphaned NVMe/TCP sessions.
+managedNQNPrefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
+
 # RDS connection configuration
 rds:
   # Enable RouterOS/RDS controller configuration. Set false for ZoL-only
@@ -44,9 +52,6 @@ rds:
   # SECURITY WARNING: Skip SSH host key verification (INSECURE - testing only)
   # NEVER set to true in production
   insecureSkipVerify: false
-
-  # NQN prefix for CSI-managed volumes (safety filter)
-  nqnPrefix: "nqn.2000-02.com.mikrotik:pvc-"
 
   # Mutation guardrails for RouterOS/RDS control-plane changes
   mutationGuard:

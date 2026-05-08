@@ -154,7 +154,7 @@ parameters:
   volumePath: "/storage-pool/kubernetes-volumes"
 
   # NVMe parameters
-  nqnPrefix: "nqn.2000-02.com.mikrotik"
+  nqnPrefix: "nqn.2026-05.works.whiskey.nvmet-csi"
 
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
@@ -209,7 +209,7 @@ spec:
 | `sshPort` | SSH port for management | `22` | No |
 | `fsType` | Filesystem type (ext4, xfs, ext3) | `ext4` | No |
 | `volumePath` | Base path for volumes on RDS | `/storage-pool/metal-csi` | No |
-| `nqnPrefix` | NVMe Qualified Name prefix | `nqn.2000-02.com.mikrotik` | No |
+| `nqnPrefix` | NVMe Qualified Name namespace | `nqn.2026-05.works.whiskey.nvmet-csi` | No |
 
 **Note**: `nvmeAddress` allows using a separate high-speed network for storage traffic while management operations use `rdsAddress`.
 

@@ -140,7 +140,7 @@ func TestVolumeIDToNQN(t *testing.T) {
 		{
 			name:        "valid volume ID",
 			volumeID:    "pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			expectedNQN: "nqn.2000-02.com.mikrotik:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			expectedNQN: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			expectErr:   false,
 		},
 		{
@@ -169,6 +169,43 @@ func TestVolumeIDToNQN(t *testing.T) {
 				if nqn != tt.expectedNQN {
 					t.Errorf("Expected NQN %s, got %s", tt.expectedNQN, nqn)
 				}
+			}
+		})
+	}
+}
+
+func TestVolumeIDToNQNWithPrefix(t *testing.T) {
+	volumeID := "pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	tests := []struct {
+		name        string
+		prefix      string
+		expectedNQN string
+	}{
+		{
+			name:        "bare namespace",
+			prefix:      "nqn.2000-02.com.example.storage",
+			expectedNQN: "nqn.2000-02.com.example.storage:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		},
+		{
+			name:        "managed safety prefix",
+			prefix:      "nqn.2000-02.com.example.storage:pvc-",
+			expectedNQN: "nqn.2000-02.com.example.storage:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		},
+		{
+			name:        "lowercases prefix and volume id",
+			prefix:      "NQN.2000-02.COM.EXAMPLE.STORAGE",
+			expectedNQN: "nqn.2000-02.com.example.storage:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nqn, err := VolumeIDToNQNWithPrefix(volumeID, tt.prefix)
+			if err != nil {
+				t.Fatalf("VolumeIDToNQNWithPrefix() error = %v", err)
+			}
+			if nqn != tt.expectedNQN {
+				t.Fatalf("VolumeIDToNQNWithPrefix() = %q, want %q", nqn, tt.expectedNQN)
 			}
 		})
 	}
@@ -232,7 +269,7 @@ func TestExtractVolumeIDFromNQN(t *testing.T) {
 	}{
 		{
 			name:             "valid NQN",
-			nqn:              "nqn.2000-02.com.mikrotik:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			nqn:              "nqn.2026-05.works.whiskey.nvmet-csi:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			expectedVolumeID: "pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			expectErr:        false,
 		},
@@ -243,12 +280,12 @@ func TestExtractVolumeIDFromNQN(t *testing.T) {
 		},
 		{
 			name:      "missing volume ID",
-			nqn:       "nqn.2000-02.com.mikrotik:",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:",
 			expectErr: true,
 		},
 		{
 			name:      "invalid volume ID in NQN",
-			nqn:       "nqn.2000-02.com.mikrotik:invalid; rm -rf /",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:invalid; rm -rf /",
 			expectErr: true,
 		},
 		{
@@ -286,7 +323,7 @@ func TestValidateNQN(t *testing.T) {
 		// Valid NQNs
 		{
 			name:      "valid MikroTik NQN",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			expectErr: false,
 		},
 		{
@@ -323,7 +360,7 @@ func TestValidateNQN(t *testing.T) {
 		},
 		{
 			name:      "missing colon separator",
-			nqn:       "nqn.2000-02.com.mikrotik-pvc-123",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi-pvc-123",
 			expectErr: true,
 		},
 		{
@@ -334,67 +371,67 @@ func TestValidateNQN(t *testing.T) {
 		// Command injection attempts
 		{
 			name:      "semicolon injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-123; rm -rf /",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123; rm -rf /",
 			expectErr: true,
 		},
 		{
 			name:      "pipe injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-123 | cat /etc/passwd",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123 | cat /etc/passwd",
 			expectErr: true,
 		},
 		{
 			name:      "ampersand injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-123 && ls",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123 && ls",
 			expectErr: true,
 		},
 		{
 			name:      "dollar sign injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-$USER",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-$USER",
 			expectErr: true,
 		},
 		{
 			name:      "backtick injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-`whoami`",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-`whoami`",
 			expectErr: true,
 		},
 		{
 			name:      "parenthesis injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-(test)",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-(test)",
 			expectErr: true,
 		},
 		{
 			name:      "redirect injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-123 > /tmp/evil",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123 > /tmp/evil",
 			expectErr: true,
 		},
 		{
 			name:      "newline injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-123\nrm -rf /",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123\nrm -rf /",
 			expectErr: true,
 		},
 		{
 			name:      "space in NQN",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc 123",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc 123",
 			expectErr: true,
 		},
 		{
 			name:      "quote injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-'test'",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-'test'",
 			expectErr: true,
 		},
 		{
 			name:      "double quote injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-\"test\"",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-\"test\"",
 			expectErr: true,
 		},
 		{
 			name:      "backslash injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-test\\n",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test\\n",
 			expectErr: true,
 		},
 		{
 			name:      "wildcard injection",
-			nqn:       "nqn.2000-02.com.mikrotik:pvc-*",
+			nqn:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-*",
 			expectErr: true,
 		},
 	}
@@ -669,7 +706,7 @@ func TestValidateNVMETargetContext(t *testing.T) {
 	}{
 		{
 			name:            "valid without expected address",
-			nqn:             "nqn.2000-02.com.mikrotik:pvc-123",
+			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
 			address:         "10.42.68.1",
 			port:            4420,
 			expectedAddress: "",
@@ -677,7 +714,7 @@ func TestValidateNVMETargetContext(t *testing.T) {
 		},
 		{
 			name:            "valid with matching expected address",
-			nqn:             "nqn.2000-02.com.mikrotik:pvc-123",
+			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
 			address:         "10.42.68.1",
 			port:            4420,
 			expectedAddress: "10.42.68.1",
@@ -685,7 +722,7 @@ func TestValidateNVMETargetContext(t *testing.T) {
 		},
 		{
 			name:            "mismatched expected address",
-			nqn:             "nqn.2000-02.com.mikrotik:pvc-123",
+			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
 			address:         "10.42.68.1",
 			port:            4420,
 			expectedAddress: "10.42.68.2",
@@ -701,7 +738,7 @@ func TestValidateNVMETargetContext(t *testing.T) {
 		},
 		{
 			name:            "invalid address",
-			nqn:             "nqn.2000-02.com.mikrotik:pvc-123",
+			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
 			address:         "invalid-ip",
 			port:            4420,
 			expectedAddress: "",
@@ -721,14 +758,14 @@ func TestValidateNVMETargetContext(t *testing.T) {
 
 // Benchmark validation functions
 func BenchmarkValidateNQN(b *testing.B) {
-	nqn := "nqn.2000-02.com.mikrotik:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 	for i := 0; i < b.N; i++ {
 		_ = ValidateNQN(nqn)
 	}
 }
 
 func BenchmarkValidateNQNMalicious(b *testing.B) {
-	nqn := "nqn.2000-02.com.mikrotik:pvc-123; rm -rf /"
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123; rm -rf /"
 	for i := 0; i < b.N; i++ {
 		_ = ValidateNQN(nqn)
 	}
@@ -748,6 +785,6 @@ func BenchmarkValidatePort(b *testing.B) {
 
 func BenchmarkValidateNVMETargetContext(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = ValidateNVMETargetContext("nqn.2000-02.com.mikrotik:pvc-123", "10.42.68.1", 4420, "")
+		_ = ValidateNVMETargetContext("nqn.2026-05.works.whiskey.nvmet-csi:pvc-123", "10.42.68.1", 4420, "")
 	}
 }

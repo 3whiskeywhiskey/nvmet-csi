@@ -20,7 +20,7 @@ func TestResolveDevicePath_CacheMiss(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -31,11 +31,11 @@ func TestResolveDevicePath_CacheMiss(t *testing.T) {
 	})
 
 	// First call - cache miss
-	if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+	if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 		t.Error("Expected cache miss before first resolve")
 	}
 
-	devicePath, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	devicePath, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -46,11 +46,11 @@ func TestResolveDevicePath_CacheMiss(t *testing.T) {
 	}
 
 	// Verify cache is now populated
-	if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+	if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 		t.Error("Expected cache hit after resolve")
 	}
 
-	cachedPath := resolver.GetCachedPath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	cachedPath := resolver.GetCachedPath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if cachedPath != expected {
 		t.Errorf("Expected cached path %s, got %s", expected, cachedPath)
 	}
@@ -61,7 +61,7 @@ func TestResolveDevicePath_CacheHit(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -72,7 +72,7 @@ func TestResolveDevicePath_CacheHit(t *testing.T) {
 	})
 
 	// First call - populates cache
-	devicePath1, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	devicePath1, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if err != nil {
 		t.Fatalf("Unexpected error on first resolve: %v", err)
 	}
@@ -87,11 +87,11 @@ func TestResolveDevicePath_CacheHit(t *testing.T) {
 	// Note: This works because the cache check doesn't re-validate sysfs existence
 	// It only validates the /dev/ device exists, which we can't mock
 	// So instead, we verify the cached path is returned
-	if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+	if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 		t.Error("Expected cache hit after first resolve")
 	}
 
-	cachedPath := resolver.GetCachedPath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	cachedPath := resolver.GetCachedPath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if cachedPath != devicePath1 {
 		t.Errorf("Expected cached path to match first resolve, got %s vs %s", cachedPath, devicePath1)
 	}
@@ -108,7 +108,7 @@ func TestResolveDevicePath_TTLExpired(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -120,7 +120,7 @@ func TestResolveDevicePath_TTLExpired(t *testing.T) {
 	})
 
 	// First call - populates cache
-	_, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	_, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if err != nil {
 		t.Fatalf("Unexpected error on first resolve: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestResolveDevicePath_TTLExpired(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	// Cache should be expired
-	if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+	if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 		t.Error("Expected cache entry to be expired")
 	}
 
@@ -148,7 +148,7 @@ func TestResolveDevicePath_DeviceGone(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -159,7 +159,7 @@ func TestResolveDevicePath_DeviceGone(t *testing.T) {
 	})
 
 	// First call - populates cache with /dev/nvme0n1
-	devicePath1, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test-123")
+	devicePath1, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 	if err != nil {
 		t.Fatalf("Unexpected error on first resolve: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestResolveDevicePath_DeviceGone(t *testing.T) {
 	}
 
 	// Verify cache is populated
-	if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+	if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 		t.Error("Expected cache to be populated")
 	}
 
@@ -185,7 +185,7 @@ func TestResolveDevicePath_NotFound(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-other",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-other",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -195,13 +195,13 @@ func TestResolveDevicePath_NotFound(t *testing.T) {
 		TTL:       10 * time.Second,
 	})
 
-	_, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-nonexistent")
+	_, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-nonexistent")
 	if err == nil {
 		t.Error("Expected error for non-existent NQN, got nil")
 	}
 
 	// Should not cache failed lookups
-	if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-nonexistent") {
+	if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-nonexistent") {
 		t.Error("Expected failed lookup to not be cached")
 	}
 }
@@ -220,7 +220,7 @@ func TestResolveDevicePath_EmptySysfs(t *testing.T) {
 		TTL:       10 * time.Second,
 	})
 
-	_, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test")
+	_, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 	if err == nil {
 		t.Error("Expected error for empty sysfs, got nil")
 	}
@@ -232,7 +232,7 @@ func TestInvalidate(t *testing.T) {
 		tmpDir := createMockSysfsForResolver(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
@@ -243,25 +243,25 @@ func TestInvalidate(t *testing.T) {
 		})
 
 		// Populate cache
-		_, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test-123")
+		_, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
 		// Verify cached
-		if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+		if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 			t.Error("Expected entry to be cached")
 		}
 
 		// Invalidate
-		resolver.Invalidate("nqn.2000-02.com.mikrotik:pvc-test-123")
+		resolver.Invalidate("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 
 		// Verify no longer cached
-		if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test-123") {
+		if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123") {
 			t.Error("Expected entry to be invalidated")
 		}
 
-		cachedPath := resolver.GetCachedPath("nqn.2000-02.com.mikrotik:pvc-test-123")
+		cachedPath := resolver.GetCachedPath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 		if cachedPath != "" {
 			t.Errorf("Expected empty cached path after invalidation, got %s", cachedPath)
 		}
@@ -271,10 +271,10 @@ func TestInvalidate(t *testing.T) {
 		resolver := NewDeviceResolver()
 
 		// Should not panic or error
-		resolver.Invalidate("nqn.2000-02.com.mikrotik:pvc-nonexistent")
+		resolver.Invalidate("nqn.2026-05.works.whiskey.nvmet-csi:pvc-nonexistent")
 
 		// Verify still works
-		if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-nonexistent") {
+		if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-nonexistent") {
 			t.Error("Non-existent entry should not be cached")
 		}
 	})
@@ -285,12 +285,12 @@ func TestInvalidateAll(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-0",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-0",
 			blockDevices: []string{"nvme0n1"},
 		},
 		{
 			name:         "nvme1",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-1",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-1",
 			blockDevices: []string{"nvme1n1"},
 		},
 	})
@@ -301,11 +301,11 @@ func TestInvalidateAll(t *testing.T) {
 	})
 
 	// Populate cache with multiple entries
-	_, err := resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-0")
+	_, err := resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-0")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	_, err = resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-1")
+	_, err = resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-1")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		resolver := NewDeviceResolver()
 
 		// Without isConnectedFn, should return (false, nil)
-		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2000-02.com.mikrotik:pvc-test")
+		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
@@ -345,7 +345,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		tmpDir := createMockSysfsForResolver(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
@@ -360,7 +360,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 			return false, nil
 		})
 
-		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2000-02.com.mikrotik:pvc-test")
+		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
@@ -373,7 +373,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		tmpDir := createMockSysfsForResolver(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
@@ -389,7 +389,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		})
 
 		// NQN exists with device - not orphaned
-		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2000-02.com.mikrotik:pvc-test")
+		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
@@ -403,7 +403,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		tmpDir := createMockSysfsForResolver(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-other", // Different NQN
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-other", // Different NQN
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
@@ -419,7 +419,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 		})
 
 		// pvc-test appears connected but no device found in sysfs - orphaned
-		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2000-02.com.mikrotik:pvc-test")
+		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
@@ -436,7 +436,7 @@ func TestIsOrphanedSubsystem(t *testing.T) {
 			return false, os.ErrPermission
 		})
 
-		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2000-02.com.mikrotik:pvc-test")
+		orphaned, err := resolver.IsOrphanedSubsystem("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err == nil {
 			t.Error("Expected error when isConnectedFn fails")
 		}
@@ -514,7 +514,7 @@ func TestDeviceResolver_CacheStats(t *testing.T) {
 		tmpDir := createMockSysfsForResolver(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
@@ -525,7 +525,7 @@ func TestDeviceResolver_CacheStats(t *testing.T) {
 		})
 
 		// Populate cache
-		_, _ = resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test")
+		_, _ = resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 
 		stats := resolver.GetCacheStats()
 		if stats.Entries != 1 {
@@ -578,7 +578,7 @@ func TestDeviceResolver_ConcurrentAccess(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-test",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 			blockDevices: []string{"nvme0n1"},
 		},
 	})
@@ -601,11 +601,11 @@ func TestDeviceResolver_ConcurrentAccess(t *testing.T) {
 				// Mix of operations
 				switch j % 5 {
 				case 0:
-					_, _ = resolver.ResolveDevicePath("nqn.2000-02.com.mikrotik:pvc-test")
+					_, _ = resolver.ResolveDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 				case 1:
-					_ = resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-test")
+					_ = resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 				case 2:
-					_ = resolver.GetCachedPath("nqn.2000-02.com.mikrotik:pvc-test")
+					_ = resolver.GetCachedPath("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 				case 3:
 					_ = resolver.GetCacheStats()
 				case 4:
@@ -625,17 +625,17 @@ func TestDeviceResolver_MultipleNQNs(t *testing.T) {
 	tmpDir := createMockSysfsForResolver(t, []mockController{
 		{
 			name:         "nvme0",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-0",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-0",
 			blockDevices: []string{"nvme0n1"},
 		},
 		{
 			name:         "nvme1",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-1",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-1",
 			blockDevices: []string{"nvme1n1"},
 		},
 		{
 			name:         "nvme2",
-			nqn:          "nqn.2000-02.com.mikrotik:pvc-2",
+			nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-2",
 			blockDevices: []string{"nvme2n1"},
 		},
 	})
@@ -649,9 +649,9 @@ func TestDeviceResolver_MultipleNQNs(t *testing.T) {
 		nqn      string
 		expected string
 	}{
-		{"nqn.2000-02.com.mikrotik:pvc-0", "/dev/nvme0n1"},
-		{"nqn.2000-02.com.mikrotik:pvc-1", "/dev/nvme1n1"},
-		{"nqn.2000-02.com.mikrotik:pvc-2", "/dev/nvme2n1"},
+		{"nqn.2026-05.works.whiskey.nvmet-csi:pvc-0", "/dev/nvme0n1"},
+		{"nqn.2026-05.works.whiskey.nvmet-csi:pvc-1", "/dev/nvme1n1"},
+		{"nqn.2026-05.works.whiskey.nvmet-csi:pvc-2", "/dev/nvme2n1"},
 	}
 
 	// Resolve all NQNs
@@ -673,19 +673,19 @@ func TestDeviceResolver_MultipleNQNs(t *testing.T) {
 	}
 
 	// Invalidate one, verify others remain
-	resolver.Invalidate("nqn.2000-02.com.mikrotik:pvc-1")
+	resolver.Invalidate("nqn.2026-05.works.whiskey.nvmet-csi:pvc-1")
 	stats = resolver.GetCacheStats()
 	if stats.Entries != 2 {
 		t.Errorf("Expected 2 cache entries after invalidate, got %d", stats.Entries)
 	}
 
-	if resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-1") {
+	if resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-1") {
 		t.Error("Expected pvc-1 to be invalidated")
 	}
-	if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-0") {
+	if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-0") {
 		t.Error("Expected pvc-0 to still be cached")
 	}
-	if !resolver.IsCached("nqn.2000-02.com.mikrotik:pvc-2") {
+	if !resolver.IsCached("nqn.2026-05.works.whiskey.nvmet-csi:pvc-2") {
 		t.Error("Expected pvc-2 to still be cached")
 	}
 }

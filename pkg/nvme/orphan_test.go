@@ -160,12 +160,12 @@ func TestCleanupOrphanedConnections_NoOrphans(t *testing.T) {
 	cleaner := &testableOrphanCleaner{
 		connector: mockConnector,
 		connectedNQNs: []string{
-			"nqn.2000-02.com.mikrotik:pvc-test-1",
-			"nqn.2000-02.com.mikrotik:pvc-test-2",
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-1",
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-2",
 		},
 		orphanedNQNs: map[string]bool{
-			"nqn.2000-02.com.mikrotik:pvc-test-1": false,
-			"nqn.2000-02.com.mikrotik:pvc-test-2": false,
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-1": false,
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-2": false,
 		},
 	}
 
@@ -186,9 +186,9 @@ func TestCleanupOrphanedConnections_NoOrphans(t *testing.T) {
 func TestCleanupOrphanedConnections_WithOrphans(t *testing.T) {
 	mockConnector := NewMockConnector()
 
-	orphan1 := "nqn.2000-02.com.mikrotik:pvc-orphan-1"
-	orphan2 := "nqn.2000-02.com.mikrotik:pvc-orphan-2"
-	healthy := "nqn.2000-02.com.mikrotik:pvc-healthy"
+	orphan1 := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-1"
+	orphan2 := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-2"
+	healthy := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-healthy"
 
 	cleaner := &testableOrphanCleaner{
 		connector: mockConnector,
@@ -238,8 +238,8 @@ func TestCleanupOrphanedConnections_DisconnectError(t *testing.T) {
 	mockConnector := NewMockConnector()
 	mockConnector.disconnectError = errors.New("disconnect failed")
 
-	orphan1 := "nqn.2000-02.com.mikrotik:pvc-orphan-1"
-	orphan2 := "nqn.2000-02.com.mikrotik:pvc-orphan-2"
+	orphan1 := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-1"
+	orphan2 := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-2"
 
 	cleaner := &testableOrphanCleaner{
 		connector: mockConnector,
@@ -274,14 +274,14 @@ func TestCleanupOrphanedConnections_ContextCanceled(t *testing.T) {
 	cleaner := &testableOrphanCleaner{
 		connector: mockConnector,
 		connectedNQNs: []string{
-			"nqn.2000-02.com.mikrotik:pvc-orphan-1",
-			"nqn.2000-02.com.mikrotik:pvc-orphan-2",
-			"nqn.2000-02.com.mikrotik:pvc-orphan-3",
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-1",
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-2",
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-3",
 		},
 		orphanedNQNs: map[string]bool{
-			"nqn.2000-02.com.mikrotik:pvc-orphan-1": true,
-			"nqn.2000-02.com.mikrotik:pvc-orphan-2": true,
-			"nqn.2000-02.com.mikrotik:pvc-orphan-3": true,
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-1": true,
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-2": true,
+			"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-3": true,
 		},
 	}
 
@@ -373,8 +373,8 @@ func TestCleanupOrphanedConnections_RejectsEmptyManagedPrefix(t *testing.T) {
 }
 
 func TestOrphanCleanerActualImplementationFiltersAndDisconnectsOnlyManagedOrphans(t *testing.T) {
-	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
-	managedHealthy := "nqn.2000-02.com.mikrotik:pvc-healthy"
+	managedOrphan := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan"
+	managedHealthy := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-healthy"
 	systemOrphan := "nqn.2014-08.org.nixos:root-disk"
 
 	sysfsRoot := createMockSysfs(t, []mockController{
@@ -397,7 +397,7 @@ func TestOrphanCleanerActualImplementationFiltersAndDisconnectsOnlyManagedOrphan
 	resolver.SetIsConnectedFn(mockConnector.IsConnected)
 	mockConnector.resolver = resolver
 
-	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2026-05.works.whiskey.nvmet-csi:pvc-")
 	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
 		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestOrphanCleanerActualImplementationFiltersAndDisconnectsOnlyManagedOrphan
 }
 
 func TestOrphanCleanerActualImplementationRespectsCanceledContextBeforeDisconnect(t *testing.T) {
-	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
+	managedOrphan := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan"
 	sysfsRoot := createMockSysfs(t, nil)
 	createMockSubsystemEntries(t, sysfsRoot, managedOrphan)
 
@@ -424,7 +424,7 @@ func TestOrphanCleanerActualImplementationRespectsCanceledContextBeforeDisconnec
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2026-05.works.whiskey.nvmet-csi:pvc-")
 	err := cleaner.CleanupOrphanedConnections(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("CleanupOrphanedConnections() error = %v, want context.Canceled", err)
@@ -436,9 +436,9 @@ func TestOrphanCleanerActualImplementationRespectsCanceledContextBeforeDisconnec
 
 func TestOrphanCleanerActualImplementationLimitsDisconnectAttempts(t *testing.T) {
 	orphans := []string{
-		"nqn.2000-02.com.mikrotik:pvc-orphan-1",
-		"nqn.2000-02.com.mikrotik:pvc-orphan-2",
-		"nqn.2000-02.com.mikrotik:pvc-orphan-3",
+		"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-1",
+		"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-2",
+		"nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-3",
 	}
 	sysfsRoot := createMockSysfs(t, nil)
 	createMockSubsystemEntries(t, sysfsRoot, orphans...)
@@ -454,7 +454,7 @@ func TestOrphanCleanerActualImplementationLimitsDisconnectAttempts(t *testing.T)
 	resolver.SetIsConnectedFn(mockConnector.IsConnected)
 	mockConnector.resolver = resolver
 
-	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2026-05.works.whiskey.nvmet-csi:pvc-")
 	cleaner.SetMaxDisconnects(2)
 	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
 		t.Fatalf("CleanupOrphanedConnections() failed: %v", err)
@@ -466,7 +466,7 @@ func TestOrphanCleanerActualImplementationLimitsDisconnectAttempts(t *testing.T)
 }
 
 func TestOrphanCleanerActualImplementationDryRunDoesNotDisconnect(t *testing.T) {
-	managedOrphan := "nqn.2000-02.com.mikrotik:pvc-orphan"
+	managedOrphan := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan"
 	sysfsRoot := createMockSysfs(t, nil)
 	createMockSubsystemEntries(t, sysfsRoot, managedOrphan)
 
@@ -480,7 +480,7 @@ func TestOrphanCleanerActualImplementationDryRunDoesNotDisconnect(t *testing.T) 
 	mockConnector.resolver = resolver
 
 	metrics := observability.NewMetrics()
-	cleaner := NewOrphanCleaner(mockConnector, "nqn.2000-02.com.mikrotik:pvc-")
+	cleaner := NewOrphanCleaner(mockConnector, "nqn.2026-05.works.whiskey.nvmet-csi:pvc-")
 	cleaner.SetMetrics(metrics)
 	cleaner.SetDryRun(true)
 	if err := cleaner.CleanupOrphanedConnections(context.Background()); err != nil {
@@ -527,7 +527,7 @@ func TestNewOrphanCleaner(t *testing.T) {
 	})
 	mockConnector.resolver = resolver
 
-	prefix := "nqn.2000-02.com.mikrotik:pvc-"
+	prefix := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
 	cleaner := NewOrphanCleaner(mockConnector, prefix)
 
 	if cleaner == nil {

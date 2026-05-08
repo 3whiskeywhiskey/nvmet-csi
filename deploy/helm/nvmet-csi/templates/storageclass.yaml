@@ -20,6 +20,7 @@ parameters:
   executor: {{ $sc.executor | quote }}
   {{- end }}
   csi.storage.k8s.io/fstype: {{ $sc.fsType | default "ext4" | quote }}
+  nqnPrefix: {{ $sc.nqnPrefix | default $.Values.nqnPrefix | quote }}
   nvmeAddress: {{ $sc.nvmeAddress | default $sc.targetAddress | default $.Values.rds.storageIP | quote }}
   nvmePort: {{ $sc.nvmePort | default (printf "%d" (int $.Values.rds.nvmePort)) | quote }}
   volumePath: {{ $sc.volumePath | default $.Values.rds.basePath | quote }}
