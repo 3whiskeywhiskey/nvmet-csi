@@ -77,6 +77,18 @@ func IsRetryableError(err error) bool {
 
 	errStr := strings.ToLower(err.Error())
 
+	// Non-retryable patterns must be checked first. These errors can wrap lower-level
+	// transient text, but retrying them would repeat cleanup chatter.
+	nonRetryablePatterns := []string{
+		"failed to disconnect orphaned subsystem",
+	}
+
+	for _, pattern := range nonRetryablePatterns {
+		if strings.Contains(errStr, pattern) {
+			return false
+		}
+	}
+
 	// Retryable patterns - transient network and device issues
 	retryablePatterns := []string{
 		"connection refused",
