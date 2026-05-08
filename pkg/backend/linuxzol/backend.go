@@ -71,6 +71,15 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 	if actual.DevicePath != spec.DevicePath {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "zvol device path differs")), nil
 	}
+	if actual.ID != "" && actual.ID != spec.ID {
+		return b.withPlanMetadata(conflictPlan(spec, actual, "observed volume ID differs")), nil
+	}
+	if actual.OwnerVolumeID == "" {
+		return b.withPlanMetadata(conflictPlan(spec, actual, "ZFS owner volume ID metadata is missing")), nil
+	}
+	if actual.OwnerVolumeID != spec.ID {
+		return b.withPlanMetadata(conflictPlan(spec, actual, "ZFS owner volume ID metadata differs")), nil
+	}
 	if actual.NQN != spec.NQN {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "NVMe/TCP NQN differs")), nil
 	}
@@ -141,6 +150,21 @@ func (b *Backend) BuildDeleteVolumePlan(ctx context.Context, volumeID string) (*
 			}), nil
 		}
 		return nil, fmt.Errorf("failed to observe volume %s: %w", volumeID, err)
+	}
+	if actual.ID != "" && actual.ID != volumeID {
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "observed volume ID differs")), nil
+	}
+	if actual.OwnerVolumeID == "" {
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "ZFS owner volume ID metadata is missing")), nil
+	}
+	if actual.OwnerVolumeID != volumeID {
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "ZFS owner volume ID metadata differs")), nil
+	}
+	if actual.Dataset != b.cfg.datasetFor(volumeID) {
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "ZFS dataset differs")), nil
+	}
+	if actual.DevicePath != b.cfg.devicePathFor(volumeID) {
+		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "zvol device path differs")), nil
 	}
 	if actual.NQN == "" {
 		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "NVMe/TCP NQN metadata is missing")), nil

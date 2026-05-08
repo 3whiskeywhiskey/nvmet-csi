@@ -98,13 +98,17 @@ func TestControllerBackendForVolumeUsesPersistentVolumeAttributes(t *testing.T) 
 
 func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 	volumeID := "test-volume"
+	var observedSelection BackendSelection
+	var observedCreate storagebackend.CreateVolumeRequest
 	driver := &Driver{
 		name: DriverName,
 		backendFactory: func(selection BackendSelection) (storagebackend.Backend, error) {
+			observedSelection = selection
 			return &testBackend{
 				name:    selection.Type,
 				address: selection.TargetAddr,
 				normalizeCreate: func(req storagebackend.CreateVolumeRequest) storagebackend.CreateVolumeRequest {
+					observedCreate = req
 					req.Path = "/dev/zvol/" + selection.ZFSPool + "/" + req.ID
 					return req
 				},
@@ -125,26 +129,43 @@ func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 		CapacityRange: &csi.CapacityRange{RequiredBytes: minVolumeSizeBytes},
 		Parameters: map[string]string{
 			"backend":       storagebackend.TypeLinuxZOLNVMET,
-			"executor":      storagebackend.ExecutorLocal,
+			"executor":      storagebackend.ExecutorHostNamespace,
 			"zfsPool":       "tank/nvmet",
 			"targetAddress": "10.42.0.10",
+			"nvmeAddress":   "10.42.0.20",
+			"nvmePort":      "4421",
 		},
 	})
 	if err != nil {
 		t.Fatalf("CreateVolume() error = %v", err)
 	}
 	ctx := resp.GetVolume().GetVolumeContext()
-	if ctx["backend"] != storagebackend.TypeLinuxZOLNVMET || ctx["executor"] != storagebackend.ExecutorLocal {
+	if observedSelection.Type != storagebackend.TypeLinuxZOLNVMET || observedSelection.Executor != storagebackend.ExecutorHostNamespace {
+		t.Fatalf("expected Linux host-namespace selection, got %+v", observedSelection)
+	}
+	if observedSelection.ZFSPool != "tank/nvmet" || observedSelection.TargetAddr != "10.42.0.20" {
+		t.Fatalf("expected Linux target selection, got %+v", observedSelection)
+	}
+	if observedCreate.ID != volumeID || observedCreate.NVMETCPPort != 4421 {
+		t.Fatalf("unexpected backend create request: %+v", observedCreate)
+	}
+	if observedCreate.NVMETCPNQN != "nqn.2026-05.works.whiskey.nvmet-csi:"+volumeID {
+		t.Fatalf("unexpected backend NQN: %q", observedCreate.NVMETCPNQN)
+	}
+	if observedCreate.Parameters["backend"] != storagebackend.TypeLinuxZOLNVMET || observedCreate.Parameters["zfsPool"] != "tank/nvmet" {
+		t.Fatalf("expected storage class parameters to reach backend request, got %#v", observedCreate.Parameters)
+	}
+	if ctx["backend"] != storagebackend.TypeLinuxZOLNVMET || ctx["executor"] != storagebackend.ExecutorHostNamespace {
 		t.Fatalf("expected Linux backend context, got %#v", ctx)
 	}
-	if ctx["zfsPool"] != "tank/nvmet" || ctx["targetAddress"] != "10.42.0.10" {
+	if ctx["zfsPool"] != "tank/nvmet" || ctx["targetAddress"] != "10.42.0.20" {
 		t.Fatalf("expected Linux target context, got %#v", ctx)
 	}
 	if ctx["volumePath"] != "/dev/zvol/tank/nvmet/"+volumeID {
 		t.Fatalf("expected normalized zvol volumePath, got %q", ctx["volumePath"])
 	}
-	if ctx["nvmeAddress"] != "10.42.0.10" {
-		t.Fatalf("expected nvmeAddress from targetAddress, got %q", ctx["nvmeAddress"])
+	if ctx["nvmeAddress"] != "10.42.0.20" || ctx["nvmePort"] != "4421" {
+		t.Fatalf("expected explicit nvme endpoint in context, got %#v", ctx)
 	}
 }
 

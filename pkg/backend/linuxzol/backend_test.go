@@ -87,6 +87,7 @@ func TestBuildEnsureVolumePlanRepairsIncompleteExport(t *testing.T) {
 
 	host.volumes[desired.ID] = VolumeState{
 		ID:             spec.ID,
+		OwnerVolumeID:  spec.ID,
 		Dataset:        spec.Dataset,
 		DevicePath:     spec.DevicePath,
 		SizeBytes:      spec.SizeBytes,
@@ -125,6 +126,104 @@ func TestBuildEnsureVolumePlanRepairsIncompleteExport(t *testing.T) {
 	}
 }
 
+func TestBuildEnsureVolumePlanHandlesPartialOwnedExports(t *testing.T) {
+	storageBackend := newTestBackend(t, newMemoryHost())
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+	expectedSubsystem := defaultConfigFSRoot + "/subsystems/" + spec.NQN
+
+	tests := []struct {
+		name string
+		mut  func(*VolumeState)
+	}{
+		{
+			name: "namespace absent",
+			mut:  func(state *VolumeState) {},
+		},
+		{
+			name: "namespace disabled after device path write",
+			mut: func(state *VolumeState) {
+				state.ExportDevice = spec.DevicePath
+				state.PortLinkTarget = expectedSubsystem
+			},
+		},
+		{
+			name: "namespace ready but port symlink absent",
+			mut: func(state *VolumeState) {
+				state.NamespaceReady = true
+				state.ExportDevice = spec.DevicePath
+				state.PortAddress = "10.42.0.10"
+				state.PortServiceID = "4420"
+				state.PortTransport = "tcp"
+				state.PortAddressFam = "ipv4"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := newMemoryHost()
+			storageBackend := newTestBackend(t, host)
+			state := VolumeState{
+				ID:            spec.ID,
+				OwnerVolumeID: spec.ID,
+				Dataset:       spec.Dataset,
+				DevicePath:    spec.DevicePath,
+				SizeBytes:     spec.SizeBytes,
+				NQN:           spec.NQN,
+				Port:          spec.Port,
+				Status:        "not-exported",
+			}
+			tt.mut(&state)
+			host.volumes[desired.ID] = state
+
+			plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+			if err != nil {
+				t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+			}
+			if plan.Action != backend.VolumeActionRepair {
+				t.Fatalf("expected repair plan, got %s: %s", plan.Action, plan.Reason)
+			}
+		})
+	}
+}
+
+func TestBuildEnsureVolumePlanConflictsOnUnownedZvol(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	for name, ownerVolumeID := range map[string]string{
+		"missing owner metadata": "",
+		"wrong owner metadata":   "other-volume",
+	} {
+		t.Run(name, func(t *testing.T) {
+			host.volumes[desired.ID] = VolumeState{
+				ID:            spec.ID,
+				OwnerVolumeID: ownerVolumeID,
+				Dataset:       spec.Dataset,
+				DevicePath:    spec.DevicePath,
+				SizeBytes:     spec.SizeBytes,
+				NQN:           spec.NQN,
+				Port:          spec.Port,
+				Status:        "not-exported",
+			}
+
+			plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+			if err != nil {
+				t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+			}
+			if plan.Action != backend.VolumeActionConflict {
+				t.Fatalf("expected conflict plan, got %s", plan.Action)
+			}
+			if !strings.Contains(plan.Reason, "owner volume ID") {
+				t.Fatalf("unexpected conflict reason: %q", plan.Reason)
+			}
+		})
+	}
+}
+
 func TestBuildEnsureVolumePlanConflictsOnWrongExportDevice(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -132,14 +231,15 @@ func TestBuildEnsureVolumePlanConflictsOnWrongExportDevice(t *testing.T) {
 	spec := storageBackend.specFromRequest(desired)
 
 	host.volumes[desired.ID] = VolumeState{
-		ID:           spec.ID,
-		Dataset:      spec.Dataset,
-		DevicePath:   spec.DevicePath,
-		SizeBytes:    spec.SizeBytes,
-		NQN:          spec.NQN,
-		Port:         spec.Port,
-		ExportDevice: "/dev/zvol/tank/nvmet/other-volume",
-		Status:       "not-exported",
+		ID:            spec.ID,
+		OwnerVolumeID: spec.ID,
+		Dataset:       spec.Dataset,
+		DevicePath:    spec.DevicePath,
+		SizeBytes:     spec.SizeBytes,
+		NQN:           spec.NQN,
+		Port:          spec.Port,
+		ExportDevice:  "/dev/zvol/tank/nvmet/other-volume",
+		Status:        "not-exported",
 	}
 
 	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
@@ -162,6 +262,7 @@ func TestBuildEnsureVolumePlanConflictsOnWrongPortAddress(t *testing.T) {
 
 	host.volumes[desired.ID] = VolumeState{
 		ID:             spec.ID,
+		OwnerVolumeID:  spec.ID,
 		Dataset:        spec.Dataset,
 		DevicePath:     spec.DevicePath,
 		SizeBytes:      spec.SizeBytes,
@@ -258,6 +359,7 @@ func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
 	nqn := "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume"
 	state := VolumeState{
 		ID:              "pvc-test-volume",
+		OwnerVolumeID:   "pvc-test-volume",
 		Dataset:         "tank/nvmet/pvc-test-volume",
 		DevicePath:      "/dev/zvol/tank/nvmet/pvc-test-volume",
 		SizeBytes:       10 << 30,
@@ -287,6 +389,7 @@ func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
 	larger.SizeBytes = 12 << 30
 	host.volumes[state.ID] = VolumeState{
 		ID:              state.ID,
+		OwnerVolumeID:   state.OwnerVolumeID,
 		Dataset:         state.Dataset,
 		DevicePath:      state.DevicePath,
 		SizeBytes:       state.SizeBytes,
@@ -346,13 +449,14 @@ func TestBuildDeleteVolumePlanConflictsOnUnsafeExportState(t *testing.T) {
 	spec := storageBackend.specFromRequest(desired)
 
 	host.volumes[desired.ID] = VolumeState{
-		ID:           spec.ID,
-		Dataset:      spec.Dataset,
-		DevicePath:   spec.DevicePath,
-		SizeBytes:    spec.SizeBytes,
-		NQN:          spec.NQN,
-		Port:         spec.Port,
-		ExportDevice: "/dev/zvol/tank/nvmet/other-volume",
+		ID:            spec.ID,
+		OwnerVolumeID: spec.ID,
+		Dataset:       spec.Dataset,
+		DevicePath:    spec.DevicePath,
+		SizeBytes:     spec.SizeBytes,
+		NQN:           spec.NQN,
+		Port:          spec.Port,
+		ExportDevice:  "/dev/zvol/tank/nvmet/other-volume",
 	}
 	plan, err := storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
 	if err != nil {
@@ -367,6 +471,7 @@ func TestBuildDeleteVolumePlanConflictsOnUnsafeExportState(t *testing.T) {
 
 	host.volumes[desired.ID] = VolumeState{
 		ID:              spec.ID,
+		OwnerVolumeID:   spec.ID,
 		Dataset:         spec.Dataset,
 		DevicePath:      spec.DevicePath,
 		SizeBytes:       spec.SizeBytes,
@@ -386,6 +491,69 @@ func TestBuildDeleteVolumePlanConflictsOnUnsafeExportState(t *testing.T) {
 	}
 }
 
+func TestBuildDeleteVolumePlanConflictsOnUnownedZvolState(t *testing.T) {
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	tests := []struct {
+		name string
+		mut  func(*VolumeState)
+		want string
+	}{
+		{
+			name: "missing owner metadata",
+			mut:  func(state *VolumeState) { state.OwnerVolumeID = "" },
+			want: "owner volume ID",
+		},
+		{
+			name: "wrong owner metadata",
+			mut:  func(state *VolumeState) { state.OwnerVolumeID = "other-volume" },
+			want: "owner volume ID",
+		},
+		{
+			name: "wrong dataset",
+			mut:  func(state *VolumeState) { state.Dataset = "tank/nvmet/other-volume" },
+			want: "dataset differs",
+		},
+		{
+			name: "wrong device path",
+			mut:  func(state *VolumeState) { state.DevicePath = "/dev/zvol/tank/nvmet/other-volume" },
+			want: "device path differs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := newMemoryHost()
+			storageBackend := newTestBackend(t, host)
+			spec := storageBackend.specFromRequest(desired)
+			host.volumes[desired.ID] = VolumeState{
+				ID:             spec.ID,
+				OwnerVolumeID:  spec.ID,
+				Dataset:        spec.Dataset,
+				DevicePath:     spec.DevicePath,
+				SizeBytes:      spec.SizeBytes,
+				NQN:            spec.NQN,
+				Port:           spec.Port,
+				ExportDevice:   spec.DevicePath,
+				PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+			}
+			state := host.volumes[desired.ID]
+			tt.mut(&state)
+			host.volumes[desired.ID] = state
+
+			plan, err := storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
+			if err != nil {
+				t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+			}
+			if plan.Action != backend.VolumeActionConflict {
+				t.Fatalf("expected conflict plan, got %s", plan.Action)
+			}
+			if !strings.Contains(plan.Reason, tt.want) {
+				t.Fatalf("expected reason containing %q, got %q", tt.want, plan.Reason)
+			}
+		})
+	}
+}
+
 func TestBuildDeleteVolumePlanAllowsPartialExpectedExport(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -394,6 +562,7 @@ func TestBuildDeleteVolumePlanAllowsPartialExpectedExport(t *testing.T) {
 
 	host.volumes[desired.ID] = VolumeState{
 		ID:             spec.ID,
+		OwnerVolumeID:  spec.ID,
 		Dataset:        spec.Dataset,
 		DevicePath:     spec.DevicePath,
 		SizeBytes:      spec.SizeBytes,
@@ -456,11 +625,12 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
 	state := VolumeState{
-		ID:         "pvc-test-volume",
-		Dataset:    "tank/nvmet/pvc-test-volume",
-		DevicePath: "/dev/zvol/tank/nvmet/pvc-test-volume",
-		NQN:        "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
-		Port:       4420,
+		ID:            "pvc-test-volume",
+		OwnerVolumeID: "pvc-test-volume",
+		Dataset:       "tank/nvmet/pvc-test-volume",
+		DevicePath:    "/dev/zvol/tank/nvmet/pvc-test-volume",
+		NQN:           "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+		Port:          4420,
 	}
 
 	resize := commandStrings(host.ResizeVolumeCommands(state.ID, 12<<30))
@@ -489,6 +659,64 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 	}
 	if repair[len(repair)-1] != expectedLinkCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume", "/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume") {
 		t.Fatalf("unexpected final repair command: %q", repair[len(repair)-1])
+	}
+}
+
+func TestCommandHostValidateDeleteStateRequiresExpectedOwnerAndPaths(t *testing.T) {
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+	base := VolumeState{
+		ID:             "pvc-test-volume",
+		OwnerVolumeID:  "pvc-test-volume",
+		Dataset:        "tank/nvmet/pvc-test-volume",
+		DevicePath:     "/dev/zvol/tank/nvmet/pvc-test-volume",
+		NQN:            "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+		Port:           4420,
+		ExportDevice:   "/dev/zvol/tank/nvmet/pvc-test-volume",
+		PortLinkTarget: defaultConfigFSRoot + "/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+	}
+
+	tests := []struct {
+		name string
+		mut  func(*VolumeState)
+		want string
+	}{
+		{
+			name: "missing owner",
+			mut:  func(state *VolumeState) { state.OwnerVolumeID = "" },
+			want: "owner volume ID",
+		},
+		{
+			name: "wrong owner",
+			mut:  func(state *VolumeState) { state.OwnerVolumeID = "other-volume" },
+			want: "owner volume ID",
+		},
+		{
+			name: "wrong dataset",
+			mut:  func(state *VolumeState) { state.Dataset = "tank/nvmet/other-volume" },
+			want: "dataset",
+		},
+		{
+			name: "wrong device path",
+			mut:  func(state *VolumeState) { state.DevicePath = "/dev/zvol/tank/nvmet/other-volume" },
+			want: "device path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := base
+			tt.mut(&state)
+			err := host.validateDeleteState(state)
+			if err == nil {
+				t.Fatal("expected delete validation to fail")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected error containing %q, got %v", tt.want, err)
+			}
+		})
 	}
 }
 
@@ -716,6 +944,7 @@ func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
 func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 	h.volumes[spec.ID] = VolumeState{
 		ID:              spec.ID,
+		OwnerVolumeID:   spec.ID,
 		Dataset:         spec.Dataset,
 		DevicePath:      spec.DevicePath,
 		SizeBytes:       spec.SizeBytes,
