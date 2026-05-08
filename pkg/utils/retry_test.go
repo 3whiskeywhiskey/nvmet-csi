@@ -125,6 +125,11 @@ func TestIsRetryableError(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "device wait cleanup failure is terminal even with retryable detail",
+			err:      errors.New("device did not appear for subsystem nqn.2000-02.com.mikrotik:pvc-test and cleanup disconnect failed: wait error: connection timed out; cleanup error: resource temporarily unavailable"),
+			expected: false,
+		},
+		{
 			name:     "permission denied (not retryable)",
 			err:      errors.New("permission denied"),
 			expected: false,

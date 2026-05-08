@@ -45,6 +45,43 @@ func mockExecCommandWithDisconnectFailure(listOutput string) func(string, ...str
 	}
 }
 
+func mockExecCommandConnectThenDisconnectFailure(nqn string) func(string, ...string) *exec.Cmd {
+	listCalls := 0
+	return func(command string, args ...string) *exec.Cmd {
+		stdout := ""
+		stderr := ""
+		exitCode := "0"
+		disconnectStderr := ""
+		disconnectExitCode := ""
+
+		if command == "nvme" && len(args) > 0 {
+			switch args[0] {
+			case "list-subsys":
+				listCalls++
+				if listCalls > 1 {
+					stdout = `{"Subsystems":[{"NQN":"` + nqn + `"}]}`
+				}
+			case "disconnect":
+				disconnectStderr = "resource temporarily unavailable"
+				disconnectExitCode = "1"
+			}
+		}
+
+		cs := []string{"-test.run=TestHelperProcess", "--", command}
+		cs = append(cs, args...)
+		cmd := exec.Command(os.Args[0], cs...)
+		cmd.Env = []string{
+			"GO_WANT_HELPER_PROCESS=1",
+			"STDOUT=" + stdout,
+			"STDERR=" + stderr,
+			"EXIT_CODE=" + exitCode,
+			"DISCONNECT_STDERR=" + disconnectStderr,
+			"DISCONNECT_EXIT_CODE=" + disconnectExitCode,
+		}
+		return cmd
+	}
+}
+
 // TestHelperProcess is used by mockExecCommand to simulate command execution
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
@@ -245,6 +282,42 @@ func TestConnectWithConfigOrphanedSubsystemReturnsDisconnectError(t *testing.T) 
 	}
 	if !strings.Contains(err.Error(), "failed to disconnect orphaned subsystem") {
 		t.Fatalf("ConnectWithConfig() error = %v, want orphan disconnect failure", err)
+	}
+
+	c.metrics.mu.RLock()
+	connectErrors := c.metrics.connectErrors
+	c.metrics.mu.RUnlock()
+	if connectErrors != 1 {
+		t.Fatalf("connectErrors = %d, want 1", connectErrors)
+	}
+}
+
+func TestConnectWithConfigReturnsCleanupDisconnectErrorWhenDeviceMissing(t *testing.T) {
+	nqn := "nqn.2000-02.com.mikrotik:pvc-device-wait-cleanup"
+	c := &connector{
+		execCommand:      mockExecCommandConnectThenDisconnectFailure(nqn),
+		config:           DefaultConfig(),
+		metrics:          &Metrics{},
+		activeOperations: make(map[string]*operationTracker),
+		resolver: NewDeviceResolverWithConfig(ResolverConfig{
+			SysfsRoot: t.TempDir(),
+			TTL:       10 * time.Second,
+		}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := c.ConnectWithConfig(ctx, Target{
+		Transport:     "tcp",
+		NQN:           nqn,
+		TargetAddress: "10.0.0.1",
+		TargetPort:    4420,
+	}, DefaultConnectionConfig())
+	if err == nil {
+		t.Fatal("ConnectWithConfig() expected cleanup disconnect error")
+	}
+	if !strings.Contains(err.Error(), "cleanup disconnect failed") {
+		t.Fatalf("ConnectWithConfig() error = %v, want cleanup disconnect failure", err)
 	}
 
 	c.metrics.mu.RLock()

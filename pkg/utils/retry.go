@@ -80,6 +80,7 @@ func IsRetryableError(err error) bool {
 	// Non-retryable patterns must be checked first. These errors can wrap lower-level
 	// transient text, but retrying them would repeat cleanup chatter.
 	nonRetryablePatterns := []string{
+		"device did not appear for subsystem",
 		"failed to disconnect orphaned subsystem",
 	}
 

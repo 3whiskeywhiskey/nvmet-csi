@@ -602,12 +602,14 @@ func (c *connector) ConnectWithConfig(ctx context.Context, target Target, config
 	// Wait for device with context
 	devicePath, err = c.waitForDeviceWithContext(ctx, target.NQN)
 	if err != nil {
-		_ = c.DisconnectWithContext(context.Background(), target.NQN)
 		c.metrics.mu.Lock()
 		c.metrics.connectErrors++
 		c.metrics.mu.Unlock()
-		err = fmt.Errorf("device did not appear: %w", err)
-		return "", err
+
+		if cleanupErr := c.DisconnectWithContext(context.Background(), target.NQN); cleanupErr != nil {
+			return "", fmt.Errorf("device did not appear for subsystem %s and cleanup disconnect failed: wait error: %w; cleanup error: %w", target.NQN, err, cleanupErr)
+		}
+		return "", fmt.Errorf("device did not appear: %w", err)
 	}
 
 	klog.V(2).Infof("Successfully connected to NVMe target, device: %s", devicePath)
