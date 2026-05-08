@@ -59,8 +59,13 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 	exportDevice := h.namespaceDevicePath(ctx, nqn)
 	portEntryExists := h.portEntryExists(ctx, port, nqn)
 	portLinkTarget := h.portLinkTarget(ctx, port, nqn)
+	portAddress := h.portAttribute(ctx, port, "addr_traddr")
+	portServiceID := h.portAttribute(ctx, port, "addr_trsvcid")
+	portTransport := h.portAttribute(ctx, port, "addr_trtype")
+	portAddressFam := h.portAttribute(ctx, port, "addr_adrfam")
 	namespaceReady := h.namespaceEnabled(ctx, nqn)
-	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkTarget == h.cfg.subsystemPath(nqn)
+	portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
+	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkTarget == h.cfg.subsystemPath(nqn) && portReady
 
 	return &VolumeState{
 		ID:              volumeID,
@@ -74,6 +79,10 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 		ExportDevice:    exportDevice,
 		PortEntryExists: portEntryExists,
 		PortLinkTarget:  portLinkTarget,
+		PortAddress:     portAddress,
+		PortServiceID:   portServiceID,
+		PortTransport:   portTransport,
+		PortAddressFam:  portAddressFam,
 		Status:          statusFromExport(exported),
 	}, nil
 }
@@ -112,9 +121,14 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		exportDevice := h.namespaceDevicePath(ctx, nqn)
 		portEntryExists := h.portEntryExists(ctx, port, nqn)
 		portLinkTarget := h.portLinkTarget(ctx, port, nqn)
+		portAddress := h.portAttribute(ctx, port, "addr_traddr")
+		portServiceID := h.portAttribute(ctx, port, "addr_trsvcid")
+		portTransport := h.portAttribute(ctx, port, "addr_trtype")
+		portAddressFam := h.portAttribute(ctx, port, "addr_adrfam")
 		devicePath := h.cfg.devicePathFor(id)
 		namespaceReady := h.namespaceEnabled(ctx, nqn)
-		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn)
+		portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
+		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn) && portReady
 		volumes = append(volumes, VolumeState{
 			ID:              id,
 			Dataset:         fields[0],
@@ -127,6 +141,10 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 			ExportDevice:    exportDevice,
 			PortEntryExists: portEntryExists,
 			PortLinkTarget:  portLinkTarget,
+			PortAddress:     portAddress,
+			PortServiceID:   portServiceID,
+			PortTransport:   portTransport,
+			PortAddressFam:  portAddressFam,
 			Status:          statusFromExport(exported),
 		})
 	}
@@ -138,8 +156,10 @@ func (h *CommandHost) CreateVolume(ctx context.Context, spec VolumeSpec) error {
 }
 
 func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
-	return []Command{
-		{
+	commands := []Command{}
+	commands = append(commands, h.EnsurePortCommands(spec.Port)...)
+	commands = append(commands,
+		Command{
 			Name: "zfs",
 			Args: []string{
 				"create", "-V", strconv.FormatInt(spec.SizeBytes, 10),
@@ -150,13 +170,13 @@ func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
 				spec.Dataset,
 			},
 		},
-		{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
+		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
-		{Name: "mkdir", Args: []string{"-p", filepathJoin(h.cfg.portPath(spec.Port), "subsystems")}},
-		{Name: "ln", Args: []string{"-s", h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)}},
-	}
+		Command{Name: "ln", Args: []string{"-s", h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)}},
+	)
+	return commands
 }
 
 func (h *CommandHost) RepairVolume(ctx context.Context, spec VolumeSpec) error {
@@ -164,13 +184,25 @@ func (h *CommandHost) RepairVolume(ctx context.Context, spec VolumeSpec) error {
 }
 
 func (h *CommandHost) RepairVolumeCommands(spec VolumeSpec) []Command {
-	return []Command{
-		{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
+	commands := []Command{}
+	commands = append(commands, h.EnsurePortCommands(spec.Port)...)
+	commands = append(commands,
+		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
-		{Name: "mkdir", Args: []string{"-p", filepathJoin(h.cfg.portPath(spec.Port), "subsystems")}},
 		linkIfMissingCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
+	)
+	return commands
+}
+
+func (h *CommandHost) EnsurePortCommands(port int) []Command {
+	return []Command{
+		{Name: "mkdir", Args: []string{"-p", filepathJoin(h.cfg.portPath(port), "subsystems")}},
+		writeIfEmptyOrEqualCommand(h.cfg.portPath(port)+"/addr_trtype", h.cfg.portTransport()),
+		writeIfEmptyOrEqualCommand(h.cfg.portPath(port)+"/addr_adrfam", h.cfg.portAddressFamily()),
+		writeIfEmptyOrEqualCommand(h.cfg.portPath(port)+"/addr_traddr", h.cfg.Address),
+		writeIfEmptyOrEqualCommand(h.cfg.portPath(port)+"/addr_trsvcid", h.cfg.portServiceID(port)),
 	}
 }
 
@@ -317,6 +349,27 @@ func (h *CommandHost) portEntryExists(ctx context.Context, port int, nqn string)
 	return err == nil
 }
 
+func (h *CommandHost) portAttribute(ctx context.Context, port int, name string) string {
+	if port <= 0 {
+		return ""
+	}
+	out, err := h.run(ctx, Command{
+		Name: "cat",
+		Args: []string{h.cfg.portPath(port) + "/" + name},
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+func (h *CommandHost) portReady(address, serviceID, transport, addressFamily string, port int) bool {
+	return address == h.cfg.Address &&
+		serviceID == h.cfg.portServiceID(port) &&
+		transport == h.cfg.portTransport() &&
+		addressFamily == h.cfg.portAddressFamily()
+}
+
 func (h *CommandHost) run(ctx context.Context, cmd Command) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -345,6 +398,19 @@ func writeCommand(path string, value string) Command {
 		Name:  "tee",
 		Args:  []string{path},
 		Stdin: value,
+	}
+}
+
+func writeIfEmptyOrEqualCommand(path string, value string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"current=$(cat " + shellQuote(path) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ -z \"$current\" ] || [ \"$current\" = " + shellQuote(value) + " ]; then " +
+				"printf '%s\\n' " + shellQuote(value) + " > " + shellQuote(path) + "; " +
+				"else printf '%s\\n' 'refusing to rewrite nvmet port attribute " + path + "' >&2; exit 1; fi",
+		},
 	}
 }
 

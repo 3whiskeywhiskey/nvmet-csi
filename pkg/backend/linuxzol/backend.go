@@ -83,6 +83,9 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(spec.NQN) {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "nvmet port link target differs")), nil
 	}
+	if reason := b.conflictingPortReason(actual, spec.Port); reason != "" {
+		return b.withPlanMetadata(conflictPlan(spec, actual, reason)), nil
+	}
 	if actual.SizeBytes > spec.SizeBytes {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "actual zvol is larger than desired")), nil
 	}
@@ -302,6 +305,25 @@ func (b *Backend) specFromRequest(req backend.CreateVolumeRequest) VolumeSpec {
 		NQN:        req.NVMETCPNQN,
 		Port:       req.NVMETCPPort,
 	}
+}
+
+func (b *Backend) conflictingPortReason(actual *VolumeState, port int) string {
+	if actual == nil {
+		return ""
+	}
+	if actual.PortAddress != "" && actual.PortAddress != b.cfg.Address {
+		return fmt.Sprintf("nvmet port target address %q differs from expected %q", actual.PortAddress, b.cfg.Address)
+	}
+	if actual.PortServiceID != "" && actual.PortServiceID != b.cfg.portServiceID(port) {
+		return fmt.Sprintf("nvmet port service id %q differs from expected %q", actual.PortServiceID, b.cfg.portServiceID(port))
+	}
+	if actual.PortTransport != "" && actual.PortTransport != b.cfg.portTransport() {
+		return fmt.Sprintf("nvmet port transport %q differs from expected %q", actual.PortTransport, b.cfg.portTransport())
+	}
+	if actual.PortAddressFam != "" && actual.PortAddressFam != b.cfg.portAddressFamily() {
+		return fmt.Sprintf("nvmet port address family %q differs from expected %q", actual.PortAddressFam, b.cfg.portAddressFamily())
+	}
+	return ""
 }
 
 func (b *Backend) specFromPlan(plan *backend.VolumePlan) (VolumeSpec, error) {

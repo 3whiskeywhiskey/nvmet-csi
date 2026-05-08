@@ -154,6 +154,36 @@ func TestBuildEnsureVolumePlanConflictsOnWrongExportDevice(t *testing.T) {
 	}
 }
 
+func TestBuildEnsureVolumePlanConflictsOnWrongPortAddress(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = VolumeState{
+		ID:             spec.ID,
+		Dataset:        spec.Dataset,
+		DevicePath:     spec.DevicePath,
+		SizeBytes:      spec.SizeBytes,
+		NQN:            spec.NQN,
+		Port:           spec.Port,
+		ExportDevice:   spec.DevicePath,
+		PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+		PortAddress:    "10.42.0.99",
+	}
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionConflict {
+		t.Fatalf("expected conflict plan, got %s", plan.Action)
+	}
+	if !strings.Contains(plan.Reason, "target address") {
+		t.Fatalf("unexpected conflict reason: %q", plan.Reason)
+	}
+}
+
 func TestApplyVolumePlanDryRunDoesNotMutate(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -182,7 +212,7 @@ func TestCommandHostPlansReportCommands(t *testing.T) {
 			"zfs get -H -p -o value volsize tank/nvmet/pvc-test-volume": errors.New("cannot open 'tank/nvmet/pvc-test-volume': dataset does not exist"),
 		},
 	}
-	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", ConfigFSRoot: "/config/nvmet"}, recorder)
+	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -199,11 +229,14 @@ func TestCommandHostPlansReportCommands(t *testing.T) {
 	if plan.Action != backend.VolumeActionCreate {
 		t.Fatalf("expected create plan, got %s", plan.Action)
 	}
-	if len(plan.Commands) != 7 {
-		t.Fatalf("expected 7 create commands, got %d: %v", len(plan.Commands), plan.Commands)
+	if len(plan.Commands) != 11 {
+		t.Fatalf("expected 11 create commands, got %d: %v", len(plan.Commands), plan.Commands)
 	}
-	if plan.Commands[0] != "zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume" {
+	if plan.Commands[0] != "mkdir -p /config/nvmet/ports/4420/subsystems" {
 		t.Fatalf("unexpected first command: %q", plan.Commands[0])
+	}
+	if plan.Commands[5] != "zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume" {
+		t.Fatalf("unexpected zfs create command: %q", plan.Commands[5])
 	}
 
 	result, err := storageBackend.ApplyVolumePlan(context.Background(), plan, backend.VolumeApplyOptions{DryRun: true})
@@ -264,6 +297,10 @@ func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
 		ExportDevice:    state.DevicePath,
 		PortEntryExists: true,
 		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + state.NQN,
+		PortAddress:     "10.42.0.10",
+		PortServiceID:   "4420",
+		PortTransport:   "tcp",
+		PortAddressFam:  "ipv4",
 		Status:          "ready",
 	}
 	plan, err = storageBackend.BuildEnsureVolumePlan(context.Background(), larger)
@@ -377,7 +414,7 @@ func TestBuildDeleteVolumePlanAllowsPartialExpectedExport(t *testing.T) {
 
 func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	recorder := &recordingExecutor{outputs: map[string]string{}}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", ConfigFSRoot: "/config/nvmet"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -396,25 +433,25 @@ func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	}
 
 	got := commandStrings(recorder.commands)
-	want := []string{
+	want := expectedPortCommands("/config/nvmet", 4420, "10.42.0.10")
+	want = append(want,
 		"zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume",
 		"mkdir -p /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/attr_allow_any_host",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable",
-		"mkdir -p /config/nvmet/ports/4420/subsystems",
 		"ln -s /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume /config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
-	}
+	)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected commands:\nwant=%v\n got=%v", want, got)
 	}
-	if recorder.commands[2].Stdin != "1\n" || recorder.commands[3].Stdin != spec.DevicePath+"\n" || recorder.commands[4].Stdin != "1\n" {
+	if recorder.commands[7].Stdin != "1\n" || recorder.commands[8].Stdin != spec.DevicePath+"\n" || recorder.commands[9].Stdin != "1\n" {
 		t.Fatalf("unexpected tee stdin: %+v", recorder.commands)
 	}
 }
 
 func TestCommandHostDryRunCommandPlanning(t *testing.T) {
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", ConfigFSRoot: "/config/nvmet"}, &recordingExecutor{})
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, &recordingExecutor{})
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -447,7 +484,7 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 	if len(repair) == 0 {
 		t.Fatal("expected repair commands")
 	}
-	if repair[0] != "mkdir -p /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1" {
+	if repair[0] != "mkdir -p /config/nvmet/ports/4420/subsystems" {
 		t.Fatalf("unexpected first repair command: %q", repair[0])
 	}
 	if repair[len(repair)-1] != "sh -c test -L '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' || ln -s '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume'" {
@@ -461,7 +498,7 @@ func TestCommandHostGetVolumeMapsNotFound(t *testing.T) {
 			"zfs get -H -p -o value volsize tank/nvmet/pvc-missing": errors.New("cannot open 'tank/nvmet/pvc-missing': dataset does not exist"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -542,7 +579,7 @@ func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	}
 
 	_, err = NewCommandBackend(CommandBackendOptions{
-		Config:   Config{Pool: "tank/nvmet"},
+		Config:   Config{Pool: "tank/nvmet", Address: "10.42.0.10"},
 		Executor: backend.ExecutorHostNamespace,
 	})
 	if err != nil {
@@ -633,6 +670,10 @@ func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 		ExportDevice:    spec.DevicePath,
 		PortEntryExists: true,
 		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + spec.NQN,
+		PortAddress:     "10.42.0.10",
+		PortServiceID:   "4420",
+		PortTransport:   "tcp",
+		PortAddressFam:  "ipv4",
 		Status:          "ready",
 	}
 	return nil
@@ -648,6 +689,10 @@ func (h *memoryHost) RepairVolume(_ context.Context, spec VolumeSpec) error {
 	volume.ExportDevice = spec.DevicePath
 	volume.PortEntryExists = true
 	volume.PortLinkTarget = defaultConfigFSRoot + "/subsystems/" + spec.NQN
+	volume.PortAddress = "10.42.0.10"
+	volume.PortServiceID = "4420"
+	volume.PortTransport = "tcp"
+	volume.PortAddressFam = "ipv4"
 	volume.Status = "ready"
 	h.volumes[spec.ID] = volume
 	return nil
@@ -673,22 +718,22 @@ func (h *memoryHost) GetCapacity(context.Context) (*backend.Capacity, error) {
 }
 
 func (h *planningMemoryHost) CreateVolumeCommands(spec VolumeSpec) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
 	return commandHost.CreateVolumeCommands(spec)
 }
 
 func (h *planningMemoryHost) RepairVolumeCommands(spec VolumeSpec) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
 	return commandHost.RepairVolumeCommands(spec)
 }
 
 func (h *planningMemoryHost) DeleteVolumeCommands(state VolumeState) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
 	return commandHost.DeleteVolumeCommands(state)
 }
 
 func (h *planningMemoryHost) ResizeVolumeCommands(volumeID string, sizeBytes int64) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
 	return commandHost.ResizeVolumeCommands(volumeID, sizeBytes)
 }
 
@@ -713,6 +758,18 @@ func commandStrings(commands []Command) []string {
 		out = append(out, cmd.String())
 	}
 	return out
+}
+
+func expectedPortCommands(configFSRoot string, port int, address string) []string {
+	cfg := Config{Address: address, ConfigFSRoot: configFSRoot}.withDefaults()
+	portPath := cfg.portPath(port)
+	return []string{
+		"mkdir -p " + portPath + "/subsystems",
+		writeIfEmptyOrEqualCommand(portPath+"/addr_trtype", "tcp").String(),
+		writeIfEmptyOrEqualCommand(portPath+"/addr_adrfam", cfg.portAddressFamily()).String(),
+		writeIfEmptyOrEqualCommand(portPath+"/addr_traddr", address).String(),
+		writeIfEmptyOrEqualCommand(portPath+"/addr_trsvcid", cfg.portServiceID(port)).String(),
+	}
 }
 
 func stateToSpec(state VolumeState) VolumeSpec {
