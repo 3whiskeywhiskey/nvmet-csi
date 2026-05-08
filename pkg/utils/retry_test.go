@@ -120,6 +120,11 @@ func TestIsRetryableError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "orphan disconnect failure is terminal even with retryable detail",
+			err:      errors.New("failed to disconnect orphaned subsystem nqn.2000-02.com.mikrotik:pvc-test before reconnect: resource temporarily unavailable"),
+			expected: false,
+		},
+		{
 			name:     "permission denied (not retryable)",
 			err:      errors.New("permission denied"),
 			expected: false,
