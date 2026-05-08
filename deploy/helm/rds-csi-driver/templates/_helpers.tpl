@@ -84,7 +84,7 @@ Create the name of the node service account to use
 CSI driver name (used in CSIDriver, StorageClass, etc.)
 */}}
 {{- define "rds-csi.driverName" -}}
-rds.csi.srvlab.io
+{{- default "rds.csi.srvlab.io" .Values.driverName }}
 {{- end }}
 
 {{/*

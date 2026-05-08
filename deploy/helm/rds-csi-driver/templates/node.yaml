@@ -52,6 +52,7 @@ spec:
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
             - "-node-id=$(NODE_ID)"
+            - "-driver-name={{ include "rds-csi.driverName" . }}"
             - "-node"
             - "-v={{ .Values.node.logLevel }}"
             {{- if .Values.node.orphanCleanup.enabled }}

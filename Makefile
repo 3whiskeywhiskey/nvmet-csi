@@ -337,6 +337,20 @@ verify-helm:
 	grep -q -- "-node-orphan-cleanup" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
 	grep -q -- "-node-orphan-cleanup-dry-run=false" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
 	grep -q -- "-node-orphan-cleanup-max-disconnects=2" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
+	helm template nvmet-zol deploy/helm/rds-csi-driver --namespace nvmet-csi \
+		-f deploy/helm/rds-csi-driver/ci/nvmet-zol-values.yaml > /tmp/nvmet-zol-helm.yaml
+	grep -q -- "name: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "provisioner: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-driver-name=nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
+	@if grep -q -- "-rds-address" /tmp/nvmet-zol-helm.yaml; then \
+		echo "ERROR: RDS address rendered for ZoL-only Helm install"; \
+		exit 1; \
+	fi
+	@if grep -q -- "name: rds-credentials" /tmp/nvmet-zol-helm.yaml; then \
+		echo "ERROR: RDS credentials rendered for ZoL-only Helm install"; \
+		exit 1; \
+	fi
 
 .PHONY: verify
 verify: fmt vet lint test verify-helm

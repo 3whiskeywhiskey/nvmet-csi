@@ -1,0 +1,22 @@
+driverName: nvmet.csi.whiskey.works
+
+rds:
+  enabled: false
+
+controller:
+  linuxZOLHostAccess:
+    enabled: true
+
+storageClasses:
+  - name: nvmet-zol-r740xd
+    enabled: true
+    isDefault: false
+    backend: linux-zol-nvmet
+    executor: local
+    zfsPool: tank/nvmet
+    targetAddress: "10.42.0.10"
+    fsType: ext4
+    nvmePort: "4420"
+    volumeBindingMode: WaitForFirstConsumer
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true

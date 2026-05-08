@@ -63,10 +63,19 @@ func (e SSHExecutor) Run(ctx context.Context, cmd Command) (string, error) {
 	if e.Target == "" {
 		return "", fmt.Errorf("SSH target is required")
 	}
-	args := append([]string{e.Target, cmd.Name}, cmd.Args...)
+	args := []string{e.Target, remoteCommandString(cmd)}
 	return LocalExecutor{}.Run(ctx, Command{
 		Name:  "ssh",
 		Args:  args,
 		Stdin: cmd.Stdin,
 	})
+}
+
+func remoteCommandString(cmd Command) string {
+	parts := make([]string, 0, 1+len(cmd.Args))
+	parts = append(parts, shellQuote(cmd.Name))
+	for _, arg := range cmd.Args {
+		parts = append(parts, shellQuote(arg))
+	}
+	return strings.Join(parts, " ")
 }

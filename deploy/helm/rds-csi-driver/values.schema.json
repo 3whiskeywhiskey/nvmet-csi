@@ -13,11 +13,20 @@
       "type": "string",
       "description": "Override the full name of the chart"
     },
+    "driverName": {
+      "type": "string",
+      "description": "CSI driver name used in CSIDriver, sidecars, node registration, and StorageClasses",
+      "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+    },
     "rds": {
       "type": "object",
       "description": "RDS connection configuration",
       "required": ["managementIP", "secretName"],
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable RouterOS/RDS controller configuration and credentials mount"
+        },
         "managementIP": {
           "type": "string",
           "description": "RDS management IP address for SSH control plane",
@@ -103,6 +112,20 @@
         "priorityClassName": {
           "type": "string",
           "description": "Priority class for controller pod"
+        },
+        "linuxZOLHostAccess": {
+          "type": "object",
+          "description": "Host access for linux-zol-nvmet executor=local controller deployments",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Mount host devices and nvmet configfs into the controller"
+            },
+            "privileged": {
+              "type": "boolean",
+              "description": "Run the controller container privileged for local ZFS/configfs control"
+            }
+          }
         },
         "staleVolumeAttachmentCleanup": {
           "type": "object",

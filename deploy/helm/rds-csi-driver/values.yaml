@@ -6,8 +6,16 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# CSI driver name. Set this to a distinct value for side-by-side installs with
+# the existing rds-csi deployment, for example nvmet.csi.whiskey.works.
+driverName: "rds.csi.srvlab.io"
+
 # RDS connection configuration
 rds:
+  # Enable RouterOS/RDS controller configuration. Set false for ZoL-only
+  # deployments so the controller does not require RDS credentials.
+  enabled: true
+
   # Management interface IP (SSH control plane)
   managementIP: "10.42.241.3"
 
@@ -97,6 +105,12 @@ controller:
 
   # Priority class for controller pod
   priorityClassName: system-cluster-critical
+
+  # Host access needed for linux-zol-nvmet executor=local. Keep disabled for
+  # RouterOS/RDS and linux-zol-nvmet executor=ssh deployments.
+  linuxZOLHostAccess:
+    enabled: false
+    privileged: true
 
   # Orphan reconciler settings (detects and cleans up orphaned volumes)
   orphanReconciler:
