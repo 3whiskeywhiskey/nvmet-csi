@@ -13,6 +13,14 @@ type CommandBackendOptions struct {
 }
 
 func NewCommandBackend(opts CommandBackendOptions) (*Backend, error) {
+	host, err := NewCommandHostFromOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	return New(opts.Config, host)
+}
+
+func NewCommandHostFromOptions(opts CommandBackendOptions) (*CommandHost, error) {
 	executorType := opts.Executor
 	if executorType == "" {
 		executorType = storagebackend.ExecutorLocal
@@ -33,9 +41,5 @@ func NewCommandBackend(opts CommandBackendOptions) (*Backend, error) {
 		return nil, fmt.Errorf("unsupported Linux ZoL executor %q", executorType)
 	}
 
-	host, err := NewCommandHost(opts.Config, executor)
-	if err != nil {
-		return nil, err
-	}
-	return New(opts.Config, host)
+	return NewCommandHost(opts.Config, executor)
 }

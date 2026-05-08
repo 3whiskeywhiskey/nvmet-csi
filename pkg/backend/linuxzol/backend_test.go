@@ -587,6 +587,62 @@ func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	}
 }
 
+func TestCommandHostPreflightAllowsAbsentPort(t *testing.T) {
+	recorder := &recordingExecutor{
+		outputs: map[string]string{
+			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
+		},
+		errs: map[string]error{
+			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
+		},
+	}
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+
+	checks := host.Preflight(context.Background(), 4420)
+	if !PreflightChecksOK(checks) {
+		t.Fatalf("expected absent port preflight to pass, got %+v", checks)
+	}
+	if checks[len(checks)-1].Name != "nvmet port" || !strings.Contains(checks[len(checks)-1].Detail, "will create it") {
+		t.Fatalf("unexpected port check: %+v", checks[len(checks)-1])
+	}
+}
+
+func TestCommandHostPreflightFailsMismatchedPortAttribute(t *testing.T) {
+	recorder := &recordingExecutor{
+		outputs: map[string]string{
+			"zfs list -H -o name tank/nvmet":                       "tank/nvmet\n",
+			"cat /sys/kernel/config/nvmet/ports/4420/addr_trtype":  "tcp\n",
+			"cat /sys/kernel/config/nvmet/ports/4420/addr_adrfam":  "ipv4\n",
+			"cat /sys/kernel/config/nvmet/ports/4420/addr_traddr":  "10.42.0.99\n",
+			"cat /sys/kernel/config/nvmet/ports/4420/addr_trsvcid": "4420\n",
+		},
+	}
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+
+	checks := host.Preflight(context.Background(), 4420)
+	if PreflightChecksOK(checks) {
+		t.Fatalf("expected preflight to fail, got %+v", checks)
+	}
+	found := false
+	for _, check := range checks {
+		if check.Name == "nvmet port addr_traddr" {
+			found = true
+			if check.OK || !strings.Contains(check.Detail, "10.42.0.99") {
+				t.Fatalf("unexpected addr_traddr check: %+v", check)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing addr_traddr check: %+v", checks)
+	}
+}
+
 func TestGetSnapshotReturnsTypedNotFound(t *testing.T) {
 	storageBackend := newTestBackend(t, newMemoryHost())
 
