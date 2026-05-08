@@ -779,9 +779,9 @@ func TestHostNamespaceExecutorCommandUsesHostPath(t *testing.T) {
 			"-t", "1",
 			"-m",
 			"--",
-			"env", "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 			"zfs", "list", "tank/nvmet",
 		},
+		Env:   []string{"PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
 		Stdin: "ignored\n",
 	}
 	if !reflect.DeepEqual(cmd, want) {

@@ -378,8 +378,8 @@ verify-helm:
 	grep -q -- "nvmePort: \"4420\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "hostPID: true" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "path: /sys/kernel/config/nvmet" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "mountPath: /sys/kernel/config/nvmet" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "path: /sys/kernel/config" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "mountPath: /sys/kernel/config" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "kind: Job" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "app.kubernetes.io/component: linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-helm.yaml

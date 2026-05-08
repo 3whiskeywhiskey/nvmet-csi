@@ -63,6 +63,35 @@ func TestNewDriver_NodeModeSkipsAttachmentManager(t *testing.T) {
 	}
 }
 
+func TestNewDriver_ControllerModeWithoutRDSStillEnablesControllerService(t *testing.T) {
+	config := DriverConfig{
+		DriverName:       "nvmet.csi.whiskey.works",
+		EnableController: true,
+		EnableNode:       false,
+		K8sClient:        fake.NewSimpleClientset(),
+	}
+
+	driver, err := NewDriver(config)
+	if err != nil {
+		t.Fatalf("NewDriver failed: %v", err)
+	}
+
+	if !driver.enableController {
+		t.Fatal("controller mode should remain enabled without a default RDS backend")
+	}
+	if len(driver.cscaps) == 0 {
+		t.Fatal("controller capabilities should be configured when controller mode is enabled")
+	}
+
+	driver.ids = NewIdentityServer(driver)
+	if driver.enableController {
+		driver.cs = NewControllerServer(driver)
+	}
+	if driver.cs == nil {
+		t.Fatal("controller service should be registered even when no default backend is configured")
+	}
+}
+
 // Note: Testing the full controller mode initialization with AttachmentManager
 // requires a valid RDS connection (SSH), which is not feasible in unit tests.
 // The metrics wiring in driver.go (lines 188-189) is verified by:

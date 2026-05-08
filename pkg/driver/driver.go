@@ -116,6 +116,11 @@ type Driver struct {
 	// Managed NQN prefix for orphan cleaner filtering
 	managedNQNPrefix string
 
+	// Enabled CSI service modes. Controller mode can be valid without a default
+	// RDS backend because backends may be selected per StorageClass/volume.
+	enableController bool
+	enableNode       bool
+
 	// Capabilities
 	vcaps  []*csi.VolumeCapability_AccessMode
 	cscaps []*csi.ControllerServiceCapability
@@ -217,6 +222,8 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		volumeBackendSelections:   map[string]BackendSelection{},
 		snapshotBackendSelections: map[string]BackendSelection{},
 		controllerVolumeLocks:     attachment.NewVolumeLockManager(),
+		enableController:          config.EnableController,
+		enableNode:                config.EnableNode,
 	}
 
 	// Initialize RDS client if controller is enabled and an RDS address is
@@ -551,13 +558,13 @@ func (d *Driver) Run(endpoint string) error {
 	d.ids = NewIdentityServer(d)
 
 	// Initialize controller service if enabled
-	if d.controllerBackend() != nil {
+	if d.enableController {
 		klog.Info("Controller service enabled")
 		d.cs = NewControllerServer(d)
 	}
 
 	// Initialize node service if enabled
-	if d.nodeID != "" {
+	if d.enableNode {
 		klog.Info("Node service enabled")
 		d.ns = NewNodeServer(d, d.nodeID, d.k8sClient)
 	}

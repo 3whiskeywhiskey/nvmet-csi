@@ -68,7 +68,7 @@ spec:
             - name: host-dev
               mountPath: /dev
             - name: host-nvmet-configfs
-              mountPath: /sys/kernel/config/nvmet
+              mountPath: /sys/kernel/config
               mountPropagation: HostToContainer
           {{- end }}
       {{- if $mountHost }}
@@ -79,7 +79,7 @@ spec:
             type: Directory
         - name: host-nvmet-configfs
           hostPath:
-            path: /sys/kernel/config/nvmet
+            path: /sys/kernel/config
             type: Directory
       {{- end }}
 {{- end }}
