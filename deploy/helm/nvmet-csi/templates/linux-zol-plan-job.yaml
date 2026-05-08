@@ -9,6 +9,10 @@ metadata:
   labels:
     {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: linux-zol-plan
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-9"
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: {{ .Values.linuxZOLPlan.backoffLimit }}
   ttlSecondsAfterFinished: {{ .Values.linuxZOLPlan.ttlSecondsAfterFinished }}
