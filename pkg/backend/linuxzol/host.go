@@ -174,7 +174,7 @@ func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
-		Command{Name: "ln", Args: []string{"-s", h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)}},
+		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
 	return commands
 }
@@ -191,7 +191,7 @@ func (h *CommandHost) RepairVolumeCommands(spec VolumeSpec) []Command {
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
-		linkIfMissingCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
+		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
 	return commands
 }
@@ -414,12 +414,18 @@ func writeIfEmptyOrEqualCommand(path string, value string) Command {
 	}
 }
 
-func linkIfMissingCommand(target string, link string) Command {
+func linkIfAbsentOrEqualCommand(target string, link string) Command {
 	return Command{
 		Name: "sh",
 		Args: []string{
 			"-c",
-			"test -L " + shellQuote(link) + " || ln -s " + shellQuote(target) + " " + shellQuote(link),
+			"if [ -L " + shellQuote(link) + " ]; then " +
+				"current=$(readlink " + shellQuote(link) + "); " +
+				"if [ \"$current\" = " + shellQuote(target) + " ]; then exit 0; fi; " +
+				"printf '%s\\n' " + shellQuote("refusing to rewrite nvmet port symlink "+link) + " >&2; exit 1; " +
+				"elif [ -e " + shellQuote(link) + " ]; then " +
+				"printf '%s\\n' " + shellQuote("refusing to replace non-symlink nvmet port entry "+link) + " >&2; exit 1; " +
+				"else ln -s " + shellQuote(target) + " " + shellQuote(link) + "; fi",
 		},
 	}
 }
