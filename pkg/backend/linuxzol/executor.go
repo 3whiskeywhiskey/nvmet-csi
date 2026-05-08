@@ -107,6 +107,7 @@ func (e HostNamespaceExecutor) command(cmd Command) Command {
 	args := []string{
 		"-t", fmt.Sprintf("%d", targetPID),
 		"-m",
+		"-n",
 		"--",
 		cmd.Name,
 	}

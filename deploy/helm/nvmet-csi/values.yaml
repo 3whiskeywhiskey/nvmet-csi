@@ -220,6 +220,9 @@ node:
   nodeSelector:
     kubernetes.io/os: linux
 
+  # Affinity for node plugin pods.
+  affinity: {}
+
   # Tolerations for node plugin pods (must run on ALL nodes)
   tolerations:
     - operator: Exists

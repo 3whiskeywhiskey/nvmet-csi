@@ -189,6 +189,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `node.resources.limits.memory` | Memory limit | `512Mi` |
 | `node.kubeletPath` | Kubelet directory path | `/var/lib/kubelet` |
 | `node.nodeSelector` | Node selector for node plugin pods | `{kubernetes.io/os: linux}` |
+| `node.affinity` | Affinity for node plugin pods | `{}` |
 | `node.tolerations` | Tolerations for node plugin pods | `[{operator: Exists}]` |
 | `node.priorityClassName` | Priority class for node plugin pods | `system-node-critical` |
 | `node.terminationGracePeriodSeconds` | Termination grace period for clean unmount | `60` |

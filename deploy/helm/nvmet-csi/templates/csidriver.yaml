@@ -29,9 +29,9 @@ spec:
   # requiresRepublish: false means we don't need periodic NodePublishVolume calls
   requiresRepublish: false
 
-  # storageCapacity: true enables CSI storage capacity tracking
-  # This allows the scheduler to make informed decisions about pod placement
-  storageCapacity: true
+  # storageCapacity requires CSIStorageCapacity objects. Keep disabled until
+  # nvmet-csi publishes capacity per backend/topology.
+  storageCapacity: false
 
   # tokenRequests: empty means we don't need service account tokens
   # Future: could be used for authentication to RDS

@@ -325,6 +325,10 @@
         "priorityClassName": {
           "type": "string",
           "description": "Priority class for node plugin pods"
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity for node plugin pods"
         }
       }
     },
