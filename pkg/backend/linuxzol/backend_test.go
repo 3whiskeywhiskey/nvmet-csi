@@ -279,7 +279,7 @@ func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
 	if plan.Action != backend.VolumeActionRepair {
 		t.Fatalf("expected repair plan, got %s", plan.Action)
 	}
-	if len(plan.Commands) == 0 || !strings.HasPrefix(plan.Commands[len(plan.Commands)-1], "sh -c test -L ") {
+	if len(plan.Commands) == 0 || !strings.Contains(plan.Commands[len(plan.Commands)-1], "refusing to rewrite nvmet port symlink") {
 		t.Fatalf("expected repair command report, got %v", plan.Commands)
 	}
 
@@ -440,7 +440,7 @@ func TestCommandHostCreateVolumeCommands(t *testing.T) {
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/attr_allow_any_host",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable",
-		"ln -s /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume /config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+		expectedLinkCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume", "/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume"),
 	)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected commands:\nwant=%v\n got=%v", want, got)
@@ -487,7 +487,7 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 	if repair[0] != "mkdir -p /config/nvmet/ports/4420/subsystems" {
 		t.Fatalf("unexpected first repair command: %q", repair[0])
 	}
-	if repair[len(repair)-1] != "sh -c test -L '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' || ln -s '/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume' '/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume'" {
+	if repair[len(repair)-1] != expectedLinkCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume", "/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume") {
 		t.Fatalf("unexpected final repair command: %q", repair[len(repair)-1])
 	}
 }
@@ -826,6 +826,10 @@ func expectedPortCommands(configFSRoot string, port int, address string) []strin
 		writeIfEmptyOrEqualCommand(portPath+"/addr_traddr", address).String(),
 		writeIfEmptyOrEqualCommand(portPath+"/addr_trsvcid", cfg.portServiceID(port)).String(),
 	}
+}
+
+func expectedLinkCommand(target string, link string) string {
+	return linkIfAbsentOrEqualCommand(target, link).String()
 }
 
 func stateToSpec(state VolumeState) VolumeSpec {
