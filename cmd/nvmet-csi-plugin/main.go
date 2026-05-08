@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
 	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
 	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 const (
@@ -94,6 +96,22 @@ var (
 	linuxZOLPreflightSSHTarget    = flag.String("linux-zol-preflight-ssh-target", "", "SSH target for Linux ZoL preflight when executor=ssh")
 	linuxZOLPreflightDeviceRoot   = flag.String("linux-zol-preflight-device-root", "", "Device root for Linux ZoL preflight")
 	linuxZOLPreflightConfigFSRoot = flag.String("linux-zol-preflight-configfs-root", "", "ConfigFS root for Linux ZoL preflight")
+
+	// Linux ZoL/nvmet dry-run plan flags. This mode observes host state, prints
+	// the planned reconciliation action and commands, and exits without applying.
+	linuxZOLPlan             = flag.Bool("linux-zol-plan", false, "Build a read-only Linux ZoL/nvmet volume reconciliation plan and exit")
+	linuxZOLPlanAction       = flag.String("linux-zol-plan-action", "ensure", "Linux ZoL plan action: ensure or delete")
+	linuxZOLPlanExecutor     = flag.String("linux-zol-plan-executor", storagebackend.ExecutorHostNamespace, "Linux ZoL plan executor: local, host-namespace, or ssh")
+	linuxZOLPlanZFSPool      = flag.String("linux-zol-plan-zfs-pool", "", "ZFS pool/dataset for Linux ZoL plan")
+	linuxZOLPlanTarget       = flag.String("linux-zol-plan-target-address", "", "NVMe/TCP target address for Linux ZoL plan")
+	linuxZOLPlanPort         = flag.Int("linux-zol-plan-nvme-port", 4420, "NVMe/TCP port for Linux ZoL plan")
+	linuxZOLPlanSSHTarget    = flag.String("linux-zol-plan-ssh-target", "", "SSH target for Linux ZoL plan when executor=ssh")
+	linuxZOLPlanDeviceRoot   = flag.String("linux-zol-plan-device-root", "", "Device root for Linux ZoL plan")
+	linuxZOLPlanConfigFSRoot = flag.String("linux-zol-plan-configfs-root", "", "ConfigFS root for Linux ZoL plan")
+	linuxZOLPlanVolumeID     = flag.String("linux-zol-plan-volume-id", "", "Volume ID for Linux ZoL plan")
+	linuxZOLPlanSizeBytes    = flag.Int64("linux-zol-plan-size-bytes", 0, "Desired volume size in bytes for linux-zol-plan-action=ensure")
+	linuxZOLPlanNQN          = flag.String("linux-zol-plan-nqn", "", "Exact NQN for linux-zol-plan-action=ensure")
+	linuxZOLPlanNQNPrefix    = flag.String("linux-zol-plan-nqn-prefix", utils.NQNPrefix, "NQN namespace used to derive an NQN when --linux-zol-plan-nqn is omitted")
 )
 
 func main() {
@@ -109,6 +127,12 @@ func main() {
 	if *linuxZOLPreflight {
 		if err := runLinuxZOLPreflight(context.Background()); err != nil {
 			klog.Fatalf("Linux ZoL/nvmet preflight failed: %v", err)
+		}
+		os.Exit(0)
+	}
+	if *linuxZOLPlan {
+		if err := runLinuxZOLPlan(context.Background(), os.Stdout); err != nil {
+			klog.Fatalf("Linux ZoL/nvmet plan failed: %v", err)
 		}
 		os.Exit(0)
 	}
@@ -326,6 +350,187 @@ func runLinuxZOLPreflight(ctx context.Context) error {
 	}
 	if !linuxzolbackend.PreflightChecksOK(checks) {
 		return fmt.Errorf("one or more checks failed")
+	}
+	return nil
+}
+
+type linuxZOLPlanOptions struct {
+	Action       string
+	Executor     string
+	ZFSPool      string
+	Target       string
+	Port         int
+	SSHTarget    string
+	DeviceRoot   string
+	ConfigFSRoot string
+	VolumeID     string
+	SizeBytes    int64
+	NQN          string
+	NQNPrefix    string
+}
+
+func runLinuxZOLPlan(ctx context.Context, out io.Writer) error {
+	opts := linuxZOLPlanOptions{
+		Action:       *linuxZOLPlanAction,
+		Executor:     *linuxZOLPlanExecutor,
+		ZFSPool:      *linuxZOLPlanZFSPool,
+		Target:       *linuxZOLPlanTarget,
+		Port:         *linuxZOLPlanPort,
+		SSHTarget:    *linuxZOLPlanSSHTarget,
+		DeviceRoot:   *linuxZOLPlanDeviceRoot,
+		ConfigFSRoot: *linuxZOLPlanConfigFSRoot,
+		VolumeID:     *linuxZOLPlanVolumeID,
+		SizeBytes:    *linuxZOLPlanSizeBytes,
+		NQN:          *linuxZOLPlanNQN,
+		NQNPrefix:    *linuxZOLPlanNQNPrefix,
+	}
+	return runLinuxZOLPlanWithOptions(ctx, out, opts)
+}
+
+func runLinuxZOLPlanWithOptions(ctx context.Context, out io.Writer, opts linuxZOLPlanOptions) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
+
+	storageBackend, err := linuxzolbackend.NewCommandBackend(linuxzolbackend.CommandBackendOptions{
+		Config: linuxzolbackend.Config{
+			Pool:         opts.ZFSPool,
+			Address:      opts.Target,
+			DeviceRoot:   opts.DeviceRoot,
+			ConfigFSRoot: opts.ConfigFSRoot,
+		},
+		Executor:  opts.Executor,
+		SSHTarget: opts.SSHTarget,
+	})
+	if err != nil {
+		return err
+	}
+
+	var plan *storagebackend.VolumePlan
+	var planErr error
+	switch opts.Action {
+	case "ensure":
+		nqn, nqnErr := resolveLinuxZOLPlanNQN(opts.VolumeID, opts.NQN, opts.NQNPrefix)
+		if nqnErr != nil {
+			return nqnErr
+		}
+		plan, planErr = storageBackend.BuildEnsureVolumePlan(ctx, storagebackend.CreateVolumeRequest{
+			ID:          opts.VolumeID,
+			SizeBytes:   opts.SizeBytes,
+			NVMETCPPort: opts.Port,
+			NVMETCPNQN:  nqn,
+			Parameters: map[string]string{
+				"backend":       storagebackend.TypeLinuxZOLNVMET,
+				"executor":      opts.Executor,
+				"zfsPool":       opts.ZFSPool,
+				"targetAddress": opts.Target,
+			},
+		})
+	case "delete":
+		plan, planErr = storageBackend.BuildDeleteVolumePlan(ctx, opts.VolumeID)
+	default:
+		return fmt.Errorf("--linux-zol-plan-action must be ensure or delete")
+	}
+	if planErr != nil {
+		return planErr
+	}
+
+	return renderLinuxZOLPlan(out, plan)
+}
+
+func (o linuxZOLPlanOptions) validate() error {
+	if o.ZFSPool == "" {
+		return fmt.Errorf("--linux-zol-plan-zfs-pool is required")
+	}
+	if o.Target == "" {
+		return fmt.Errorf("--linux-zol-plan-target-address is required")
+	}
+	if o.Port <= 0 {
+		return fmt.Errorf("--linux-zol-plan-nvme-port must be positive")
+	}
+	if o.VolumeID == "" {
+		return fmt.Errorf("--linux-zol-plan-volume-id is required")
+	}
+	if err := utils.ValidateVolumeID(o.VolumeID); err != nil {
+		return fmt.Errorf("invalid --linux-zol-plan-volume-id: %w", err)
+	}
+	switch o.Action {
+	case "ensure":
+		if o.SizeBytes <= 0 {
+			return fmt.Errorf("--linux-zol-plan-size-bytes must be positive for ensure plans")
+		}
+	case "delete":
+	default:
+		return fmt.Errorf("--linux-zol-plan-action must be ensure or delete")
+	}
+	return nil
+}
+
+func resolveLinuxZOLPlanNQN(volumeID, exactNQN, nqnPrefix string) (string, error) {
+	if exactNQN != "" {
+		if err := utils.ValidateNQN(exactNQN); err != nil {
+			return "", err
+		}
+		return exactNQN, nil
+	}
+	return utils.VolumeIDToNQNWithPrefix(volumeID, nqnPrefix)
+}
+
+func renderLinuxZOLPlan(out io.Writer, plan *storagebackend.VolumePlan) error {
+	if plan == nil {
+		return nil
+	}
+	if _, err := fmt.Fprintf(out, "backend\t%s\n", plan.Backend); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(out, "action\t%s\n", plan.Action); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(out, "volume_id\t%s\n", plan.VolumeID); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(out, "reason\t%s\n", plan.Reason); err != nil {
+		return err
+	}
+	if plan.Desired != nil {
+		if _, err := fmt.Fprintf(out, "desired_path\t%s\n", plan.Desired.Path); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "desired_size_bytes\t%d\n", plan.Desired.SizeBytes); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "desired_nqn\t%s\n", plan.Desired.NVMETCPNQN); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "desired_port\t%d\n", plan.Desired.NVMETCPPort); err != nil {
+			return err
+		}
+	}
+	if plan.Actual != nil {
+		if _, err := fmt.Fprintf(out, "actual_path\t%s\n", plan.Actual.Path); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "actual_size_bytes\t%d\n", plan.Actual.SizeBytes); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "actual_nqn\t%s\n", plan.Actual.NVMETCPNQN); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "actual_port\t%d\n", plan.Actual.NVMETCPPort); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(out, "actual_status\t%s\n", plan.Actual.Status); err != nil {
+			return err
+		}
+	}
+	if len(plan.Commands) == 0 {
+		_, err := fmt.Fprintln(out, "commands\t")
+		return err
+	}
+	for _, command := range plan.Commands {
+		if _, err := fmt.Fprintf(out, "command\t%s\n", command); err != nil {
+			return err
+		}
 	}
 	return nil
 }
