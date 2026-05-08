@@ -111,6 +111,7 @@ controller:
   linuxZOLHostAccess:
     enabled: false
     privileged: true
+    hostPID: true
 
   # Orphan reconciler settings (detects and cleans up orphaned volumes)
   orphanReconciler:
@@ -349,13 +350,13 @@ storageClasses:
       - ReadWriteMany
 
   # Linux ZoL + kernel nvmet StorageClass example.
-  # This is disabled by default. For local executor mode, schedule the CSI
-  # controller onto the ZoL host and grant the pod access to zfs + configfs.
+  # This is disabled by default. For host-namespace executor mode, schedule the
+  # CSI controller onto the ZoL host and enable controller.linuxZOLHostAccess.
   - name: nvmet-zol-local
     enabled: false
     isDefault: false
     backend: linux-zol-nvmet
-    executor: local
+    executor: host-namespace
     zfsPool: tank/nvmet
     targetAddress: ""
     fsType: ext4

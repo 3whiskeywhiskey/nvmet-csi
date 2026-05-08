@@ -85,9 +85,9 @@ func ParseBackendSelection(params map[string]string) (BackendSelection, error) {
 		}
 	case backend.TypeLinuxZOLNVMET:
 		switch selection.Executor {
-		case backend.ExecutorLocal, backend.ExecutorSSH:
+		case backend.ExecutorLocal, backend.ExecutorSSH, backend.ExecutorHostNamespace:
 		default:
-			return selection, fmt.Errorf("%s backend requires %s to be %q or %q", backend.TypeLinuxZOLNVMET, paramExecutor, backend.ExecutorLocal, backend.ExecutorSSH)
+			return selection, fmt.Errorf("%s backend requires %s to be %q, %q, or %q", backend.TypeLinuxZOLNVMET, paramExecutor, backend.ExecutorLocal, backend.ExecutorSSH, backend.ExecutorHostNamespace)
 		}
 		if selection.ZFSPool == "" {
 			return selection, fmt.Errorf("%s backend requires %s", backend.TypeLinuxZOLNVMET, paramZFSPool)

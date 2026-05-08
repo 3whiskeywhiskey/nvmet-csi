@@ -19,6 +19,9 @@ spec:
         {{- include "rds-csi.controllerSelectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "rds-csi.controllerServiceAccountName" . }}
+      {{- if .Values.controller.linuxZOLHostAccess.enabled }}
+      hostPID: {{ .Values.controller.linuxZOLHostAccess.hostPID }}
+      {{- end }}
       priorityClassName: {{ .Values.controller.priorityClassName }}
 
       {{- with .Values.controller.affinity }}

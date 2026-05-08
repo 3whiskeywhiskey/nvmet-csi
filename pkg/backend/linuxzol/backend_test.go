@@ -501,6 +501,29 @@ func TestRemoteCommandStringPreservesStdinCommandShape(t *testing.T) {
 	}
 }
 
+func TestHostNamespaceExecutorCommandUsesHostPath(t *testing.T) {
+	cmd := HostNamespaceExecutor{}.command(Command{
+		Name:  "zfs",
+		Args:  []string{"list", "tank/nvmet"},
+		Stdin: "ignored\n",
+	})
+
+	want := Command{
+		Name: "nsenter",
+		Args: []string{
+			"-t", "1",
+			"-m",
+			"--",
+			"env", "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"zfs", "list", "tank/nvmet",
+		},
+		Stdin: "ignored\n",
+	}
+	if !reflect.DeepEqual(cmd, want) {
+		t.Fatalf("unexpected host namespace command:\nwant=%+v\n got=%+v", want, cmd)
+	}
+}
+
 func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	_, err := NewCommandBackend(CommandBackendOptions{
 		Config:   Config{Pool: "tank/nvmet"},
@@ -516,6 +539,14 @@ func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "unsupported Linux ZoL executor") {
 		t.Fatalf("expected unsupported executor error, got %v", err)
+	}
+
+	_, err = NewCommandBackend(CommandBackendOptions{
+		Config:   Config{Pool: "tank/nvmet"},
+		Executor: backend.ExecutorHostNamespace,
+	})
+	if err != nil {
+		t.Fatalf("expected host namespace executor to be supported, got %v", err)
 	}
 }
 

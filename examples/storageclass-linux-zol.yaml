@@ -8,7 +8,7 @@ metadata:
 provisioner: rds.csi.srvlab.io
 parameters:
   backend: linux-zol-nvmet
-  executor: local
+  executor: host-namespace
   zfsPool: tank/nvmet
   targetAddress: "10.42.0.10"
   nvmeAddress: "10.42.0.10"
