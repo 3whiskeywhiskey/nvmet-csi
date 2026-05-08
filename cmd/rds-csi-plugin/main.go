@@ -15,6 +15,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
+	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	linuxzolbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/linuxzol"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/driver"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
 	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
@@ -81,6 +83,17 @@ var (
 
 	// Version flag
 	version = flag.Bool("version", false, "Print version and exit")
+
+	// Linux ZoL/nvmet preflight flags. This mode is read-only and exits before
+	// starting CSI services.
+	linuxZOLPreflight             = flag.Bool("linux-zol-preflight", false, "Run read-only Linux ZoL/nvmet host preflight checks and exit")
+	linuxZOLPreflightExecutor     = flag.String("linux-zol-preflight-executor", storagebackend.ExecutorHostNamespace, "Linux ZoL preflight executor: local, host-namespace, or ssh")
+	linuxZOLPreflightZFSPool      = flag.String("linux-zol-preflight-zfs-pool", "", "ZFS pool/dataset for Linux ZoL preflight")
+	linuxZOLPreflightTarget       = flag.String("linux-zol-preflight-target-address", "", "NVMe/TCP target address for Linux ZoL preflight")
+	linuxZOLPreflightPort         = flag.Int("linux-zol-preflight-nvme-port", 4420, "NVMe/TCP port for Linux ZoL preflight")
+	linuxZOLPreflightSSHTarget    = flag.String("linux-zol-preflight-ssh-target", "", "SSH target for Linux ZoL preflight when executor=ssh")
+	linuxZOLPreflightDeviceRoot   = flag.String("linux-zol-preflight-device-root", "", "Device root for Linux ZoL preflight")
+	linuxZOLPreflightConfigFSRoot = flag.String("linux-zol-preflight-configfs-root", "", "ConfigFS root for Linux ZoL preflight")
 )
 
 func main() {
@@ -90,6 +103,13 @@ func main() {
 	if *version {
 		fmt.Println(driver.DriverName)
 		// Version info will be displayed by driver
+		os.Exit(0)
+	}
+
+	if *linuxZOLPreflight {
+		if err := runLinuxZOLPreflight(context.Background()); err != nil {
+			klog.Fatalf("Linux ZoL/nvmet preflight failed: %v", err)
+		}
 		os.Exit(0)
 	}
 
@@ -269,6 +289,45 @@ func main() {
 	case err := <-errChan:
 		klog.Fatalf("Driver failed: %v", err)
 	}
+}
+
+func runLinuxZOLPreflight(ctx context.Context) error {
+	if *linuxZOLPreflightZFSPool == "" {
+		return fmt.Errorf("--linux-zol-preflight-zfs-pool is required")
+	}
+	if *linuxZOLPreflightTarget == "" {
+		return fmt.Errorf("--linux-zol-preflight-target-address is required")
+	}
+	if *linuxZOLPreflightPort <= 0 {
+		return fmt.Errorf("--linux-zol-preflight-nvme-port must be positive")
+	}
+
+	host, err := linuxzolbackend.NewCommandHostFromOptions(linuxzolbackend.CommandBackendOptions{
+		Config: linuxzolbackend.Config{
+			Pool:         *linuxZOLPreflightZFSPool,
+			Address:      *linuxZOLPreflightTarget,
+			DeviceRoot:   *linuxZOLPreflightDeviceRoot,
+			ConfigFSRoot: *linuxZOLPreflightConfigFSRoot,
+		},
+		Executor:  *linuxZOLPreflightExecutor,
+		SSHTarget: *linuxZOLPreflightSSHTarget,
+	})
+	if err != nil {
+		return err
+	}
+
+	checks := host.Preflight(ctx, *linuxZOLPreflightPort)
+	for _, check := range checks {
+		status := "ok"
+		if !check.OK {
+			status = "fail"
+		}
+		fmt.Printf("%s\t%s\t%s\n", status, check.Name, check.Detail)
+	}
+	if !linuxzolbackend.PreflightChecksOK(checks) {
+		return fmt.Errorf("one or more checks failed")
+	}
+	return nil
 }
 
 // createKubernetesClient creates a Kubernetes client using in-cluster config or kubeconfig file

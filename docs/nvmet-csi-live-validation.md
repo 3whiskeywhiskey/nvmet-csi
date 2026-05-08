@@ -91,6 +91,11 @@ matters more than a single migration surface.
   the old driver name.
 - Capture baseline controller logs and metrics for both drivers.
 - Confirm no live RDS commands are required for ZoL validation.
+- Run the read-only ZoL host preflight from the controller image on the storage
+  host before creating PVCs:
+  `rds-csi-plugin -linux-zol-preflight -linux-zol-preflight-executor=host-namespace -linux-zol-preflight-zfs-pool=tank/nvmet -linux-zol-preflight-target-address=<r740xd-nvme-ip> -linux-zol-preflight-nvme-port=4420`.
+  This checks the pool, configfs, zvol device root, and any existing nvmet port
+  attributes without creating zvols or exports.
 
 ### Phase 1: Linux ZoL Dry Run and Command Audit
 
