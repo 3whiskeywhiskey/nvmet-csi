@@ -156,6 +156,68 @@
         }
       }
     },
+    "linuxZOLPreflight": {
+      "type": "object",
+      "description": "Optional read-only Linux ZoL/nvmet preflight Job",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render a Job that runs Linux ZoL/nvmet preflight checks"
+        },
+        "executor": {
+          "type": "string",
+          "description": "Preflight executor mode",
+          "enum": ["local", "ssh", "host-namespace"]
+        },
+        "zfsPool": {
+          "type": "string",
+          "description": "ZFS pool or dataset to validate"
+        },
+        "targetAddress": {
+          "type": "string",
+          "description": "NVMe/TCP target address expected on the Linux ZoL host"
+        },
+        "nvmePort": {
+          "type": "string",
+          "description": "NVMe/TCP port to validate"
+        },
+        "sshTarget": {
+          "type": "string",
+          "description": "SSH target for executor=ssh"
+        },
+        "deviceRoot": {
+          "type": "string",
+          "description": "Optional zvol device root override"
+        },
+        "configFSRoot": {
+          "type": "string",
+          "description": "Optional nvmet configfs root override"
+        },
+        "backoffLimit": {
+          "type": "integer",
+          "description": "Kubernetes Job backoff limit",
+          "minimum": 0
+        },
+        "ttlSecondsAfterFinished": {
+          "type": "integer",
+          "description": "Kubernetes Job TTL after completion",
+          "minimum": 0
+        },
+        "restartPolicy": {
+          "type": "string",
+          "description": "Pod restart policy for the preflight Job",
+          "enum": ["Never", "OnFailure"]
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Optional node selector override for the preflight Job"
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Optional tolerations override for the preflight Job"
+        }
+      }
+    },
     "node": {
       "type": "object",
       "description": "Node DaemonSet configuration",

@@ -345,6 +345,12 @@ verify-helm:
 	grep -q -- "executor: \"host-namespace\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "hostPID: true" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "kind: Job" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "app.kubernetes.io/component: linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight-target-address=10.42.0.10" /tmp/nvmet-zol-helm.yaml
 	@if grep -q -- "-rds-address" /tmp/nvmet-zol-helm.yaml; then \
 		echo "ERROR: RDS address rendered for ZoL-only Helm install"; \
 		exit 1; \

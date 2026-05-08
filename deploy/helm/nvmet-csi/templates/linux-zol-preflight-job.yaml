@@ -1,0 +1,85 @@
+{{- if .Values.linuxZOLPreflight.enabled }}
+{{- $mountHost := or .Values.controller.linuxZOLHostAccess.enabled (eq .Values.linuxZOLPreflight.executor "host-namespace") }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nvmet-csi.fullname" . }}-linux-zol-preflight
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: linux-zol-preflight
+spec:
+  backoffLimit: {{ .Values.linuxZOLPreflight.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.linuxZOLPreflight.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "nvmet-csi.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: linux-zol-preflight
+    spec:
+      serviceAccountName: {{ include "nvmet-csi.controllerServiceAccountName" . }}
+      restartPolicy: {{ .Values.linuxZOLPreflight.restartPolicy }}
+      {{- if $mountHost }}
+      hostPID: {{ .Values.controller.linuxZOLHostAccess.hostPID }}
+      {{- end }}
+      {{- if .Values.linuxZOLPreflight.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.linuxZOLPreflight.nodeSelector | nindent 8 }}
+      {{- else }}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.linuxZOLPreflight.tolerations }}
+      tolerations:
+        {{- toYaml .Values.linuxZOLPreflight.tolerations | nindent 8 }}
+      {{- else }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: linux-zol-preflight
+          image: {{ include "nvmet-csi.controllerImage" . }}
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          args:
+            - "-linux-zol-preflight"
+            - "-linux-zol-preflight-executor={{ .Values.linuxZOLPreflight.executor }}"
+            - "-linux-zol-preflight-zfs-pool={{ required "linuxZOLPreflight.zfsPool is required when linuxZOLPreflight.enabled=true" .Values.linuxZOLPreflight.zfsPool }}"
+            - "-linux-zol-preflight-target-address={{ required "linuxZOLPreflight.targetAddress is required when linuxZOLPreflight.enabled=true" .Values.linuxZOLPreflight.targetAddress }}"
+            - "-linux-zol-preflight-nvme-port={{ .Values.linuxZOLPreflight.nvmePort }}"
+            {{- if .Values.linuxZOLPreflight.sshTarget }}
+            - "-linux-zol-preflight-ssh-target={{ .Values.linuxZOLPreflight.sshTarget }}"
+            {{- end }}
+            {{- if .Values.linuxZOLPreflight.deviceRoot }}
+            - "-linux-zol-preflight-device-root={{ .Values.linuxZOLPreflight.deviceRoot }}"
+            {{- end }}
+            {{- if .Values.linuxZOLPreflight.configFSRoot }}
+            - "-linux-zol-preflight-configfs-root={{ .Values.linuxZOLPreflight.configFSRoot }}"
+            {{- end }}
+          {{- if $mountHost }}
+          securityContext:
+            privileged: {{ .Values.controller.linuxZOLHostAccess.privileged }}
+            runAsUser: 0
+          volumeMounts:
+            - name: host-dev
+              mountPath: /dev
+            - name: host-nvmet-configfs
+              mountPath: /sys/kernel/config/nvmet
+              mountPropagation: HostToContainer
+          {{- end }}
+      {{- if $mountHost }}
+      volumes:
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-nvmet-configfs
+          hostPath:
+            path: /sys/kernel/config/nvmet
+            type: Directory
+      {{- end }}
+{{- end }}

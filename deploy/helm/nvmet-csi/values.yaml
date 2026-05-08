@@ -145,6 +145,24 @@ controller:
     enabled: false
     cacheTTL: 60s
 
+# Optional read-only Linux ZoL/nvmet host preflight. This renders a Job that
+# runs before PVC validation to confirm the target ZFS pool, configfs path,
+# zvol device root, and nvmet port attributes without creating volumes.
+linuxZOLPreflight:
+  enabled: false
+  executor: host-namespace
+  zfsPool: ""
+  targetAddress: ""
+  nvmePort: "4420"
+  sshTarget: ""
+  deviceRoot: ""
+  configFSRoot: ""
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  restartPolicy: Never
+  nodeSelector: {}
+  tolerations: []
+
 # Node DaemonSet configuration
 node:
   # Container image configuration

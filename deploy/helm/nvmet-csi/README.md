@@ -154,6 +154,17 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `controller.vmiSerialization.enabled` | Enable VMI serialization (KubeVirt) | `false` |
 | `controller.vmiSerialization.cacheTTL` | VMI cache TTL | `60s` |
 
+### Linux ZoL Preflight Settings
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `linuxZOLPreflight.enabled` | Render a read-only ZoL/nvmet preflight Job | `false` |
+| `linuxZOLPreflight.executor` | Executor mode: `host-namespace`, `local`, or `ssh` | `host-namespace` |
+| `linuxZOLPreflight.zfsPool` | ZFS pool or dataset to validate | `""` |
+| `linuxZOLPreflight.targetAddress` | NVMe/TCP target address to validate | `""` |
+| `linuxZOLPreflight.nvmePort` | NVMe/TCP port to validate | `4420` |
+| `linuxZOLPreflight.sshTarget` | SSH target for `executor=ssh` | `""` |
+
 ### Node Plugin Settings
 
 | Parameter | Description | Default |

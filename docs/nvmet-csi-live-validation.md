@@ -96,6 +96,10 @@ matters more than a single migration surface.
   `nvmet-csi-plugin -linux-zol-preflight -linux-zol-preflight-executor=host-namespace -linux-zol-preflight-zfs-pool=tank/nvmet -linux-zol-preflight-target-address=<r740xd-nvme-ip> -linux-zol-preflight-nvme-port=4420`.
   This checks the pool, configfs, zvol device root, and any existing nvmet port
   attributes without creating zvols or exports.
+- For Helm installs, enable `linuxZOLPreflight.enabled=true` with the same
+  `executor`, `zfsPool`, `targetAddress`, and `nvmePort` values as the test
+  StorageClass. The rendered Job is read-only and should complete successfully
+  before any PVCs are created.
 
 ### Phase 1: Linux ZoL Dry Run and Command Audit
 
