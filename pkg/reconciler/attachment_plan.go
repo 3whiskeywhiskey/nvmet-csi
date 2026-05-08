@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
 )
 
 // AttachmentAction is the smallest safe state change needed for an attachment.

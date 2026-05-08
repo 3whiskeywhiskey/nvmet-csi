@@ -3,7 +3,7 @@ package linuxzol
 import (
 	"fmt"
 
-	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
 )
 
 type CommandBackendOptions struct {

@@ -1,5 +1,5 @@
 // Package attachment provides thread-safe tracking of volume-to-node attachments
-// for the RDS CSI driver.
+// for the nvmet-csi driver.
 package attachment
 
 import (
@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // NodeWatcher integrates with Kubernetes node informers to trigger attachment

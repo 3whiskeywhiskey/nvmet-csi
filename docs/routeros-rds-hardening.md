@@ -80,7 +80,7 @@ These are standing rules for future refactor and incident work:
   reattach cleanly.
 - Treat `~/code/flux-repo` as the source of truth for Kubernetes manifests.
 - Treat homelab repo manifests as stale until confirmed.
-- Inventory and decide before deleting old `homelab-csi`, `rds-csi`, or
+- Inventory and decide before deleting old `homelab-csi`, `nvmet-csi`, or
   `metal-csi` RouterOS objects.
 
 ## Refactor Requirements

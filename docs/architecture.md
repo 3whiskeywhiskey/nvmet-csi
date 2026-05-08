@@ -1,10 +1,10 @@
-# RDS CSI Driver Architecture
+# nvmet-csi driver Architecture
 
-This document describes the system architecture, component interactions, and design decisions for the RDS CSI Driver.
+This document describes the system architecture, component interactions, and design decisions for the nvmet-csi driver.
 
 ## System Overview
 
-The RDS CSI Driver is a Kubernetes-native storage driver that enables dynamic provisioning of persistent block volumes backed by MikroTik ROSE Data Server (RDS) via NVMe over TCP.
+The nvmet-csi driver is a Kubernetes-native storage driver that enables dynamic provisioning of persistent block volumes backed by MikroTik ROSE Data Server (RDS) via NVMe over TCP.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
@@ -24,7 +24,7 @@ The RDS CSI Driver is a Kubernetes-native storage driver that enables dynamic pr
 │                                   │ CSI gRPC                                  │
 │                                   │                                           │
 │  ┌────────────────────────────────▼────────────────────────────────────────┐ │
-│  │ RDS CSI Node Plugin (DaemonSet on every worker node)                   │ │
+│  │ nvmet-csi Node Plugin (DaemonSet on every worker node)                   │ │
 │  │                                                                         │ │
 │  │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐   │ │
 │  │  │  Node Service    │  │  Identity Service│  │  Health Monitor    │   │ │
@@ -41,7 +41,7 @@ The RDS CSI Driver is a Kubernetes-native storage driver that enables dynamic pr
 │  └──────────────────────────────────┬────────────────────────────────────────┘ │
 │                                     │ CSI gRPC                                │
 │  ┌──────────────────────────────────▼────────────────────────────────────────┐ │
-│  │ RDS CSI Controller (Deployment, 1 replica)                               │ │
+│  │ nvmet-csi Controller (Deployment, 1 replica)                               │ │
 │  │                                                                           │ │
 │  │  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐ │ │
 │  │  │ Controller Service │  │  Identity Service  │  │  Volume Manager    │ │ │
@@ -458,7 +458,7 @@ other volumes on the same target.
 
 ### SSH Key Management
 - **Storage**: SSH private key stored in Kubernetes Secret
-- **Mount**: Secret mounted to controller pod at `/etc/rds-csi/ssh-key`
+- **Mount**: Secret mounted to controller pod at `/etc/nvmet-csi/ssh-key`
 - **Permissions**: File mode 0600, owned by driver process user
 - **Rotation**: Manual key rotation via secret update + pod restart
 
@@ -528,11 +528,11 @@ Node plugin requires:
 ## Monitoring and Observability
 
 ### Metrics (Prometheus)
-- `rds_csi_volume_operations_total{operation, status}`: Volume op counter
-- `rds_csi_volume_operation_duration_seconds{operation}`: Operation latency histogram
-- `rds_csi_ssh_connection_errors_total`: SSH connection failure counter
-- `rds_csi_nvme_connection_errors_total{node}`: NVMe connection failure counter
-- `rds_csi_volume_capacity_bytes`: Total/used/available capacity
+- `nvmet_csi_volume_operations_total{operation, status}`: Volume op counter
+- `nvmet_csi_volume_operation_duration_seconds{operation}`: Operation latency histogram
+- `nvmet_csi_ssh_connection_errors_total`: SSH connection failure counter
+- `nvmet_csi_nvme_connection_errors_total{node}`: NVMe connection failure counter
+- `nvmet_csi_volume_capacity_bytes`: Total/used/available capacity
 
 ### Logging
 - **Level**: Info (default), Debug (via command line flag)

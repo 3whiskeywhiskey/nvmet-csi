@@ -1,4 +1,4 @@
-# Default values for rds-csi-driver.
+# Default values for nvmet-csi.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -6,9 +6,9 @@
 nameOverride: ""
 fullnameOverride: ""
 
-# CSI driver name. Set this to a distinct value for side-by-side installs with
-# the existing rds-csi deployment, for example nvmet.csi.whiskey.works.
-driverName: "rds.csi.srvlab.io"
+# CSI driver name used in CSIDriver, sidecars, node registration, and
+# StorageClasses.
+driverName: "nvmet.csi.whiskey.works"
 
 # RDS connection configuration
 rds:
@@ -39,7 +39,7 @@ rds:
   #   - rds-private-key: SSH private key for RouterOS authentication
   #   - rds-host-key: SSH host public key for host verification
   #   - snmp-community: (optional) SNMP community string for hardware monitoring
-  secretName: "rds-csi-secret"
+  secretName: "nvmet-csi-secret"
 
   # SECURITY WARNING: Skip SSH host key verification (INSECURE - testing only)
   # NEVER set to true in production
@@ -64,7 +64,7 @@ controller:
 
   # Container image configuration
   image:
-    repository: ghcr.io/3whiskeywhiskey/rds-csi
+    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
     tag: ""  # Defaults to Chart.appVersion if empty
     pullPolicy: Always
 
@@ -144,7 +144,7 @@ controller:
 node:
   # Container image configuration
   image:
-    repository: ghcr.io/3whiskeywhiskey/rds-csi
+    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
     tag: ""  # Defaults to Chart.appVersion if empty
     pullPolicy: Always
 
@@ -392,7 +392,7 @@ snapshotClass:
   enabled: true
 
   # VolumeSnapshotClass name
-  name: rds-csi-snapclass
+  name: nvmet-csi-snapclass
 
   # Deletion policy (Delete or Retain)
   deletionPolicy: Delete

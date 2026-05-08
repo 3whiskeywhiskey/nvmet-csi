@@ -255,7 +255,7 @@ func createTestPV(volumeID, nodeID string) *corev1.PersistentVolume {
 		Spec: corev1.PersistentVolumeSpec{
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				CSI: &corev1.CSIPersistentVolumeSource{
-					Driver:       "rds.csi.srvlab.io",
+					Driver:       "nvmet.csi.whiskey.works",
 					VolumeHandle: volumeID,
 				},
 			},
@@ -351,8 +351,8 @@ func TestAttachmentManager_RebuildState(t *testing.T) {
 	pv3 := createTestPV("pv-3", "") // No annotations (not attached)
 
 	// Create VolumeAttachments for pv-1 and pv-2 (pv-3 has no VA = not attached)
-	va1 := createTestVolumeAttachment("va-1", "rds.csi.srvlab.io", "pv-1", "node-a", true)
-	va2 := createTestVolumeAttachment("va-2", "rds.csi.srvlab.io", "pv-2", "node-b", true)
+	va1 := createTestVolumeAttachment("va-1", "nvmet.csi.whiskey.works", "pv-1", "node-a", true)
+	va2 := createTestVolumeAttachment("va-2", "nvmet.csi.whiskey.works", "pv-2", "node-b", true)
 
 	fakeClient := fake.NewSimpleClientset(pv1, pv2, pv3, va1, va2)
 

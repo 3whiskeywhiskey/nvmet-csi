@@ -27,11 +27,11 @@ import (
 const (
 	// AnnotationAttachedNode stores the node ID for debugging/observability.
 	// Informational only - never read during state rebuild.
-	AnnotationAttachedNode = "rds.csi.srvlab.io/attached-node"
+	AnnotationAttachedNode = "nvmet.csi.whiskey.works/attached-node"
 
 	// AnnotationAttachedAt stores the attachment timestamp for debugging.
 	// Informational only - never read during state rebuild.
-	AnnotationAttachedAt = "rds.csi.srvlab.io/attached-at"
+	AnnotationAttachedAt = "nvmet.csi.whiskey.works/attached-at"
 )
 
 // persistAttachment writes attachment metadata to PV annotations for debugging.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // MockConnector implements the Connector interface for testing
@@ -66,7 +66,7 @@ func requireMetricLine(t *testing.T, body string, labels ...string) {
 	t.Helper()
 
 	for _, line := range strings.Split(body, "\n") {
-		if !strings.HasPrefix(line, "rds_csi_orphan_cleanup_total{") || !strings.HasSuffix(line, " 1") {
+		if !strings.HasPrefix(line, "nvmet_csi_orphan_cleanup_total{") || !strings.HasSuffix(line, " 1") {
 			continue
 		}
 		matched := true
@@ -496,7 +496,7 @@ func TestOrphanCleanerActualImplementationDryRunDoesNotDisconnect(t *testing.T) 
 	body := rec.Body.String()
 	requireMetricLine(t, body, `action="detect"`, `result="orphan"`, `dry_run="true"`)
 	requireMetricLine(t, body, `action="disconnect"`, `result="dry_run"`, `dry_run="true"`)
-	if strings.Contains(body, "rds_csi_orphans_cleaned_total 1") {
+	if strings.Contains(body, "nvmet_csi_orphans_cleaned_total 1") {
 		t.Fatalf("dry-run must not record successful cleanup, got:\n%s", body)
 	}
 }

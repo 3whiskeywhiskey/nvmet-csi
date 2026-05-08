@@ -1,6 +1,6 @@
-# RDS CSI Driver - Capabilities & Comparison
+# nvmet-csi driver - Capabilities & Comparison
 
-This document provides a comprehensive analysis of the RDS CSI Driver's capabilities, comparing it with mature CSI drivers like AWS EBS CSI and Longhorn to help operators make informed deployment decisions.
+This document provides a comprehensive analysis of the nvmet-csi driver's capabilities, comparing it with mature CSI drivers like AWS EBS CSI and Longhorn to help operators make informed deployment decisions.
 
 ## Overview
 
@@ -9,7 +9,7 @@ This document provides a comprehensive analysis of the RDS CSI Driver's capabili
 **Target Use Case:** Single-server NVMe/TCP storage for Kubernetes on MikroTik ROSE Data Server
 **Architecture:** Single-node storage backend (not distributed storage)
 
-The RDS CSI Driver is designed for a specific deployment scenario: high-performance block storage for Kubernetes clusters using MikroTik's ROSE Data Server as a centralized storage appliance. It is not intended to compete with distributed storage solutions like Longhorn or Ceph. Instead, it provides a simpler, lower-latency alternative for environments where a single high-performance storage server is appropriate.
+The nvmet-csi driver is designed for a specific deployment scenario: high-performance block storage for Kubernetes clusters using MikroTik's ROSE Data Server as a centralized storage appliance. It is not intended to compete with distributed storage solutions like Longhorn or Ceph. Instead, it provides a simpler, lower-latency alternative for environments where a single high-performance storage server is appropriate.
 
 **Key Design Principles:**
 - **NVMe/TCP Protocol:** Lower latency (~1ms) vs iSCSI-based drivers (~3ms)
@@ -29,7 +29,7 @@ The driver implements CSI Specification v1.5.0+ with the following capabilities:
 | VOLUME_ACCESSIBILITY_CONSTRAINTS | ✅ Supported | Topology-aware scheduling for node affinity |
 
 **Implementation Details:**
-- GetPluginInfo returns driver name (`rds.csi.srvlab.io`) and version
+- GetPluginInfo returns driver name (`nvmet.csi.whiskey.works`) and version
 - GetPluginCapabilities declares controller service support
 - Probe validates RDS connectivity (SSH health check)
 
@@ -70,9 +70,9 @@ NVMe/TCP namespaces in RouterOS are exported as single-initiator targets. Allowi
 
 ## Feature Comparison Matrix
 
-This table compares the RDS CSI Driver against two mature CSI drivers: AWS EBS CSI (cloud-native block storage) and Longhorn (distributed storage for Kubernetes).
+This table compares the nvmet-csi driver against two mature CSI drivers: AWS EBS CSI (cloud-native block storage) and Longhorn (distributed storage for Kubernetes).
 
-| Feature | RDS CSI | AWS EBS CSI | Longhorn |
+| Feature | nvmet-csi | AWS EBS CSI | Longhorn |
 |---------|---------|-------------|----------|
 | **Provisioning** |
 | Dynamic provisioning | ✅ Supported | ✅ Supported | ✅ Supported |
@@ -127,7 +127,7 @@ This table compares the RDS CSI Driver against two mature CSI drivers: AWS EBS C
 
 ## Unique Advantages
 
-The RDS CSI Driver offers several unique advantages for its target use case:
+The nvmet-csi driver offers several unique advantages for its target use case:
 
 ### 1. NVMe/TCP Protocol Performance
 
@@ -173,23 +173,23 @@ The RDS CSI Driver offers several unique advantages for its target use case:
 
 **Advantage:** Live migration validated in production with ~15-second migration window. Block volume mode fully supported.
 
-**Why It Matters:** Many CSI drivers claim KubeVirt support but haven't been tested with live migration. RDS CSI has been validated in production with VMs that have been migrated across nodes without downtime.
+**Why It Matters:** Many CSI drivers claim KubeVirt support but haven't been tested with live migration. nvmet-csi has been validated in production with VMs that have been migrated across nodes without downtime.
 
 **Trade-off:** KubeVirt-specific features like hotplug not yet tested/documented.
 
 ## Architectural Differences
 
-Understanding the architectural differences between RDS CSI and other drivers is essential for setting correct expectations:
+Understanding the architectural differences between nvmet-csi and other drivers is essential for setting correct expectations:
 
 ### Single-Server vs Distributed Storage
 
-**RDS CSI:** Single MikroTik RDS server provides storage for entire cluster.
+**nvmet-csi:** Single MikroTik RDS server provides storage for entire cluster.
 
 **Longhorn:** Distributed storage with replica placement across multiple nodes.
 
-**Why It Matters:** RDS CSI's reliability model depends on RDS hardware (RAID, power, network). Longhorn's reliability comes from software replication. Different failure domains.
+**Why It Matters:** nvmet-csi's reliability model depends on RDS hardware (RAID, power, network). Longhorn's reliability comes from software replication. Different failure domains.
 
-**When to choose RDS CSI:**
+**When to choose nvmet-csi:**
 - Homelab/small clusters where a single high-quality storage server is acceptable
 - Latency-sensitive workloads where NVMe/TCP beats distributed storage overhead
 - Environments where infrastructure is managed outside Kubernetes (RouterOS)
@@ -201,7 +201,7 @@ Understanding the architectural differences between RDS CSI and other drivers is
 
 ### NVMe/TCP vs iSCSI vs Cloud API
 
-**RDS CSI:** NVMe/TCP protocol for data plane, SSH CLI for control plane.
+**nvmet-csi:** NVMe/TCP protocol for data plane, SSH CLI for control plane.
 
 **AWS EBS CSI:** AWS API for both control and data plane (EBS volumes attach via AWS infrastructure).
 
@@ -214,13 +214,13 @@ Understanding the architectural differences between RDS CSI and other drivers is
 
 ### Single Controller vs High Availability
 
-**RDS CSI:** Single controller replica (no leader election).
+**nvmet-csi:** Single controller replica (no leader election).
 
 **AWS EBS CSI:** AWS manages controller HA transparently.
 
 **Longhorn:** Multiple controller replicas with leader election.
 
-**Why It Matters:** RDS CSI's single controller is an intentional simplification. Since the storage backend is a single server, adding controller HA doesn't improve storage availability. During controller pod restarts (~10s), existing volumes remain accessible; only new provisioning/deletion is affected.
+**Why It Matters:** nvmet-csi's single controller is an intentional simplification. Since the storage backend is a single server, adding controller HA doesn't improve storage availability. During controller pod restarts (~10s), existing volumes remain accessible; only new provisioning/deletion is affected.
 
 **Trade-off:** Brief provisioning unavailability during controller restarts. Acceptable for homelab/small cluster; not suitable for large-scale multi-tenant environments.
 
@@ -268,7 +268,7 @@ This section provides honest assessment of capabilities the driver doesn't suppo
 
 **Status:** ❌ Not Applicable (single storage endpoint)
 
-**Why Not:** Multipath is used to provide redundant paths to the same storage target. RDS CSI connects to a single RDS server with a single storage IP. There's no secondary path to configure.
+**Why Not:** Multipath is used to provide redundant paths to the same storage target. nvmet-csi connects to a single RDS server with a single storage IP. There's no secondary path to configure.
 
 **Architectural Note:** Dual-IP configuration (management vs storage network) is for traffic separation, not multipath failover. If the storage network fails, there's no alternate path to the NVMe/TCP target.
 
@@ -276,7 +276,7 @@ This section provides honest assessment of capabilities the driver doesn't suppo
 
 **Status:** ❌ Not Supported
 
-**Why Not:** CSI ephemeral volumes (CSIInlineVolume) require support for per-pod volume provisioning without PVC. RDS CSI assumes PVC-based provisioning with volume lifecycle tied to PVC, not pod.
+**Why Not:** CSI ephemeral volumes (CSIInlineVolume) require support for per-pod volume provisioning without PVC. nvmet-csi assumes PVC-based provisioning with volume lifecycle tied to PVC, not pod.
 
 **Workaround:** Create PVC with `reclaimPolicy: Delete` for similar behavior. PVC deletion triggers volume deletion.
 
@@ -340,9 +340,9 @@ See [ROADMAP.md](../ROADMAP.md) for current milestone status and release history
 
 ## Conclusion
 
-The RDS CSI Driver is a production-ready storage driver for Kubernetes environments using MikroTik ROSE Data Server. It excels in its target niche: single-server NVMe/TCP storage for homelabs and small clusters where low latency and hardware integration matter more than distributed storage features.
+The nvmet-csi driver is a production-ready storage driver for Kubernetes environments using MikroTik ROSE Data Server. It excels in its target niche: single-server NVMe/TCP storage for homelabs and small clusters where low latency and hardware integration matter more than distributed storage features.
 
-**Choose RDS CSI when:**
+**Choose nvmet-csi when:**
 - You have MikroTik RDS hardware and want native Kubernetes integration
 - Low-latency NVMe/TCP storage is more important than storage HA
 - You value debuggability and auditability (SSH-based management)

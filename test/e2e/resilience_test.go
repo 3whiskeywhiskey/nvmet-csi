@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/test/mock"
+	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
 )
 
 var _ = Describe("Resilience Regression", func() {

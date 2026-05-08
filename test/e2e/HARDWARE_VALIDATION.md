@@ -57,7 +57,7 @@ nqn-prefix: nqn.2000-02.com.mikrotik:pvc-
 - Size: 1Gi
 - AccessMode: ReadWriteOnce
 - VolumeMode: Filesystem
-- StorageClass: rds-nvme (Note: runbook had rds-csi, corrected to rds-nvme)
+- StorageClass: rds-nvme (Note: runbook had nvmet-csi, corrected to rds-nvme)
 
 **Volume ID:** pvc-42f0d924-eb9f-4a5f-a323-112802392ace
 
@@ -308,7 +308,7 @@ This is a blocker for v0.6.0 release. Options:
 ## Issues Encountered
 
 ### Issue 1: StorageClass Name Mismatch
-- **Description:** Runbook specified rds-csi, cluster uses rds-nvme
+- **Description:** Runbook specified nvmet-csi, cluster uses rds-nvme
 - **Impact:** Initial PVC stayed Pending
 - **Resolution:** Updated manifest to use rds-nvme
 - **Category:** Documentation (Deviation Rule: minor correction)
@@ -334,7 +334,7 @@ This is a blocker for v0.6.0 release. Options:
 ### Applied Deviation Rules
 
 **Rule: Documentation correction (Issue 1)**
-- StorageClass name corrected from rds-csi to rds-nvme
+- StorageClass name corrected from nvmet-csi to rds-nvme
 - No code changes needed
 - Test procedure adjusted inline
 
@@ -396,7 +396,7 @@ This is a blocker for v0.6.0 release. Options:
 **OS:** NixOS 25.11 (Xantusia)
 **Kernel:** 6.12.56
 
-**Driver Image:** ghcr.io/3whiskeywhiskey/rds-csi:dev
+**Driver Image:** ghcr.io/3whiskeywhiskey/nvmet-csi:dev
 **Build Commit:** dev-f2f1029 (Phase 14 complete)
 
 **CSI Sidecars:**

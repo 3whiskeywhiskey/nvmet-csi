@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
 )
 
 func TestBuildEnsureVolumePlanCreateAndApply(t *testing.T) {

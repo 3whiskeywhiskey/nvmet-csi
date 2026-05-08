@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document describes the comprehensive testing strategy for the RDS CSI Driver.
+This document describes the comprehensive testing strategy for the nvmet-csi driver.
 
 ## Testing Pyramid
 
@@ -137,7 +137,7 @@ make test-docker-sanity
 cat test/e2e/MANUAL_TESTING.md
 
 # Or use grpcurl directly:
-./bin/rds-csi-plugin-* --controller-mode --rds-address=... &
+./bin/nvmet-csi-plugin-* --controller-mode --rds-address=... &
 grpcurl -unix /tmp/csi.sock csi.v1.Controller/CreateVolume -d '{...}'
 ```
 

@@ -1,19 +1,20 @@
 # nvmet-csi Design
 
-This repository is the `nvmet-csi` fork of the RDS CSI driver. The goal is to
-generalize the inherited CSI implementation so it can preserve the existing
-RDS-backed path while adding a Linux ZFS + `nvmet` backend.
+This repository is the successor to the original RDS-focused CSI driver. The
+goal is to make `nvmet-csi` a backend-neutral NVMe/TCP CSI driver that can serve
+Linux ZFS + `nvmet` targets first while retaining a RouterOS/RDS backend for
+transitional and lower-priority workloads.
 
-This is a fork-and-generalize project, not a rewrite. The existing RDS path is
-load-bearing in the metal cluster during the migration, so compatibility and
-calm operational behavior matter as much as the new backend.
+This is a fork-and-generalize project, not a rewrite. The original RDS path is
+load-bearing in the metal cluster during the migration, so calm operational
+behavior and explicit cutover controls matter as much as the new backend.
 
 ## Origin
 
-`whiskey-works/nvmet-csi` was bootstrapped on 2026-04-27 by mirror-pushing the
-existing `rds-csi` repository at v0.11.0. The full commit and tag history was
-preserved so old implementation decisions, tests, and milestone notes remain
-available during the refactor.
+`whiskey-works/nvmet-csi` was bootstrapped on 2026-04-27 from the predecessor
+RDS-focused repository at v0.11.0. The full commit and tag history was preserved
+so old implementation decisions, tests, and milestone notes remain available
+during the refactor.
 
 The original implementation is a Kubernetes CSI driver for MikroTik RouterOS
 ROSE Data Server. It provisions file-backed disks on RDS and exposes them over
@@ -24,12 +25,13 @@ the resulting block devices.
 
 The migration stance is:
 
-- keep the current RDS backend working until operators intentionally migrate
-  workloads;
+- keep the RouterOS/RDS backend isolated and explicit until operators
+  intentionally migrate workloads;
 - abstract backend-specific storage operations behind a typed interface;
 - make the controller, attachment manager, and reconcilers backend-neutral;
-- add a Linux ZFS + `nvmet` backend after the abstraction is proven with RDS;
-- avoid production disruption from code, image, module, or driver-name renames.
+- make Linux ZFS + `nvmet` the primary backend path for new validation;
+- avoid production disruption from code, image, module, or driver-name renames
+  by deploying side-by-side instead of preserving old identities.
 
 The RDS backend must be treated as fragile shared infrastructure. RDS also
 provides routing and MinIO, so crash loops or RouterOS kernel failures have a
@@ -44,8 +46,8 @@ hardening requirements.
 | Category | Scope | Intent |
 | --- | --- | --- |
 | Preserve | `pkg/nvme`, `pkg/mount`, `pkg/observability`, `pkg/security`, `pkg/utils`, `pkg/circuitbreaker`, `pkg/driver/identity.go`, `test/*` | Keep proven CSI, NVMe, mount, observability, validation, and test behavior unless a local change is required by the backend abstraction. |
-| Abstract | `pkg/driver`, `pkg/driver/server.go`, `pkg/driver/params.go`, `pkg/driver/controller.go`, `pkg/attachment`, `pkg/reconciler`, `cmd/rds-csi-plugin/main.go`, `deploy/*` | Move direct RDS knowledge out of shared controller and deployment surfaces. |
-| Keep | Existing `pkg/rds` behavior through an RDS compatibility backend adapter | Existing RDS deployments must continue to work during the migration. |
+| Abstract | `pkg/driver`, `pkg/driver/server.go`, `pkg/driver/params.go`, `pkg/driver/controller.go`, `pkg/attachment`, `pkg/reconciler`, `cmd/nvmet-csi-plugin/main.go`, `deploy/*` | Move direct RDS knowledge out of shared controller and deployment surfaces. |
+| Keep | Existing `pkg/rds` behavior through a RouterOS/RDS backend adapter | Existing RDS-backed workloads remain independent until operators choose a migration. |
 | Add | `pkg/backend`, `pkg/backend/options`, `pkg/config`, `pkg/backend/rds`, `pkg/backend/nvmet` | Introduce a backend contract, RDS adapter, initial nvmet stub, then real ZFS + nvmet implementation. |
 
 ## Migration Map
@@ -54,7 +56,7 @@ The working migration map came from the earlier symphony execution plan. We are
 preserving the plan as project guidance, but this repository no longer relies
 on symphony as the agent runtime.
 
-0. **Target bootstrap**: done by mirror-pushing `rds-csi` into
+0. **Target bootstrap**: done by mirror-pushing the predecessor repository into
    `whiskey-works/nvmet-csi` with full history.
 1. **Seam capture**: document every place where controller, attachment, and
    reconciler code knows about RDS. See issue `#5`.
@@ -96,19 +98,16 @@ approved maintenance window.
 
 Operator-approved breaking renames are expected:
 
-- Go module path: legacy `git.srvlab.io/whiskey/rds-csi-driver` to the final
-  `nvmet-csi` module path chosen in issue `#3`;
-- binary: `rds-csi-plugin` to `nvmet-csi-plugin`;
+- Go module path: `git.srvlab.io/whiskey/nvmet-csi`;
+- binary: `nvmet-csi-plugin`;
 - image registry path: moved under the `whiskey-works/nvmet-csi` registry
   namespace;
 - driver name, StorageClass names, Helm chart names, labels, manifests, and
   documentation.
 
-These renames are intentionally staged after backend abstraction so import and
-deployment churn does not obscure semantic refactor review. Existing RDS
-installations remain independent until operators choose an in-place migration
-or side-by-side deployment model. The Helm alias and migration policy lives in
-issue `#15`.
+These renames are intentionally breaking. Existing predecessor installations
+remain independent until operators choose a side-by-side deployment or an
+explicit migration.
 
 ## Backend Contract Sketch
 

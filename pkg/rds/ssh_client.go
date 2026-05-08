@@ -13,8 +13,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/security"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 // sshClient implements RDSClient using SSH protocol to connect to RouterOS

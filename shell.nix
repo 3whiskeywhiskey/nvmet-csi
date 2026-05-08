@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  name = "rds-csi-driver-dev";
+  name = "nvmet-csi-dev";
 
   buildInputs = with pkgs; [
     # Go toolchain
@@ -31,7 +31,7 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    echo "RDS CSI Driver Development Environment"
+    echo "nvmet-csi driver Development Environment"
     echo ""
     echo "Available tools:"
     echo "  - go $(go version | cut -d' ' -f3)"

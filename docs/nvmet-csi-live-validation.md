@@ -1,7 +1,7 @@
 # nvmet-csi Side-by-Side Validation Plan
 
 This plan covers the safe path for validating `nvmet-csi` beside the existing
-RDS CSI deployment. The goal is to prove the Linux ZoL/nvmet path first on the
+nvmet-csi deployment. The goal is to prove the Linux ZoL/nvmet path first on the
 r740xd NVMe ZFS pool, then add RDS compatibility testing only after the driver
 has already demonstrated calm reconciliation behavior without touching RDS.
 
@@ -38,10 +38,10 @@ Required isolation:
 
 - separate namespace, ServiceAccounts, RBAC objects, sockets, and `CSIDriver`;
 - no default StorageClass during validation;
-- no reuse of the existing `rds.csi.srvlab.io` driver name;
+- no reuse of the existing `nvmet.csi.whiskey.works` driver name;
 - separate controller logs and metrics labels so mutation counts are attributable
   to the new driver;
-- existing RDS CSI StorageClasses remain untouched until explicit cutover.
+- existing nvmet-csi StorageClasses remain untouched until explicit cutover.
 
 The CSI node service should remain backend-agnostic. It only needs the target
 address, port, NQN, filesystem, and NVMe reconnect settings from the volume
@@ -87,13 +87,13 @@ matters more than a single migration surface.
 
 - Confirm r740xd pool name, free space, and host labels.
 - Confirm no validation StorageClass is default.
-- Confirm existing RDS CSI PVCs and `VolumeAttachment` objects still reference
+- Confirm existing nvmet-csi PVCs and `VolumeAttachment` objects still reference
   the old driver name.
 - Capture baseline controller logs and metrics for both drivers.
 - Confirm no live RDS commands are required for ZoL validation.
 - Run the read-only ZoL host preflight from the controller image on the storage
   host before creating PVCs:
-  `rds-csi-plugin -linux-zol-preflight -linux-zol-preflight-executor=host-namespace -linux-zol-preflight-zfs-pool=tank/nvmet -linux-zol-preflight-target-address=<r740xd-nvme-ip> -linux-zol-preflight-nvme-port=4420`.
+  `nvmet-csi-plugin -linux-zol-preflight -linux-zol-preflight-executor=host-namespace -linux-zol-preflight-zfs-pool=tank/nvmet -linux-zol-preflight-target-address=<r740xd-nvme-ip> -linux-zol-preflight-nvme-port=4420`.
   This checks the pool, configfs, zvol device root, and any existing nvmet port
   attributes without creating zvols or exports.
 

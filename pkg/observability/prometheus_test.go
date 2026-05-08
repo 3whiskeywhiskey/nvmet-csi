@@ -1,4 +1,4 @@
-// Package observability provides Prometheus metrics for the RDS CSI driver.
+// Package observability provides Prometheus metrics for the nvmet-csi driver.
 package observability
 
 import (
@@ -41,8 +41,8 @@ func TestHandler(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(rec.Body)
-	if !strings.Contains(string(body), "rds_csi_") {
-		t.Error("metrics response should contain rds_csi_ namespace")
+	if !strings.Contains(string(body), "nvmet_csi_") {
+		t.Error("metrics response should contain nvmet_csi_ namespace")
 	}
 }
 
@@ -85,10 +85,10 @@ func TestRecordVolumeOp(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_volume_operations_total") {
+	if !strings.Contains(body, "nvmet_csi_volume_operations_total") {
 		t.Error("expected volume_operations_total metric")
 	}
-	if !strings.Contains(body, "rds_csi_volume_operation_duration_seconds") {
+	if !strings.Contains(body, "nvmet_csi_volume_operation_duration_seconds") {
 		t.Error("expected volume_operation_duration_seconds metric")
 	}
 }
@@ -143,14 +143,14 @@ func TestRecordNVMeConnect(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_nvme_connects_total") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connects_total") {
 		t.Error("expected nvme_connects_total metric")
 	}
-	if !strings.Contains(body, "rds_csi_nvme_connect_duration_seconds") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connect_duration_seconds") {
 		t.Error("expected nvme_connect_duration_seconds metric")
 	}
 	// nvme_connections_active should NOT appear without SetAttachmentManager
-	if strings.Contains(body, "rds_csi_nvme_connections_active") {
+	if strings.Contains(body, "nvmet_csi_nvme_connections_active") {
 		t.Error("nvme_connections_active should not appear without SetAttachmentManager")
 	}
 }
@@ -173,7 +173,7 @@ func TestRecordNVMeConnect_ActiveConnectionsGauge(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 3") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 3") {
 		t.Errorf("expected nvme_connections_active to be 3, got:\n%s", body)
 	}
 }
@@ -195,7 +195,7 @@ func TestRecordNVMeDisconnect(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 0") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 0") {
 		t.Errorf("expected nvme_connections_active to be 0, got:\n%s", body)
 	}
 }
@@ -211,7 +211,7 @@ func TestRecordNVMeDisconnect_MultipleConnections(t *testing.T) {
 
 	// Verify starts at 3
 	body := scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 3") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 3") {
 		t.Errorf("expected nvme_connections_active to be 3, got:\n%s", body)
 	}
 
@@ -220,7 +220,7 @@ func TestRecordNVMeDisconnect_MultipleConnections(t *testing.T) {
 
 	// Verify now shows 2
 	body = scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 2") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 2") {
 		t.Errorf("expected nvme_connections_active to be 2, got:\n%s", body)
 	}
 }
@@ -240,7 +240,7 @@ func TestNVMeConnectionsActive_QueriesAttachmentManager(t *testing.T) {
 	})
 
 	body = scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 5") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 5") {
 		t.Errorf("expected nvme_connections_active to be 5, got:\n%s", body)
 	}
 }
@@ -254,7 +254,7 @@ func TestNVMeConnectionsActive_SurvivesRestart(t *testing.T) {
 	})
 
 	body := scrapeMetrics(t, m1)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 16") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 16") {
 		t.Errorf("first instance should show 16, got:\n%s", body)
 	}
 
@@ -267,7 +267,7 @@ func TestNVMeConnectionsActive_SurvivesRestart(t *testing.T) {
 	})
 
 	body = scrapeMetrics(t, m2)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 16") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 16") {
 		t.Errorf("after restart, should still show 16 (rebuilt from VolumeAttachments), got:\n%s", body)
 	}
 }
@@ -281,28 +281,28 @@ func TestNVMeConnectionsActive_DynamicUpdates(t *testing.T) {
 
 	// Start at 0
 	body := scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 0") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 0") {
 		t.Errorf("expected 0, got:\n%s", body)
 	}
 
 	// Add attachments
 	count = 5
 	body = scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 5") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 5") {
 		t.Errorf("expected 5, got:\n%s", body)
 	}
 
 	// Remove some
 	count = 2
 	body = scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 2") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 2") {
 		t.Errorf("expected 2, got:\n%s", body)
 	}
 
 	// Remove all
 	count = 0
 	body = scrapeMetrics(t, m)
-	if !strings.Contains(body, "rds_csi_nvme_connections_active 0") {
+	if !strings.Contains(body, "nvmet_csi_nvme_connections_active 0") {
 		t.Errorf("expected 0, got:\n%s", body)
 	}
 }
@@ -332,7 +332,7 @@ func TestRecordMountOp(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_mount_operations_total") {
+	if !strings.Contains(body, "nvmet_csi_mount_operations_total") {
 		t.Error("expected mount_operations_total metric")
 	}
 }
@@ -374,7 +374,7 @@ func TestRecordStaleMountDetected(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_stale_mounts_detected_total 2") {
+	if !strings.Contains(body, "nvmet_csi_stale_mounts_detected_total 2") {
 		t.Errorf("expected stale_mounts_detected_total to be 2, got:\n%s", body)
 	}
 }
@@ -391,7 +391,7 @@ func TestRecordStaleRecovery(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_stale_recoveries_total") {
+	if !strings.Contains(body, "nvmet_csi_stale_recoveries_total") {
 		t.Error("expected stale_recoveries_total metric")
 	}
 }
@@ -432,7 +432,7 @@ func TestRecordOrphanCleaned(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_orphans_cleaned_total 1") {
+	if !strings.Contains(body, "nvmet_csi_orphans_cleaned_total 1") {
 		t.Errorf("expected orphans_cleaned_total to be 1, got:\n%s", body)
 	}
 }
@@ -450,7 +450,7 @@ func TestRecordOrphanCleaned_Multiple(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_orphans_cleaned_total 3") {
+	if !strings.Contains(body, "nvmet_csi_orphans_cleaned_total 3") {
 		t.Errorf("expected orphans_cleaned_total to be 3, got:\n%s", body)
 	}
 }
@@ -472,37 +472,37 @@ func TestRecordOrphanCleanupOutcomes(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "detect",
 		"result":  "orphan",
 		"dry_run": "true",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "disconnect",
 		"result":  "dry_run",
 		"dry_run": "true",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "detect",
 		"result":  "orphan",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "disconnect",
 		"result":  "attempt",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "disconnect",
 		"result":  "failure",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "disconnect",
 		"result":  "limit_reached",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_orphan_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_orphan_cleanup_total", map[string]string{
 		"action":  "disconnect",
 		"result":  "success",
 		"dry_run": "false",
@@ -522,7 +522,7 @@ func TestRecordEventPosted(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "rds_csi_events_posted_total") {
+	if !strings.Contains(body, "nvmet_csi_events_posted_total") {
 		t.Error("expected events_posted_total metric")
 	}
 }
@@ -572,35 +572,35 @@ func TestRecordStaleVolumeAttachmentCleanupOutcomes(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "candidate",
 		"dry_run": "true",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "planned",
 		"dry_run": "true",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "candidate",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "planned",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "delete_attempt",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "delete_success",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "delete_failure",
 		"dry_run": "false",
 	}, "1")
-	assertMetricWithLabels(t, body, "rds_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
+	assertMetricWithLabels(t, body, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total", map[string]string{
 		"result":  "delete_not_found",
 		"dry_run": "false",
 	}, "1")
@@ -629,7 +629,7 @@ func TestMetricsNamespace(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// All RDS CSI metrics should use rds_csi_ namespace
+	// All nvmet-csi metrics should use nvmet_csi_ namespace
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		// Skip comments and empty lines
@@ -640,8 +640,8 @@ func TestMetricsNamespace(t *testing.T) {
 		if strings.HasPrefix(line, "go_") || strings.HasPrefix(line, "process_") {
 			continue
 		}
-		if !strings.HasPrefix(line, "rds_csi_") {
-			t.Errorf("metric line should start with rds_csi_: %s", line)
+		if !strings.HasPrefix(line, "nvmet_csi_") {
+			t.Errorf("metric line should start with nvmet_csi_: %s", line)
 		}
 	}
 }
@@ -665,7 +665,7 @@ func TestMetricsIsolation(t *testing.T) {
 	handler1.ServeHTTP(rec1, req1)
 	body1 := rec1.Body.String()
 
-	if !strings.Contains(body1, "rds_csi_stale_mounts_detected_total 2") {
+	if !strings.Contains(body1, "nvmet_csi_stale_mounts_detected_total 2") {
 		t.Error("m1 should have stale_mounts_detected_total 2")
 	}
 
@@ -676,13 +676,13 @@ func TestMetricsIsolation(t *testing.T) {
 	handler2.ServeHTTP(rec2, req2)
 	body2 := rec2.Body.String()
 
-	if !strings.Contains(body2, "rds_csi_orphans_cleaned_total 1") {
+	if !strings.Contains(body2, "nvmet_csi_orphans_cleaned_total 1") {
 		t.Error("m2 should have orphans_cleaned_total 1")
 	}
 
 	// m2 should not have stale mounts count from m1
 	// The metric line might not exist at all or be 0
-	if strings.Contains(body2, "rds_csi_stale_mounts_detected_total 2") {
+	if strings.Contains(body2, "nvmet_csi_stale_mounts_detected_total 2") {
 		t.Error("m2 should not have m1's stale mounts count")
 	}
 }
@@ -727,13 +727,13 @@ func TestHistogramBuckets(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check that histogram has bucket data
-	if !strings.Contains(body, "rds_csi_volume_operation_duration_seconds_bucket") {
+	if !strings.Contains(body, "nvmet_csi_volume_operation_duration_seconds_bucket") {
 		t.Error("expected histogram bucket data")
 	}
-	if !strings.Contains(body, "rds_csi_volume_operation_duration_seconds_sum") {
+	if !strings.Contains(body, "nvmet_csi_volume_operation_duration_seconds_sum") {
 		t.Error("expected histogram sum")
 	}
-	if !strings.Contains(body, "rds_csi_volume_operation_duration_seconds_count") {
+	if !strings.Contains(body, "nvmet_csi_volume_operation_duration_seconds_count") {
 		t.Error("expected histogram count")
 	}
 }
@@ -752,7 +752,7 @@ func TestRecordMigrationStarted(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check active migrations gauge incremented
-	if !strings.Contains(body, "rds_csi_migration_active_migrations 1") {
+	if !strings.Contains(body, "nvmet_csi_migration_active_migrations 1") {
 		t.Errorf("expected active_migrations to be 1, got:\n%s", body)
 	}
 }
@@ -774,17 +774,17 @@ func TestRecordMigrationResult_Success(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counter incremented with success label
-	if !strings.Contains(body, `rds_csi_migration_migrations_total{result="success"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_migration_migrations_total{result="success"} 1`) {
 		t.Error("expected migrations_total with result=success to be 1")
 	}
 
 	// Check histogram observed the duration
-	if !strings.Contains(body, "rds_csi_migration_duration_seconds_bucket") {
+	if !strings.Contains(body, "nvmet_csi_migration_duration_seconds_bucket") {
 		t.Error("expected migration_duration_seconds histogram bucket")
 	}
 
 	// Check active gauge decremented back to 0
-	if !strings.Contains(body, "rds_csi_migration_active_migrations 0") {
+	if !strings.Contains(body, "nvmet_csi_migration_active_migrations 0") {
 		t.Errorf("expected active_migrations to be 0 after completion, got:\n%s", body)
 	}
 }
@@ -806,12 +806,12 @@ func TestRecordMigrationResult_Timeout(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counter incremented with timeout label
-	if !strings.Contains(body, `rds_csi_migration_migrations_total{result="timeout"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_migration_migrations_total{result="timeout"} 1`) {
 		t.Error("expected migrations_total with result=timeout to be 1")
 	}
 
 	// Check active gauge decremented
-	if !strings.Contains(body, "rds_csi_migration_active_migrations 0") {
+	if !strings.Contains(body, "nvmet_csi_migration_active_migrations 0") {
 		t.Errorf("expected active_migrations to be 0 after timeout, got:\n%s", body)
 	}
 }
@@ -833,12 +833,12 @@ func TestRecordMigrationResult_Failed(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counter incremented with failed label
-	if !strings.Contains(body, `rds_csi_migration_migrations_total{result="failed"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_migration_migrations_total{result="failed"} 1`) {
 		t.Error("expected migrations_total with result=failed to be 1")
 	}
 
 	// Check active gauge decremented
-	if !strings.Contains(body, "rds_csi_migration_active_migrations 0") {
+	if !strings.Contains(body, "nvmet_csi_migration_active_migrations 0") {
 		t.Errorf("expected active_migrations to be 0 after failure, got:\n%s", body)
 	}
 }
@@ -862,7 +862,7 @@ func TestMigrationDurationHistogram(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check histogram bucket labels exist
-	if !strings.Contains(body, "rds_csi_migration_duration_seconds_bucket") {
+	if !strings.Contains(body, "nvmet_csi_migration_duration_seconds_bucket") {
 		t.Error("expected duration_seconds histogram bucket")
 	}
 
@@ -875,10 +875,10 @@ func TestMigrationDurationHistogram(t *testing.T) {
 	}
 
 	// Check histogram sum and count
-	if !strings.Contains(body, "rds_csi_migration_duration_seconds_sum") {
+	if !strings.Contains(body, "nvmet_csi_migration_duration_seconds_sum") {
 		t.Error("expected histogram sum")
 	}
-	if !strings.Contains(body, "rds_csi_migration_duration_seconds_count 2") {
+	if !strings.Contains(body, "nvmet_csi_migration_duration_seconds_count 2") {
 		t.Error("expected histogram count to be 2")
 	}
 }
@@ -897,7 +897,7 @@ func TestRecordConnectionState_Connected(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check gauge set to 1.0 for connected
-	if !strings.Contains(body, `rds_csi_rds_connection_state{address="10.42.68.1"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 1`) {
 		t.Errorf("expected connection_state to be 1 for connected, got:\n%s", body)
 	}
 }
@@ -916,7 +916,7 @@ func TestRecordConnectionState_Disconnected(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check gauge set to 0.0 for disconnected
-	if !strings.Contains(body, `rds_csi_rds_connection_state{address="10.42.68.1"} 0`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 0`) {
 		t.Errorf("expected connection_state to be 0 for disconnected, got:\n%s", body)
 	}
 }
@@ -936,10 +936,10 @@ func TestRecordConnectionState_MultipleAddresses(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check both addresses recorded
-	if !strings.Contains(body, `rds_csi_rds_connection_state{address="10.42.68.1"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 1`) {
 		t.Error("expected connection_state for 10.42.68.1 to be 1")
 	}
-	if !strings.Contains(body, `rds_csi_rds_connection_state{address="10.42.68.2"} 0`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.2"} 0`) {
 		t.Error("expected connection_state for 10.42.68.2 to be 0")
 	}
 }
@@ -958,12 +958,12 @@ func TestRecordReconnectAttempt_Success(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counter incremented
-	if !strings.Contains(body, `rds_csi_rds_reconnect_total{status="success"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_reconnect_total{status="success"} 1`) {
 		t.Error("expected reconnect_total with status=success to be 1")
 	}
 
 	// Check histogram observed the duration
-	if !strings.Contains(body, "rds_csi_rds_reconnect_duration_seconds_bucket") {
+	if !strings.Contains(body, "nvmet_csi_rds_reconnect_duration_seconds_bucket") {
 		t.Error("expected reconnect_duration_seconds histogram bucket")
 	}
 }
@@ -982,7 +982,7 @@ func TestRecordReconnectAttempt_Failure(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counter incremented
-	if !strings.Contains(body, `rds_csi_rds_reconnect_total{status="failure"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_reconnect_total{status="failure"} 1`) {
 		t.Error("expected reconnect_total with status=failure to be 1")
 	}
 }
@@ -1003,10 +1003,10 @@ func TestRecordReconnectAttempt_MultipleAttempts(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check counters
-	if !strings.Contains(body, `rds_csi_rds_reconnect_total{status="failure"} 2`) {
+	if !strings.Contains(body, `nvmet_csi_rds_reconnect_total{status="failure"} 2`) {
 		t.Error("expected reconnect_total with status=failure to be 2")
 	}
-	if !strings.Contains(body, `rds_csi_rds_reconnect_total{status="success"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_reconnect_total{status="success"} 1`) {
 		t.Error("expected reconnect_total with status=success to be 1")
 	}
 }
@@ -1186,13 +1186,13 @@ func TestRecordRDSCommand(t *testing.T) {
 	m.RecordRDSCommand("disk", "add", "mutate", "failure", 50*time.Millisecond)
 
 	body := scrapeMetrics(t, m)
-	if !strings.Contains(body, `rds_csi_rds_commands_total{action="print",class="observe",family="disk",status="success"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_commands_total{action="print",class="observe",family="disk",status="success"} 1`) {
 		t.Error("expected successful observe command counter")
 	}
-	if !strings.Contains(body, `rds_csi_rds_commands_total{action="add",class="mutate",family="disk",status="failure"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_commands_total{action="add",class="mutate",family="disk",status="failure"} 1`) {
 		t.Error("expected failed mutate command counter")
 	}
-	if !strings.Contains(body, "rds_csi_rds_command_duration_seconds_bucket") {
+	if !strings.Contains(body, "nvmet_csi_rds_command_duration_seconds_bucket") {
 		t.Error("expected command duration histogram")
 	}
 }
@@ -1203,7 +1203,7 @@ func TestRecordRDSMutationDecision(t *testing.T) {
 	m.RecordRDSMutationDecision("delete_file", "/storage-pool/test/missing.img", "noop", "missing")
 
 	body := scrapeMetrics(t, m)
-	if !strings.Contains(body, `rds_csi_rds_mutation_decisions_total{decision="noop",operation="delete_file",reason="missing"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_mutation_decisions_total{decision="noop",operation="delete_file",reason="missing"} 1`) {
 		t.Error("expected RDS mutation decision counter")
 	}
 

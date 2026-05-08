@@ -7,8 +7,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // RecoveryConfig holds recovery configuration

@@ -3,22 +3,22 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: rds-csi-controller
-  namespace: rds-csi
+  name: nvmet-csi-controller
+  namespace: nvmet-csi
 
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: rds-csi-node
-  namespace: rds-csi
+  name: nvmet-csi-node
+  namespace: nvmet-csi
 
 ---
 # ClusterRole for Controller - full permissions for volume management
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rds-csi-controller-role
+  name: nvmet-csi-controller-role
 rules:
   # Access to PersistentVolumes
   - apiGroups: [""]
@@ -94,7 +94,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rds-csi-node-role
+  name: nvmet-csi-node-role
 rules:
   # Access to CSINodes
   - apiGroups: ["storage.k8s.io"]
@@ -116,27 +116,27 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: rds-csi-controller-binding
+  name: nvmet-csi-controller-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: rds-csi-controller-role
+  name: nvmet-csi-controller-role
 subjects:
   - kind: ServiceAccount
-    name: rds-csi-controller
-    namespace: rds-csi
+    name: nvmet-csi-controller
+    namespace: nvmet-csi
 
 ---
 # ClusterRoleBinding for Node
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: rds-csi-node-binding
+  name: nvmet-csi-node-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: rds-csi-node-role
+  name: nvmet-csi-node-role
 subjects:
   - kind: ServiceAccount
-    name: rds-csi-node
-    namespace: rds-csi
+    name: nvmet-csi-node
+    namespace: nvmet-csi

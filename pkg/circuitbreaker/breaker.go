@@ -23,7 +23,7 @@ const (
 	DefaultInterval = 1 * time.Minute
 
 	// ResetAnnotation is the PV annotation to reset circuit breaker
-	ResetAnnotation = "rds.csi.srvlab.io/reset-circuit-breaker"
+	ResetAnnotation = "nvmet.csi.whiskey.works/reset-circuit-breaker"
 )
 
 // VolumeCircuitBreaker manages per-volume circuit breakers to prevent retry storms

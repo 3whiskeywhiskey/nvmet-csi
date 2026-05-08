@@ -1,5 +1,5 @@
 ---
-# StorageClass for RDS CSI Driver
+# StorageClass for nvmet-csi driver
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -8,7 +8,7 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "false"
 
 # Provisioner name matches the CSI driver name
-provisioner: rds.csi.srvlab.io
+provisioner: nvmet.csi.whiskey.works
 
 # Parameters passed to CreateVolume
 parameters:

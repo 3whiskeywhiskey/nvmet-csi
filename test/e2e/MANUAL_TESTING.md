@@ -1,6 +1,6 @@
 # Manual End-to-End Testing Guide
 
-This guide walks through manual testing of the RDS CSI driver with a real MikroTik RDS server.
+This guide walks through manual testing of the nvmet-csi driver with a real MikroTik RDS server.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ This guide walks through manual testing of the RDS CSI driver with a real MikroT
 # Build for your local platform
 make build-local
 
-# Binary will be at: bin/rds-csi-plugin-<os>-<arch>
+# Binary will be at: bin/nvmet-csi-plugin-<os>-<arch>
 ```
 
 ### 2. Configure RDS Credentials
@@ -55,7 +55,7 @@ Test the CSI Identity service responds correctly.
 source test/e2e/.env
 
 # Start driver in a terminal
-./bin/rds-csi-plugin-$(go env GOOS)-$(go env GOARCH) \
+./bin/nvmet-csi-plugin-$(go env GOOS)-$(go env GOARCH) \
   --endpoint=unix:///tmp/csi-test.sock \
   --controller-mode \
   --rds-address=${RDS_ADDRESS} \
@@ -77,7 +77,7 @@ grpcurl -plaintext -unix /tmp/csi-test.sock \
 
 # Expected output:
 # {
-#   "name": "rds.csi.srvlab.io",
+#   "name": "nvmet.csi.whiskey.works",
 #   "vendorVersion": "dev"
 # }
 
@@ -425,10 +425,10 @@ ssh -i ${RDS_SSH_KEY} ${RDS_USER}@${RDS_ADDRESS} '/system resource print'
 ls -l /tmp/csi-test.sock
 
 # Check driver is running
-ps aux | grep rds-csi-plugin
+ps aux | grep nvmet-csi-plugin
 
 # Try restarting driver
-pkill rds-csi-plugin
+pkill nvmet-csi-plugin
 # ... then restart
 ```
 

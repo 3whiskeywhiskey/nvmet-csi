@@ -7,7 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
 )
 
 // NVMe connection parameter keys for StorageClass

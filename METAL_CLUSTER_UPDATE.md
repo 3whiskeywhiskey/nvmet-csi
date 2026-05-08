@@ -22,7 +22,7 @@ mount failed: exit status 32 - wrong fs type, bad superblock
 ### 1. Apply Updated Controller Manifest
 
 ```bash
-# From the rds-csi repository
+# From the nvmet-csi repository
 kubectl apply -f deploy/kubernetes/controller.yaml
 ```
 
@@ -35,13 +35,13 @@ This will:
 
 ```bash
 # Check controller pod has 5 containers (was 4)
-kubectl get pod -n rds-csi -l app=rds-csi-controller
+kubectl get pod -n nvmet-csi -l app=nvmet-csi-controller
 
 # Verify csi-attacher container is present
-kubectl describe pod -n rds-csi -l app=rds-csi-controller | grep -A5 "csi-attacher:"
+kubectl describe pod -n nvmet-csi -l app=nvmet-csi-controller | grep -A5 "csi-attacher:"
 
 # Check attacher logs
-kubectl logs -n rds-csi deployment/rds-csi-controller -c csi-attacher --tail=20
+kubectl logs -n nvmet-csi deployment/nvmet-csi-controller -c csi-attacher --tail=20
 ```
 
 Expected output:
@@ -145,11 +145,11 @@ kubectl get vm migration-test-vm -w
 # Check VolumeAttachment was created
 kubectl get volumeattachment | grep kubevirt-migration-test
 
-# Should show attachment with csi-rds.srvlab.io as the attacher
+# Should show attachment with nvmet.csi.whiskey.works as the attacher
 # Status should be "true" (attached)
 
 # Check controller logs for ControllerPublishVolume
-kubectl logs -n rds-csi deployment/rds-csi-controller -c rds-csi-driver | grep ControllerPublish
+kubectl logs -n nvmet-csi deployment/nvmet-csi-controller -c nvmet-csi-plugin | grep ControllerPublish
 ```
 
 Expected log output:
@@ -166,15 +166,15 @@ If the attacher container fails to start:
 
 ```bash
 # Check events
-kubectl get events -n rds-csi --sort-by='.lastTimestamp' | grep csi-attacher
+kubectl get events -n nvmet-csi --sort-by='.lastTimestamp' | grep csi-attacher
 
 # Check pod describe
-kubectl describe pod -n rds-csi -l app=rds-csi-controller
+kubectl describe pod -n nvmet-csi -l app=nvmet-csi-controller
 ```
 
 Common issues:
 - Image pull failure: Check network/registry access
-- RBAC missing: Verify `kubectl get clusterrole rds-csi-controller-role` includes VolumeAttachment permissions
+- RBAC missing: Verify `kubectl get clusterrole nvmet-csi-controller-role` includes VolumeAttachment permissions
 
 ### VolumeAttachment Stuck
 
@@ -185,7 +185,7 @@ If VolumeAttachment stays in "false" status:
 kubectl describe volumeattachment <name>
 
 # Check controller logs for errors
-kubectl logs -n rds-csi deployment/rds-csi-controller -c rds-csi-driver --tail=100 | grep -i error
+kubectl logs -n nvmet-csi deployment/nvmet-csi-controller -c nvmet-csi-plugin --tail=100 | grep -i error
 ```
 
 ### Block Device Not Appearing in VM

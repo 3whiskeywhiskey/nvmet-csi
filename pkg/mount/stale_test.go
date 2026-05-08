@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
 )
 
 // createMockResolver creates a mock DeviceResolver for testing

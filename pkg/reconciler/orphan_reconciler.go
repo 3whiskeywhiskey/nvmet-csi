@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
 )
 
 const (
@@ -263,7 +263,7 @@ func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory
 	klog.V(4).Infof("Scanning %d PersistentVolumes in Kubernetes", len(pvList.Items))
 	for _, pv := range pvList.Items {
 		// Only consider PVs from this CSI driver
-		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == "rds.csi.srvlab.io" {
+		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == "nvmet.csi.whiskey.works" {
 			volumeID := pv.Spec.CSI.VolumeHandle
 			activeVolumeIDs[volumeID] = true
 			klog.V(4).Infof("  Found active PV: %s → VolumeHandle=%s, Phase=%s, ClaimRef=%s/%s",

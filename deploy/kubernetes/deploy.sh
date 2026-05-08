@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deployment script for RDS CSI Driver
+# Deployment script for nvmet-csi driver
 
 set -e
 
@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}RDS CSI Driver Deployment Script${NC}"
+echo -e "${GREEN}nvmet-csi driver Deployment Script${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -53,7 +53,7 @@ fi
 
 # Deploy components
 echo ""
-echo -e "${GREEN}Deploying RDS CSI Driver components...${NC}"
+echo -e "${GREEN}Deploying nvmet-csi driver components...${NC}"
 echo ""
 
 echo "1. Creating RBAC resources..."
@@ -83,11 +83,11 @@ echo -e "${GREEN}✓${NC} StorageClass created"
 # Wait for controller to be ready
 echo ""
 echo "Waiting for controller to be ready..."
-kubectl wait --for=condition=Ready pod -l app=rds-csi-controller -n kube-system --timeout=60s || true
+kubectl wait --for=condition=Ready pod -l app=nvmet-csi-controller -n kube-system --timeout=60s || true
 
 # Wait for at least one node pod to be ready
 echo "Waiting for node pods to be ready..."
-kubectl wait --for=condition=Ready pod -l app=rds-csi-node -n kube-system --timeout=60s || true
+kubectl wait --for=condition=Ready pod -l app=nvmet-csi-node -n kube-system --timeout=60s || true
 
 # Show deployment status
 echo ""
@@ -97,15 +97,15 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 
 echo "Controller Pods:"
-kubectl get pods -n kube-system -l app=rds-csi-controller
+kubectl get pods -n kube-system -l app=nvmet-csi-controller
 echo ""
 
 echo "Node Pods:"
-kubectl get pods -n kube-system -l app=rds-csi-node
+kubectl get pods -n kube-system -l app=nvmet-csi-node
 echo ""
 
 echo "CSI Driver:"
-kubectl get csidrivers rds.csi.srvlab.io
+kubectl get csidrivers nvmet.csi.whiskey.works
 echo ""
 
 echo "StorageClass:"
@@ -123,6 +123,6 @@ echo ""
 echo "Next steps:"
 echo "  1. Create a PVC: kubectl apply -f examples/pvc.yaml"
 echo "  2. Create a Pod: kubectl apply -f examples/pod.yaml"
-echo "  3. Check logs: kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-driver"
+echo "  3. Check logs: kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi"
 echo ""
 echo "For detailed documentation, see: docs/kubernetes-setup.md"

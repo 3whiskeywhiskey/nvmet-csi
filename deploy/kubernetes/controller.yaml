@@ -4,8 +4,8 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: rds-csi-secret
-  namespace: rds-csi
+  name: nvmet-csi-secret
+  namespace: nvmet-csi
 type: Opaque
 stringData:
   # RDS SSH private key (ed25519 format)
@@ -27,8 +27,8 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: rds-csi-config
-  namespace: rds-csi
+  name: nvmet-csi-config
+  namespace: nvmet-csi
 data:
   # RDS connection settings (SSH management interface)
   rds-address: "10.42.241.3"  # RDS management IP for SSH
@@ -46,21 +46,21 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rds-csi-controller
-  namespace: rds-csi
+  name: nvmet-csi-controller
+  namespace: nvmet-csi
   labels:
-    app: rds-csi-controller
+    app: nvmet-csi-controller
 spec:
   replicas: 1  # Single controller for simplicity
   selector:
     matchLabels:
-      app: rds-csi-controller
+      app: nvmet-csi-controller
   template:
     metadata:
       labels:
-        app: rds-csi-controller
+        app: nvmet-csi-controller
     spec:
-      serviceAccountName: rds-csi-controller
+      serviceAccountName: nvmet-csi-controller
       priorityClassName: system-cluster-critical
 
       # Prefer control-plane nodes to avoid r640 kubelet connectivity issues
@@ -85,9 +85,9 @@ spec:
           effect: NoSchedule
 
       containers:
-        # RDS CSI Driver Controller
-        - name: rds-csi-driver
-          image: ghcr.io/3whiskeywhiskey/rds-csi:dev
+        # nvmet-csi driver Controller
+        - name: nvmet-csi-plugin
+          image: ghcr.io/3whiskeywhiskey/nvmet-csi:dev
           imagePullPolicy: Always
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
@@ -96,8 +96,8 @@ spec:
             - "-rds-address=$(RDS_ADDRESS)"
             - "-rds-port=$(RDS_PORT)"
             - "-rds-user=$(RDS_USER)"
-            - "-rds-key-file=/etc/rds-csi/rds-private-key"
-            - "-rds-host-key=/etc/rds-csi/rds-host-key"
+            - "-rds-key-file=/etc/nvmet-csi/rds-private-key"
+            - "-rds-host-key=/etc/nvmet-csi/rds-host-key"
             - "-rds-volume-base-path=$(RDS_VOLUME_BASE_PATH)"
             - "-rds-mutation-min-interval=$(RDS_MUTATION_MIN_INTERVAL)"
             - "-rds-mutation-burst=$(RDS_MUTATION_BURST)"
@@ -129,43 +129,43 @@ spec:
             - name: RDS_ADDRESS
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-address
             - name: RDS_PORT
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-port
             - name: RDS_USER
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-user
             - name: RDS_VOLUME_BASE_PATH
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-volume-base-path
             - name: RDS_MUTATION_MIN_INTERVAL
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-mutation-min-interval
             - name: RDS_MUTATION_BURST
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-mutation-burst
             - name: RDS_MUTATION_TIMEOUT
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: rds-mutation-timeout
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
             - name: rds-credentials
-              mountPath: /etc/rds-csi
+              mountPath: /etc/nvmet-csi
               readOnly: true
           resources:
             requests:
@@ -183,7 +183,7 @@ spec:
             - "--v=5"
             - "--timeout=300s"
             - "--leader-election=true"
-            - "--leader-election-namespace=rds-csi"
+            - "--leader-election-namespace=nvmet-csi"
             - "--default-fstype=ext4"
             - "--feature-gates=Topology=false"
           env:
@@ -208,7 +208,7 @@ spec:
             - "--v=5"
             - "--timeout=300s"
             - "--leader-election=true"
-            - "--leader-election-namespace=rds-csi"
+            - "--leader-election-namespace=nvmet-csi"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -231,7 +231,7 @@ spec:
             - "--v=5"
             - "--timeout=300s"
             - "--leader-election=true"
-            - "--leader-election-namespace=rds-csi"
+            - "--leader-election-namespace=nvmet-csi"
             - "--handle-volume-inuse-error=false"
           env:
             - name: ADDRESS
@@ -255,7 +255,7 @@ spec:
             - "--v=5"
             - "--timeout=300s"
             - "--leader-election=true"
-            - "--leader-election-namespace=rds-csi"
+            - "--leader-election-namespace=nvmet-csi"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -295,5 +295,5 @@ spec:
           emptyDir: {}
         - name: rds-credentials
           secret:
-            secretName: rds-csi-secret
+            secretName: nvmet-csi-secret
             defaultMode: 0400

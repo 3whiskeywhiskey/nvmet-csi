@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // MockNVMEConnector is a mock implementation of nvme.Connector for testing

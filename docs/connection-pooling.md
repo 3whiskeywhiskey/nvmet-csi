@@ -2,7 +2,7 @@
 
 ## Overview
 
-The RDS CSI driver implements connection pooling with rate limiting and circuit breaker patterns to improve performance, reliability, and resource utilization when managing volumes on the RDS server.
+The nvmet-csi driver implements connection pooling with rate limiting and circuit breaker patterns to improve performance, reliability, and resource utilization when managing volumes on the RDS server.
 
 ## Features
 
@@ -52,7 +52,7 @@ The pool tracks comprehensive metrics:
 ### Pool Configuration
 
 ```go
-import "git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+import "git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
 
 poolConfig := rds.PoolConfig{
     // Required: Factory function to create new clients

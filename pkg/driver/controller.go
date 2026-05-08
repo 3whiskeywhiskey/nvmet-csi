@@ -16,11 +16,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/security"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 const (

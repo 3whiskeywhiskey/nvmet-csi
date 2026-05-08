@@ -3,15 +3,15 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-node
+  name: {{ include "nvmet-csi.fullname" . }}-node
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: node
 spec:
   selector:
     matchLabels:
-      {{- include "rds-csi.nodeSelectorLabels" . | nindent 6 }}
+      {{- include "nvmet-csi.nodeSelectorLabels" . | nindent 6 }}
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -19,9 +19,9 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "rds-csi.nodeSelectorLabels" . | nindent 8 }}
+        {{- include "nvmet-csi.nodeSelectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "rds-csi.nodeServiceAccountName" . }}
+      serviceAccountName: {{ include "nvmet-csi.nodeServiceAccountName" . }}
       hostNetwork: true  # Required for NVMe/TCP connections
       dnsPolicy: ClusterFirstWithHostNet
       priorityClassName: {{ .Values.node.priorityClassName }}
@@ -45,14 +45,14 @@ spec:
       {{- end }}
 
       containers:
-        # RDS CSI Driver Node
-        - name: rds-csi-driver
-          image: {{ include "rds-csi.nodeImage" . }}
+        # nvmet-csi driver Node
+        - name: nvmet-csi-plugin
+          image: {{ include "nvmet-csi.nodeImage" . }}
           imagePullPolicy: {{ .Values.node.image.pullPolicy }}
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
             - "-node-id=$(NODE_ID)"
-            - "-driver-name={{ include "rds-csi.driverName" . }}"
+            - "-driver-name={{ include "nvmet-csi.driverName" . }}"
             - "-node"
             - "-v={{ .Values.node.logLevel }}"
             {{- if .Values.node.orphanCleanup.enabled }}
@@ -123,7 +123,7 @@ spec:
             - name: ADDRESS
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: {{ .Values.node.kubeletPath }}/plugins/{{ include "rds-csi.driverName" . }}/csi.sock
+              value: {{ .Values.node.kubeletPath }}/plugins/{{ include "nvmet-csi.driverName" . }}/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -155,7 +155,7 @@ spec:
         # Plugin directory for CSI socket
         - name: plugin-dir
           hostPath:
-            path: {{ .Values.node.kubeletPath }}/plugins/{{ include "rds-csi.driverName" . }}/
+            path: {{ .Values.node.kubeletPath }}/plugins/{{ include "nvmet-csi.driverName" . }}/
             type: DirectoryOrCreate
 
         # Registration directory for kubelet

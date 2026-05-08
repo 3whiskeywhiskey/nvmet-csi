@@ -1,12 +1,12 @@
 # Hardware Validation Guide
 
-**Version:** Written for RDS CSI Driver v0.9.0+, RouterOS 7.16+
+**Version:** Written for nvmet-csi driver v0.9.0+, RouterOS 7.16+
 **Last Updated:** 2026-02-18
-**Purpose:** Step-by-step test procedures for validating RDS CSI driver functionality on production hardware
+**Purpose:** Step-by-step test procedures for validating nvmet-csi driver functionality on production hardware
 
 ## Overview
 
-This guide provides executable test scenarios for validating the RDS CSI driver against real MikroTik ROSE Data Server (RDS) hardware. Use this guide for:
+This guide provides executable test scenarios for validating the nvmet-csi driver against real MikroTik ROSE Data Server (RDS) hardware. Use this guide for:
 
 - **Initial deployment validation** - Verify driver works with your RDS hardware
 - **Post-upgrade verification** - Confirm upgrades didn't break functionality
@@ -28,7 +28,7 @@ Before running these tests, ensure you have:
 - **kubectl access:** Cluster-admin privileges to create/delete test resources
 
 ### Cluster Requirements
-- Kubernetes cluster with RDS CSI driver v0.9.0+ deployed
+- Kubernetes cluster with nvmet-csi driver v0.9.0+ deployed
 - At least 20GB free space on RDS for test volumes
 - Worker nodes with:
   - `nvme-cli` installed (for NVMe/TCP operations)
@@ -47,38 +47,38 @@ Run these pre-flight checks before executing test cases to ensure your environme
 ### Step 1: Verify Controller Running
 
 ```bash
-kubectl get pods -n kube-system -l app=rds-csi-controller
+kubectl get pods -n kube-system -l app=nvmet-csi-controller
 ```
 
 **Expected:** One pod in `Running` state
 
 ```
 NAME                                  READY   STATUS    RESTARTS   AGE
-rds-csi-controller-7d8b9f5c6d-xk2mn   3/3     Running   0          5m
+nvmet-csi-controller-7d8b9f5c6d-xk2mn   3/3     Running   0          5m
 ```
 
 **If not running:** Check controller logs for errors:
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50
 ```
 
 ### Step 2: Verify Node Plugin Running
 
 ```bash
-kubectl get pods -n kube-system -l app=rds-csi-node
+kubectl get pods -n kube-system -l app=nvmet-csi-node
 ```
 
 **Expected:** DaemonSet pod on every worker node in `Running` state
 
 ```
 NAME                 READY   STATUS    RESTARTS   AGE
-rds-csi-node-5k7wq   3/3     Running   0          5m
-rds-csi-node-8n2xp   3/3     Running   0          5m
+nvmet-csi-node-5k7wq   3/3     Running   0          5m
+nvmet-csi-node-8n2xp   3/3     Running   0          5m
 ```
 
 **If not running:** Check node plugin logs:
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-plugin --tail=50
+kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=50
 ```
 
 ### Step 3: Verify StorageClass Exists
@@ -91,7 +91,7 @@ kubectl get storageclass rds-nvme-tcp
 
 ```
 NAME            PROVISIONER           RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION
-rds-nvme-tcp    rds.csi.srvlab.io     Delete          WaitForFirstConsumer   true
+rds-nvme-tcp    nvmet.csi.whiskey.works     Delete          WaitForFirstConsumer   true
 ```
 
 ### Step 4: Verify SSH Connectivity to RDS
@@ -214,7 +214,7 @@ test-hw-pvc-01   Bound     pvc-12345678-1234-1234-1234-123456789abc   5Gi       
 
 **If stuck in Pending >60s:** Check controller logs for errors:
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=30 | grep CreateVolume
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=30 | grep CreateVolume
 ```
 
 #### 3. Verify Volume on RDS
@@ -254,7 +254,7 @@ test-hw-pod-01   1/1     Running   0          45s
 
 **If stuck in ContainerCreating:** Check node plugin logs:
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-plugin --tail=30 | grep NodeStage
+kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=30 | grep NodeStage
 ```
 
 #### 5. Verify Volume Mounted in Pod
@@ -485,7 +485,7 @@ kubectl delete pvc test-hw-pvc-02
 - StorageClass has `allowVolumeExpansion: true`
 - At least 10GB free space on RDS
 
-**Important Note:** Volume expansion in RDS CSI requires a pod restart for the filesystem resize to take effect. The controller expands the file on RDS immediately, but the kubelet only calls `NodeExpandVolume` during pod startup. This is normal behavior for CSI drivers that report `NodeExpansionRequired: true`.
+**Important Note:** Volume expansion in nvmet-csi requires a pod restart for the filesystem resize to take effect. The controller expands the file on RDS immediately, but the kubelet only calls `NodeExpandVolume` during pod startup. This is normal behavior for CSI drivers that report `NodeExpansionRequired: true`.
 
 **Steps:**
 
@@ -993,7 +993,7 @@ kubectl wait --for=condition=Ready pod/test-hw-pod-06 --timeout=60s
 #### 3. Check Connection Manager Status in Logs
 
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=100 | grep -i "connection\|connected"
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=100 | grep -i "connection\|connected"
 ```
 
 **Expected:** Logs show active connection to RDS
@@ -1007,8 +1007,8 @@ INFO    Connection healthy
 #### 4. Verify Controller Probe Endpoint
 
 ```bash
-CONTROLLER_POD=$(kubectl get pod -n kube-system -l app=rds-csi-controller -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n kube-system $CONTROLLER_POD -c rds-csi-plugin -- /bin/sh -c 'wget -q -O - http://localhost:9808/healthz'
+CONTROLLER_POD=$(kubectl get pod -n kube-system -l app=nvmet-csi-controller -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n kube-system $CONTROLLER_POD -c nvmet-csi-plugin -- /bin/sh -c 'wget -q -O - http://localhost:9808/healthz'
 ```
 
 **Expected:** Health check returns healthy status
@@ -1020,7 +1020,7 @@ ok
 #### 5. Verify Exponential Backoff Configuration
 
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=200 | grep -i "backoff\|retry"
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=200 | grep -i "backoff\|retry"
 ```
 
 **Expected:** Logs show retry configuration (if any connection issues occurred)
@@ -1048,7 +1048,7 @@ INFO    Retry configuration: exponential backoff with jitter, max elapsed time: 
 
 ```bash
 # Check probe endpoint (should be healthy since RDS is available)
-kubectl exec -n kube-system $CONTROLLER_POD -c rds-csi-plugin -- /bin/sh -c 'wget -q -O - http://localhost:9808/healthz; echo'
+kubectl exec -n kube-system $CONTROLLER_POD -c nvmet-csi-plugin -- /bin/sh -c 'wget -q -O - http://localhost:9808/healthz; echo'
 ```
 
 **Expected:** Returns `ok` when connected
@@ -1289,7 +1289,7 @@ ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-aaaa|pvc-bbbb|pvc-cccc"
 **Estimated Time:** 10 minutes
 
 **Prerequisites:**
-- VolumeSnapshotClass `rds-csi-snapclass` exists (deployed with v0.10.0+)
+- VolumeSnapshotClass `nvmet-csi-snapclass` exists (deployed with v0.10.0+)
 - VolumeSnapshot CRDs installed (`kubectl get crd volumesnapshots.snapshot.storage.k8s.io`)
 - snapshot-controller running in cluster
 - At least 10GB free space on RDS (5Gi source + 5Gi snapshot CoW copy)
@@ -1370,7 +1370,7 @@ metadata:
   labels:
     test: hardware-validation
 spec:
-  volumeSnapshotClassName: rds-csi-snapclass
+  volumeSnapshotClassName: nvmet-csi-snapclass
   source:
     persistentVolumeClaimName: test-hw-pvc-08-source
 EOF
@@ -1384,13 +1384,13 @@ kubectl get volumesnapshot test-hw-snapshot-08 --watch
 
 ```
 NAME                   READYTOUSE   SOURCEPVC                 SOURCESNAPSHOTCONTENT   RESTORESIZE   SNAPSHOTCLASS       SNAPSHOTCONTENT                                    CREATIONTIME   AGE
-test-hw-snapshot-08    false        test-hw-pvc-08-source                                           rds-csi-snapclass                                                                    2s
-test-hw-snapshot-08    true         test-hw-pvc-08-source                             5Gi           rds-csi-snapclass   snapcontent-12345678-1234-1234-1234-123456789abc   8s             8s
+test-hw-snapshot-08    false        test-hw-pvc-08-source                                           nvmet-csi-snapclass                                                                    2s
+test-hw-snapshot-08    true         test-hw-pvc-08-source                             5Gi           nvmet-csi-snapclass   snapcontent-12345678-1234-1234-1234-123456789abc   8s             8s
 ```
 
 **If stuck in non-ready state >30s:** Check controller logs:
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=30 | grep CreateSnapshot
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=30 | grep CreateSnapshot
 ```
 
 #### 4. Verify Snapshot on RDS via SSH
@@ -1900,7 +1900,7 @@ ssh <node-ip> 'nvme list-subsys'
 #### 9. Check Controller Logs for Reconnection
 
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep -i "reconnect"
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep -i "reconnect"
 ```
 
 **Expected:** Connection manager logs showing SSH reconnection via exponential backoff
@@ -2046,7 +2046,7 @@ kubectl get volumeattachment | grep "$PV_NAME"
 **Expected:** VolumeAttachment object exists for the volume
 
 ```
-csi-<hash>   rds.csi.srvlab.io   <pv-name>   <node-name>   true   Running   <age>
+csi-<hash>   nvmet.csi.whiskey.works   <pv-name>   <node-name>   true   Running   <age>
 ```
 
 #### 5. Simulate Node Failure
@@ -2068,7 +2068,7 @@ kubectl delete node $NODE_NAME
 #### 6. Observe Attachment Reconciler Behavior
 
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep -i "stale\|reconcil\|attachment"
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep -i "stale\|reconcil\|attachment"
 ```
 
 **Expected:** Attachment reconciler logs detecting the stale attachment
@@ -2085,14 +2085,14 @@ The attachment reconciler runs on a 5-minute interval with a 30-second grace per
 
 ```bash
 # Trigger immediate reconciliation by restarting the controller
-kubectl rollout restart deployment/rds-csi-controller -n kube-system
-kubectl rollout status deployment/rds-csi-controller -n kube-system --timeout=60s
+kubectl rollout restart deployment/nvmet-csi-controller -n kube-system
+kubectl rollout status deployment/nvmet-csi-controller -n kube-system --timeout=60s
 ```
 
 Then check the reconciler logs again:
 
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep -i "stale\|reconcil"
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep -i "stale\|reconcil"
 ```
 
 #### 8. Verify VolumeAttachment is Cleared
@@ -2219,7 +2219,7 @@ fio --name=randread --rw=randread --bs=4k --size=1G --numjobs=1 --direct=1 --iod
 
 **Step 1:** Check controller pod status
 ```bash
-kubectl get pods -n kube-system -l app=rds-csi-controller
+kubectl get pods -n kube-system -l app=nvmet-csi-controller
 ```
 
 - **If CrashLoopBackOff:** See "Controller Won't Start" below
@@ -2227,7 +2227,7 @@ kubectl get pods -n kube-system -l app=rds-csi-controller
 
 **Step 2:** Check controller logs for CreateVolume errors
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep CreateVolume
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep CreateVolume
 ```
 
 - **If "SSH connection failed":** See "SSH Authentication Issues" below
@@ -2255,7 +2255,7 @@ kubectl describe pvc <pvc-name> | grep -A 10 Events
 
 **Step 1:** Check node plugin pod status
 ```bash
-kubectl get pods -n kube-system -l app=rds-csi-node
+kubectl get pods -n kube-system -l app=nvmet-csi-node
 ```
 
 - **If no pods:** Node plugin DaemonSet not deployed
@@ -2263,7 +2263,7 @@ kubectl get pods -n kube-system -l app=rds-csi-node
 
 **Step 2:** Check node plugin logs for NodeStageVolume errors
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-plugin --tail=50 | grep NodeStage
+kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=50 | grep NodeStage
 ```
 
 - **If "nvme connect failed":** See "NVMe Connection Failures" below
@@ -2293,8 +2293,8 @@ kubectl get secret rds-ssh-key -n kube-system
 
 **Verify secret mounted to controller:**
 ```bash
-CONTROLLER_POD=$(kubectl get pod -n kube-system -l app=rds-csi-controller -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n kube-system $CONTROLLER_POD -c rds-csi-plugin -- ls -la /etc/rds-csi/
+CONTROLLER_POD=$(kubectl get pod -n kube-system -l app=nvmet-csi-controller -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n kube-system $CONTROLLER_POD -c nvmet-csi-plugin -- ls -la /etc/nvmet-csi/
 ```
 
 **Test SSH connectivity manually:**
@@ -2367,7 +2367,7 @@ kubectl get pvc <pvc-name>
 
 **Check controller logs for DeleteVolume errors:**
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep DeleteVolume
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep DeleteVolume
 ```
 
 **Manual cleanup on RDS:**
@@ -2395,12 +2395,12 @@ kubectl describe pvc <pvc-name> | grep -A 10 Events
 
 **Check controller logs:**
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin --tail=50 | grep ControllerExpandVolume
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=50 | grep ControllerExpandVolume
 ```
 
 **Check node logs:**
 ```bash
-kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-plugin --tail=50 | grep NodeExpandVolume
+kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=50 | grep NodeExpandVolume
 ```
 
 **Verify StorageClass allows expansion:**
@@ -2497,5 +2497,5 @@ ssh admin@10.42.241.3 '/disk print brief where slot~"test-hw"'
 ---
 
 **Last Updated:** 2026-02-18
-**Maintained By:** RDS CSI Driver Team
+**Maintained By:** nvmet-csi driver Team
 **Feedback:** Report issues or suggest improvements via GitHub Issues

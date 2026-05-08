@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // Event reasons - use consistent naming for filtering
@@ -128,7 +128,7 @@ func NewEventPoster(clientset kubernetes.Interface) *EventPoster {
 
 	// Create event recorder with driver component name
 	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{
-		Component: "rds-csi-node",
+		Component: "nvmet-csi-node",
 	})
 
 	return &EventPoster{

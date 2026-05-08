@@ -2,7 +2,7 @@
 
 ## Overview
 
-The RDS CSI Driver includes an optional **Orphan Reconciler** that periodically detects and cleans up orphaned volumes - volumes that exist on the RDS storage server but have no corresponding PersistentVolume (PV) in Kubernetes.
+The nvmet-csi driver includes an optional **Orphan Reconciler** that periodically detects and cleans up orphaned volumes - volumes that exist on the RDS storage server but have no corresponding PersistentVolume (PV) in Kubernetes.
 
 ## Why Orphan Volumes Occur
 
@@ -83,7 +83,7 @@ args:
 ### Option 2: Using kubectl patch
 
 ```bash
-kubectl -n kube-system patch deployment rds-csi-controller --type='json' -p='[
+kubectl -n kube-system patch deployment nvmet-csi-controller --type='json' -p='[
   {
     "op": "add",
     "path": "/spec/template/spec/containers/0/args/-",
@@ -104,7 +104,7 @@ kubectl -n kube-system patch deployment rds-csi-controller --type='json' -p='[
 1. **Enable with dry-run**: Deploy with `-enable-orphan-reconciler` and `-orphan-dry-run=true` (default). Keep `-orphan-run-on-start=false` unless you are intentionally running an audit.
 2. **Monitor logs**: Watch controller logs for orphaned volume detections:
    ```bash
-   kubectl -n kube-system logs -f deployment/rds-csi-controller -c rds-csi-driver | grep -i orphan
+   kubectl -n kube-system logs -f deployment/nvmet-csi-controller -c nvmet-csi-plugin | grep -i orphan
    ```
 3. **Review findings**: Check if detected orphans are legitimate or false positives
 4. **Manual cleanup** (if needed):
@@ -172,10 +172,10 @@ V2 1110 12:34:56.789 orphan_reconciler.go:145] No orphaned volumes found (checke
 ### Metrics (Future Enhancement)
 
 Planned Prometheus metrics:
-- `rds_csi_orphan_volumes_detected_total`: Total orphaned volumes detected
-- `rds_csi_orphan_volumes_deleted_total`: Total orphaned volumes deleted
-- `rds_csi_orphan_reconciliation_duration_seconds`: Reconciliation cycle duration
-- `rds_csi_orphan_reconciliation_errors_total`: Reconciliation errors
+- `nvmet_csi_orphan_volumes_detected_total`: Total orphaned volumes detected
+- `nvmet_csi_orphan_volumes_deleted_total`: Total orphaned volumes deleted
+- `nvmet_csi_orphan_reconciliation_duration_seconds`: Reconciliation cycle duration
+- `nvmet_csi_orphan_reconciliation_errors_total`: Reconciliation errors
 
 ## Troubleshooting
 
@@ -203,7 +203,7 @@ Planned Prometheus metrics:
 - Insufficient RBAC permissions
 
 **Solution**:
-- Check RDS connectivity: `kubectl -n kube-system exec -it deployment/rds-csi-controller -c rds-csi-driver -- sh -c "ssh admin@$RDS_ADDRESS /disk print"`
+- Check RDS connectivity: `kubectl -n kube-system exec -it deployment/nvmet-csi-controller -c nvmet-csi-plugin -- sh -c "ssh admin@$RDS_ADDRESS /disk print"`
 - Verify RBAC: Controller ServiceAccount needs `get`, `list`, `watch` on PVs
 - Check controller logs for specific error messages
 
@@ -229,7 +229,7 @@ The orphan reconciler requires the controller ServiceAccount to have permissions
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rds-csi-controller-role
+  name: nvmet-csi-controller-role
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]

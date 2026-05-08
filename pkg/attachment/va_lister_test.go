@@ -40,8 +40,8 @@ func TestListDriverVolumeAttachments(t *testing.T) {
 		{
 			name: "filters by driver name - returns only our driver",
 			existingVAs: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", "pvc-vol1", "node1", true),
-				createTestVolumeAttachment("va2", "rds.csi.srvlab.io", "pvc-vol2", "node2", true),
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", "pvc-vol1", "node1", true),
+				createTestVolumeAttachment("va2", "nvmet.csi.whiskey.works", "pvc-vol2", "node2", true),
 				createTestVolumeAttachment("va3", "ebs.csi.aws.com", "pvc-vol3", "node3", true),
 			},
 			expectedCount: 2,
@@ -89,8 +89,8 @@ func TestListDriverVolumeAttachments(t *testing.T) {
 
 			// Verify all returned VAs are for our driver
 			for _, va := range result {
-				if va.Spec.Attacher != "rds.csi.srvlab.io" {
-					t.Errorf("expected driver rds.csi.srvlab.io, got %s", va.Spec.Attacher)
+				if va.Spec.Attacher != "nvmet.csi.whiskey.works" {
+					t.Errorf("expected driver nvmet.csi.whiskey.works, got %s", va.Spec.Attacher)
 				}
 			}
 		})
@@ -106,17 +106,17 @@ func TestFilterAttachedVolumeAttachments(t *testing.T) {
 		{
 			name: "filters only attached volumes",
 			input: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", "pvc-vol1", "node1", true),
-				createTestVolumeAttachment("va2", "rds.csi.srvlab.io", "pvc-vol2", "node2", false),
-				createTestVolumeAttachment("va3", "rds.csi.srvlab.io", "pvc-vol3", "node3", true),
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", "pvc-vol1", "node1", true),
+				createTestVolumeAttachment("va2", "nvmet.csi.whiskey.works", "pvc-vol2", "node2", false),
+				createTestVolumeAttachment("va3", "nvmet.csi.whiskey.works", "pvc-vol3", "node3", true),
 			},
 			expectedCount: 2,
 		},
 		{
 			name: "all detached returns empty slice",
 			input: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", "pvc-vol1", "node1", false),
-				createTestVolumeAttachment("va2", "rds.csi.srvlab.io", "pvc-vol2", "node2", false),
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", "pvc-vol1", "node1", false),
+				createTestVolumeAttachment("va2", "nvmet.csi.whiskey.works", "pvc-vol2", "node2", false),
 			},
 			expectedCount: 0,
 		},
@@ -170,9 +170,9 @@ func TestGroupVolumeAttachmentsByVolume(t *testing.T) {
 		{
 			name: "groups by volume ID - multiple nodes for same volume",
 			input: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", vol1, "node1", true),
-				createTestVolumeAttachment("va2", "rds.csi.srvlab.io", vol1, "node2", true), // migration
-				createTestVolumeAttachment("va3", "rds.csi.srvlab.io", vol2, "node3", true),
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", vol1, "node1", true),
+				createTestVolumeAttachment("va2", "nvmet.csi.whiskey.works", vol1, "node2", true), // migration
+				createTestVolumeAttachment("va3", "nvmet.csi.whiskey.works", vol2, "node3", true),
 			},
 			expectedGroups: map[string]int{
 				vol1: 2,
@@ -182,11 +182,11 @@ func TestGroupVolumeAttachmentsByVolume(t *testing.T) {
 		{
 			name: "skips VAs with nil PersistentVolumeName",
 			input: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", vol1, "node1", true),
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", vol1, "node1", true),
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "va-nil"},
 					Spec: storagev1.VolumeAttachmentSpec{
-						Attacher: "rds.csi.srvlab.io",
+						Attacher: "nvmet.csi.whiskey.works",
 						NodeName: "node2",
 						Source: storagev1.VolumeAttachmentSource{
 							PersistentVolumeName: nilVol, // nil pointer
@@ -203,8 +203,8 @@ func TestGroupVolumeAttachmentsByVolume(t *testing.T) {
 		{
 			name: "skips VAs with empty PersistentVolumeName",
 			input: []*storagev1.VolumeAttachment{
-				createTestVolumeAttachment("va1", "rds.csi.srvlab.io", vol1, "node1", true),
-				createTestVolumeAttachment("va2", "rds.csi.srvlab.io", "", "node2", true), // empty string
+				createTestVolumeAttachment("va1", "nvmet.csi.whiskey.works", vol1, "node1", true),
+				createTestVolumeAttachment("va2", "nvmet.csi.whiskey.works", "", "node2", true), // empty string
 			},
 			expectedGroups: map[string]int{
 				vol1: 1,

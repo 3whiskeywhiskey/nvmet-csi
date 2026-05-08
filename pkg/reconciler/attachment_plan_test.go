@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
 )
 
 func TestBuildPublishAttachmentPlan(t *testing.T) {

@@ -14,7 +14,7 @@ fi
 
 echo "🔍 Probing Gitea Actions API support..."
 echo "   Host: $GITEA_HOST"
-echo "   Repo: whiskey/rds-csi"
+echo "   Repo: whiskey/nvmet-csi"
 echo
 
 # Test 1: Gitea version
@@ -27,14 +27,14 @@ echo
 # Test 2: Check if Actions is enabled on repo
 echo "2️⃣  Checking if Actions is enabled on repo..."
 HAS_ACTIONS=$(curl -s -H "Authorization: token $GITEA_TOKEN" \
-    "$GITEA_HOST/api/v1/repos/whiskey/rds-csi" | jq -r '.has_actions // false')
+    "$GITEA_HOST/api/v1/repos/whiskey/nvmet-csi" | jq -r '.has_actions // false')
 echo "   has_actions: $HAS_ACTIONS"
 echo
 
 # Test 3: Try /actions/runs endpoint
 echo "3️⃣  Testing /actions/runs endpoint..."
 RUNS_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: token $GITEA_TOKEN" \
-    "$GITEA_HOST/api/v1/repos/whiskey/rds-csi/actions/runs")
+    "$GITEA_HOST/api/v1/repos/whiskey/nvmet-csi/actions/runs")
 RUNS_CODE=$(echo "$RUNS_RESPONSE" | tail -n 1)
 RUNS_BODY=$(echo "$RUNS_RESPONSE" | sed '$d')
 echo "   HTTP Status: $RUNS_CODE"
@@ -59,7 +59,7 @@ echo
 # Test 4: Try /actions/workflows endpoint
 echo "4️⃣  Testing /actions/workflows endpoint..."
 WORKFLOWS_RESPONSE=$(curl -s -w "\n%{http_code}" -H "Authorization: token $GITEA_TOKEN" \
-    "$GITEA_HOST/api/v1/repos/whiskey/rds-csi/actions/workflows")
+    "$GITEA_HOST/api/v1/repos/whiskey/nvmet-csi/actions/workflows")
 WORKFLOWS_CODE=$(echo "$WORKFLOWS_RESPONSE" | tail -n 1)
 WORKFLOWS_BODY=$(echo "$WORKFLOWS_RESPONSE" | sed '$d')
 echo "   HTTP Status: $WORKFLOWS_CODE"
@@ -86,7 +86,7 @@ echo "5️⃣  Testing alternate endpoint patterns..."
 for path in "actions/tasks" "actionRuns" "actions/action-runs"; do
     echo "   Trying /$path..."
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GITEA_TOKEN" \
-        "$GITEA_HOST/api/v1/repos/whiskey/rds-csi/$path")
+        "$GITEA_HOST/api/v1/repos/whiskey/nvmet-csi/$path")
     if [ "$STATUS" = "200" ]; then
         echo "      ✅ Found! ($STATUS)"
     else
@@ -97,7 +97,7 @@ echo
 
 # Test 6: Check web UI for Actions tab
 echo "6️⃣  Web UI check..."
-echo "   Visit: $GITEA_HOST/whiskey/rds-csi/actions"
+echo "   Visit: $GITEA_HOST/whiskey/nvmet-csi/actions"
 echo "   If you see an Actions tab with workflow runs, the feature exists but may not have full API support yet."
 echo
 
@@ -117,7 +117,7 @@ elif [ "$RUNS_CODE" = "404" ]; then
     echo "   Required: Gitea 1.21+ with PR #35382 merged"
     echo
     echo "   Workarounds:"
-    echo "   1. Check the web UI at $GITEA_HOST/whiskey/rds-csi/actions"
+    echo "   1. Check the web UI at $GITEA_HOST/whiskey/nvmet-csi/actions"
     echo "   2. Upgrade Gitea to latest version"
     echo "   3. Use the web interface for now"
     echo "   4. Contribute Actions API support to gitea-mcp project!"

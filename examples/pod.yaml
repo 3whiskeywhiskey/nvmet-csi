@@ -16,7 +16,7 @@ spec:
         - sh
         - -c
         - |
-          echo "RDS CSI Driver Test" > /data/test.txt
+          echo "nvmet-csi driver Test" > /data/test.txt
           echo "Volume mounted successfully!"
           df -h /data
           ls -la /data

@@ -1,8 +1,8 @@
-# KubeVirt Live Migration with RDS CSI Driver
+# KubeVirt Live Migration with nvmet-csi driver
 
 ## Overview
 
-The RDS CSI driver supports KubeVirt VM live migration through temporary ReadWriteMany (RWX) block volume access during migration. This enables zero-downtime VM migration across Kubernetes nodes while the VM continues running.
+The nvmet-csi driver supports KubeVirt VM live migration through temporary ReadWriteMany (RWX) block volume access during migration. This enables zero-downtime VM migration across Kubernetes nodes while the VM continues running.
 
 **Critical limitation:** RWX block volumes are safe ONLY for KubeVirt live migration due to QEMU's I/O coordination. Using RWX for general workloads will cause data corruption.
 
@@ -104,7 +104,7 @@ KubeVirt's live migration protocol ensures only one VM writes at any time:
 
 ### NO Coordination for General Workloads
 
-The RDS CSI driver does NOT provide:
+The nvmet-csi driver does NOT provide:
 
 - **Distributed locking** - No mechanism prevents two nodes from writing simultaneously
 - **I/O fencing** - No split-brain protection if nodes lose coordination
@@ -123,7 +123,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: rds-kubevirt
-provisioner: rds.csi.mikrotik.com
+provisioner: nvmet.csi.whiskey.works
 parameters:
   # Migration timeout: Maximum duration for dual-node attachment
   # Default: 300 seconds (5 minutes)
@@ -170,36 +170,36 @@ Query migration metrics to track success rate, duration, and active migrations:
 
 ```promql
 # Number of currently active migrations (dual-attach state)
-rds_csi_migration_active_migrations
+nvmet_csi_migration_active_migrations
 
 # Migration success rate (migrations/second)
-rate(rds_csi_migration_migrations_total{result="success"}[5m])
+rate(nvmet_csi_migration_migrations_total{result="success"}[5m])
 
 # Migration timeout rate (timed out migrations/second)
-rate(rds_csi_migration_migrations_total{result="timeout"}[5m])
+rate(nvmet_csi_migration_migrations_total{result="timeout"}[5m])
 
 # 95th percentile migration duration
-histogram_quantile(0.95, rate(rds_csi_migration_migration_duration_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(nvmet_csi_migration_migration_duration_seconds_bucket[5m]))
 
 # 50th percentile migration duration (median)
-histogram_quantile(0.50, rate(rds_csi_migration_migration_duration_seconds_bucket[5m]))
+histogram_quantile(0.50, rate(nvmet_csi_migration_migration_duration_seconds_bucket[5m]))
 
 # Total migrations by result (success, timeout, failed)
-rds_csi_migration_migrations_total
+nvmet_csi_migration_migrations_total
 ```
 
 **Alerting examples:**
 
 ```promql
 # Alert if migration timeout rate exceeds 10%
-rate(rds_csi_migration_migrations_total{result="timeout"}[5m])
+rate(nvmet_csi_migration_migrations_total{result="timeout"}[5m])
   /
-rate(rds_csi_migration_migrations_total[5m]) > 0.1
+rate(nvmet_csi_migration_migrations_total[5m]) > 0.1
 
 # Alert if any migration is stuck for > 10 minutes
-rds_csi_migration_active_migrations > 0
+nvmet_csi_migration_active_migrations > 0
   AND
-time() - rds_csi_migration_active_migrations > 600
+time() - nvmet_csi_migration_active_migrations > 600
 ```
 
 ### Kubernetes Events
@@ -225,8 +225,8 @@ kubectl get events --all-namespaces --field-selector reason=MigrationFailed
 Events:
   Type    Reason               Age    From                Message
   ----    ------               ----   ----                -------
-  Normal  MigrationStarted     2m15s  rds-csi-controller  [pvc-a1b2c3d4]: KubeVirt live migration started - source: node1, target: node2, timeout: 5m0s
-  Normal  MigrationCompleted   1m30s  rds-csi-controller  [pvc-a1b2c3d4]: KubeVirt live migration completed - source: node1 → target: node2 (duration: 45s)
+  Normal  MigrationStarted     2m15s  nvmet-csi-controller  [pvc-a1b2c3d4]: KubeVirt live migration started - source: node1, target: node2, timeout: 5m0s
+  Normal  MigrationCompleted   1m30s  nvmet-csi-controller  [pvc-a1b2c3d4]: KubeVirt live migration completed - source: node1 → target: node2 (duration: 45s)
 ```
 
 **Failed migration example:**
@@ -235,8 +235,8 @@ Events:
 Events:
   Type     Reason            Age   From                Message
   ----     ------            ----  ----                -------
-  Normal   MigrationStarted  6m    rds-csi-controller  [pvc-xyz123]: KubeVirt live migration started - source: node1, target: node2, timeout: 5m0s
-  Warning  MigrationFailed   1m    rds-csi-controller  [pvc-xyz123]: KubeVirt live migration failed - source: node1, attempted target: node2, reason: timeout, elapsed: 5m0s
+  Normal   MigrationStarted  6m    nvmet-csi-controller  [pvc-xyz123]: KubeVirt live migration started - source: node1, target: node2, timeout: 5m0s
+  Warning  MigrationFailed   1m    nvmet-csi-controller  [pvc-xyz123]: KubeVirt live migration failed - source: node1, attempted target: node2, reason: timeout, elapsed: 5m0s
 ```
 
 ## Troubleshooting
@@ -393,7 +393,7 @@ Failed to connect to NVMe target: nvme connect failed with exit code 1
 
 4. **Check node plugin logs:**
    ```bash
-   kubectl logs -n kube-system -l app=rds-csi-node --tail=100
+   kubectl logs -n kube-system -l app=nvmet-csi-node --tail=100
    ```
 
 ## Future Enhancements
@@ -432,4 +432,4 @@ If you need shared storage for non-KubeVirt workloads, consider these alternativ
 - **Troubleshooting:** Increase timeout for large VMs, reset stuck migrations by deleting source pod
 - **Recovery:** Data corruption is not recoverable - restore from backup
 
-**Key takeaway:** RWX support in the RDS CSI driver is designed exclusively for KubeVirt live migration. Do not use RWX for any other purpose.
+**Key takeaway:** RWX support in the nvmet-csi driver is designed exclusively for KubeVirt live migration. Do not use RWX for any other purpose.

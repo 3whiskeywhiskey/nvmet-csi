@@ -5,7 +5,7 @@ metadata:
   name: test-vm-disk
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteMany  # RWX for live migration
@@ -21,7 +21,7 @@ metadata:
   name: test-cirros-vm
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   running: true
   template:

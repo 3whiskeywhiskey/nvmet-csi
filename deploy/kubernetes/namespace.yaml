@@ -2,8 +2,8 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: rds-csi
+  name: nvmet-csi
   labels:
-    name: rds-csi
-    app.kubernetes.io/name: rds-csi-driver
+    name: nvmet-csi
+    app.kubernetes.io/name: nvmet-csi
     app.kubernetes.io/component: storage
