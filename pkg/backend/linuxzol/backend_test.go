@@ -778,6 +778,7 @@ func TestHostNamespaceExecutorCommandUsesHostPath(t *testing.T) {
 		Args: []string{
 			"-t", "1",
 			"-m",
+			"-n",
 			"--",
 			"zfs", "list", "tank/nvmet",
 		},
