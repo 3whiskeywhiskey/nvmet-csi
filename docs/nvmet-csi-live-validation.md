@@ -105,6 +105,10 @@ matters more than a single migration surface.
 
 - Run controller/backend tests in CI.
 - Review planned commands for create, repair, resize, and delete.
+- For a live read-only plan against r740xd, run:
+  `nvmet-csi-plugin -linux-zol-plan -linux-zol-plan-action=ensure -linux-zol-plan-executor=host-namespace -linux-zol-plan-zfs-pool=tank/nvmet -linux-zol-plan-target-address=<r740xd-nvme-ip> -linux-zol-plan-volume-id=pvc-11111111-1111-1111-1111-111111111111 -linux-zol-plan-size-bytes=1073741824`.
+  This observes zfs/configfs state, prints the action and exact commands, and
+  exits without applying mutations.
 - Confirm plans are no-op after a successful create.
 - Confirm conflict states do not generate delete/recreate plans.
 - Confirm create and repair plans configure the Linux nvmet TCP port attributes:
