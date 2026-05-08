@@ -104,6 +104,7 @@ type VolumeSpec struct {
 
 type VolumeState struct {
 	ID              string
+	OwnerVolumeID   string
 	Dataset         string
 	DevicePath      string
 	SizeBytes       int64
@@ -134,6 +135,7 @@ func volumeFromState(state *VolumeState) *backend.Volume {
 		NVMETCPNQN:    state.NQN,
 		Status:        state.Status,
 		Attributes: map[string]string{
+			"linux.zfs.owner_volume_id":   state.OwnerVolumeID,
 			"linux.zfs.dataset":           state.Dataset,
 			"linux.nvmet.port.address":    state.PortAddress,
 			"linux.nvmet.port.service_id": state.PortServiceID,

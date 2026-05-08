@@ -53,9 +53,11 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 	}
 
 	nqn, _ := h.getZFSProperty(ctx, dataset, zfsPropNQN)
+	ownerVolumeID, _ := h.getZFSProperty(ctx, dataset, zfsPropVolumeID)
 	portValue, _ := h.getZFSProperty(ctx, dataset, zfsPropPort)
 	port, _ := strconv.Atoi(strings.TrimSpace(portValue))
 	nqn = strings.TrimSpace(nqn)
+	ownerVolumeID = strings.TrimSpace(ownerVolumeID)
 	exportDevice := h.namespaceDevicePath(ctx, nqn)
 	portEntryExists := h.portEntryExists(ctx, port, nqn)
 	portLinkTarget := h.portLinkTarget(ctx, port, nqn)
@@ -69,6 +71,7 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 
 	return &VolumeState{
 		ID:              volumeID,
+		OwnerVolumeID:   ownerVolumeID,
 		Dataset:         dataset,
 		DevicePath:      h.cfg.devicePathFor(volumeID),
 		SizeBytes:       sizeBytes,
@@ -115,9 +118,11 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 			return nil, fmt.Errorf("parse zvol size for %s: %w", id, err)
 		}
 		nqn, _ := h.getZFSProperty(ctx, fields[0], zfsPropNQN)
+		ownerVolumeID, _ := h.getZFSProperty(ctx, fields[0], zfsPropVolumeID)
 		portValue, _ := h.getZFSProperty(ctx, fields[0], zfsPropPort)
 		port, _ := strconv.Atoi(strings.TrimSpace(portValue))
 		nqn = strings.TrimSpace(nqn)
+		ownerVolumeID = strings.TrimSpace(ownerVolumeID)
 		exportDevice := h.namespaceDevicePath(ctx, nqn)
 		portEntryExists := h.portEntryExists(ctx, port, nqn)
 		portLinkTarget := h.portLinkTarget(ctx, port, nqn)
@@ -131,6 +136,7 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn) && portReady
 		volumes = append(volumes, VolumeState{
 			ID:              id,
+			OwnerVolumeID:   ownerVolumeID,
 			Dataset:         fields[0],
 			DevicePath:      devicePath,
 			SizeBytes:       sizeBytes,
@@ -232,6 +238,21 @@ func (h *CommandHost) DeleteVolumeCommands(state VolumeState) []Command {
 }
 
 func (h *CommandHost) validateDeleteState(state VolumeState) error {
+	if state.ID == "" {
+		return fmt.Errorf("refusing to delete volume: volume ID is missing")
+	}
+	if state.OwnerVolumeID == "" {
+		return fmt.Errorf("refusing to delete %s: ZFS owner volume ID metadata is missing", state.ID)
+	}
+	if state.OwnerVolumeID != state.ID {
+		return fmt.Errorf("refusing to delete %s: ZFS owner volume ID metadata %q differs from expected %q", state.ID, state.OwnerVolumeID, state.ID)
+	}
+	if state.Dataset != h.cfg.datasetFor(state.ID) {
+		return fmt.Errorf("refusing to delete %s: ZFS dataset %q differs from expected %q", state.ID, state.Dataset, h.cfg.datasetFor(state.ID))
+	}
+	if state.DevicePath != h.cfg.devicePathFor(state.ID) {
+		return fmt.Errorf("refusing to delete %s: zvol device path %q differs from expected %q", state.ID, state.DevicePath, h.cfg.devicePathFor(state.ID))
+	}
 	if state.NQN == "" {
 		return fmt.Errorf("refusing to delete %s: NVMe/TCP NQN metadata is missing", state.ID)
 	}
