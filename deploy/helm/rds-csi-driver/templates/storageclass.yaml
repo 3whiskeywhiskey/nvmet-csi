@@ -11,7 +11,7 @@ metadata:
   {{- end }}
   labels:
     {{- include "rds-csi.labels" $ | nindent 4 }}
-provisioner: rds.csi.srvlab.io
+provisioner: {{ include "rds-csi.driverName" $ }}
 parameters:
   {{- if $sc.backend }}
   backend: {{ $sc.backend | quote }}

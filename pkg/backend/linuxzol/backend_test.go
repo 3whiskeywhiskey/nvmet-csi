@@ -479,6 +479,28 @@ func TestSSHExecutorRequiresTarget(t *testing.T) {
 	}
 }
 
+func TestRemoteCommandStringQuotesArgumentsForSSH(t *testing.T) {
+	got := remoteCommandString(Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"test -L '/config/nvmet/ports/4420/subsystems/nqn.test' || ln -s '/config/nvmet/subsystems/nqn.test' '/config/nvmet/ports/4420/subsystems/nqn.test'",
+		},
+	})
+	want := "'sh' '-c' 'test -L '\"'\"'/config/nvmet/ports/4420/subsystems/nqn.test'\"'\"' || ln -s '\"'\"'/config/nvmet/subsystems/nqn.test'\"'\"' '\"'\"'/config/nvmet/ports/4420/subsystems/nqn.test'\"'\"''"
+	if got != want {
+		t.Fatalf("unexpected remote command:\nwant=%s\n got=%s", want, got)
+	}
+}
+
+func TestRemoteCommandStringPreservesStdinCommandShape(t *testing.T) {
+	got := remoteCommandString(writeCommand("/sys/kernel/config/nvmet/subsystems/nqn.test/attr_allow_any_host", "1\n"))
+	want := "'tee' '/sys/kernel/config/nvmet/subsystems/nqn.test/attr_allow_any_host'"
+	if got != want {
+		t.Fatalf("unexpected remote tee command: %q", got)
+	}
+}
+
 func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	_, err := NewCommandBackend(CommandBackendOptions{
 		Config:   Config{Pool: "tank/nvmet"},

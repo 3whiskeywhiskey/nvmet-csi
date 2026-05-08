@@ -44,7 +44,9 @@ spec:
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
             - "-node-id=$(NODE_ID)"
+            - "-driver-name={{ include "rds-csi.driverName" . }}"
             - "-controller"
+            {{- if .Values.rds.enabled }}
             - "-rds-address={{ .Values.rds.managementIP }}"
             - "-rds-port={{ .Values.rds.sshPort }}"
             - "-rds-user={{ .Values.rds.sshUser }}"
@@ -54,6 +56,7 @@ spec:
             - "-rds-mutation-min-interval={{ .Values.rds.mutationGuard.minInterval }}"
             - "-rds-mutation-burst={{ .Values.rds.mutationGuard.burst }}"
             - "-rds-mutation-timeout={{ .Values.rds.mutationGuard.timeout }}"
+            {{- end }}
             - "-v={{ .Values.controller.logLevel }}"
             {{- if .Values.monitoring.enabled }}
             - "-metrics-address=:{{ .Values.monitoring.port }}"
@@ -95,12 +98,26 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          {{- if .Values.controller.linuxZOLHostAccess.enabled }}
+          securityContext:
+            privileged: {{ .Values.controller.linuxZOLHostAccess.privileged }}
+            runAsUser: 0
+          {{- end }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
+            {{- if .Values.rds.enabled }}
             - name: rds-credentials
               mountPath: /etc/rds-csi
               readOnly: true
+            {{- end }}
+            {{- if .Values.controller.linuxZOLHostAccess.enabled }}
+            - name: host-dev
+              mountPath: /dev
+            - name: host-nvmet-configfs
+              mountPath: /sys/kernel/config/nvmet
+              mountPropagation: HostToContainer
+            {{- end }}
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
 
@@ -202,7 +219,19 @@ spec:
       volumes:
         - name: socket-dir
           emptyDir: {}
+        {{- if .Values.rds.enabled }}
         - name: rds-credentials
           secret:
             secretName: {{ .Values.rds.secretName }}
             defaultMode: 0400
+        {{- end }}
+        {{- if .Values.controller.linuxZOLHostAccess.enabled }}
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-nvmet-configfs
+          hostPath:
+            path: /sys/kernel/config/nvmet
+            type: Directory
+        {{- end }}
