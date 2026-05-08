@@ -1,8 +1,8 @@
 # nvmet-csi driver Makefile
 
 # Image configuration
-REGISTRY ?= ghcr.io/3whiskeywhiskey
-IMAGE_NAME ?= nvmet-csi
+REGISTRY ?= gitea.whiskey.works
+IMAGE_NAME ?= whiskey-works/nvmet-csi
 IMAGE_TAG ?= dev
 IMAGE = $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -19,6 +19,8 @@ LOCAL_ARCH := $(shell go env GOARCH)
 BINARY_NAME = nvmet-csi-plugin
 BUILD_DIR = bin
 DOCKERFILE = Dockerfile
+NIX_IMAGE_ATTR ?= .\#packages.x86_64-linux.nvmet-csi-image
+NIX_IMAGE_RESULT ?= result-nvmet-csi-image
 
 # Go build flags
 LDFLAGS ?= -s -w
@@ -55,6 +57,8 @@ help:
 	@echo "  make docker           - Build Docker image"
 	@echo "  make docker-push      - Push Docker image to registry"
 	@echo "  make docker-multiarch - Build and push multi-arch images"
+	@echo "  make nix-image        - Build Nix OCI image archive"
+	@echo "  make nix-image-push   - Push Nix OCI image archive to registry"
 	@echo ""
 	@echo "Testing Commands:"
 	@echo "  make test                - Run unit tests"
@@ -181,6 +185,22 @@ docker-multiarch:
 		-f $(DOCKERFILE) \
 		--push \
 		.
+
+.PHONY: nix-image
+nix-image:
+	@echo "Building Nix OCI image archive: $(NIX_IMAGE_RESULT)"
+	nix build $(NIX_IMAGE_ATTR) -o $(NIX_IMAGE_RESULT)
+	@echo "Image archive created: $$(readlink $(NIX_IMAGE_RESULT))"
+
+.PHONY: nix-image-inspect
+nix-image-inspect: nix-image
+	@echo "Inspecting Nix OCI image archive"
+	nix develop .#agent -c skopeo inspect docker-archive:"$$(readlink $(NIX_IMAGE_RESULT))"
+
+.PHONY: nix-image-push
+nix-image-push: nix-image
+	@echo "Pushing Nix OCI image archive: $(IMAGE)"
+	nix develop .#agent -c skopeo --insecure-policy copy docker-archive:"$$(readlink $(NIX_IMAGE_RESULT))" docker://$(IMAGE)
 
 .PHONY: test
 test:
