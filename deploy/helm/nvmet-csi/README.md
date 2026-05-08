@@ -128,9 +128,9 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `controller.replicas` | Number of controller replicas (must be 1) | `1` |
-| `controller.image.repository` | Controller container image repository | `ghcr.io/3whiskeywhiskey/nvmet-csi` |
+| `controller.image.repository` | Controller container image repository | `gitea.whiskey.works/whiskey-works/nvmet-csi` |
 | `controller.image.tag` | Controller image tag (defaults to Chart.appVersion) | `""` |
-| `controller.image.pullPolicy` | Image pull policy | `Always` |
+| `controller.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `controller.logLevel` | Log verbosity level (0-10) | `5` |
 | `controller.resources.requests.cpu` | CPU request | `10m` |
 | `controller.resources.requests.memory` | Memory request | `64Mi` |
@@ -176,9 +176,9 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `node.image.repository` | Node plugin container image repository | `ghcr.io/3whiskeywhiskey/nvmet-csi` |
+| `node.image.repository` | Node plugin container image repository | `gitea.whiskey.works/whiskey-works/nvmet-csi` |
 | `node.image.tag` | Node image tag (defaults to Chart.appVersion) | `""` |
-| `node.image.pullPolicy` | Image pull policy | `Always` |
+| `node.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `node.logLevel` | Log verbosity level (0-10) | `5` |
 | `node.orphanCleanup.enabled` | Run startup cleanup for managed orphaned NVMe sessions | `false` |
 | `node.orphanCleanup.dryRun` | Log managed orphaned NVMe sessions without disconnecting them | `true` |

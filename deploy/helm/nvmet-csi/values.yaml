@@ -69,9 +69,9 @@ controller:
 
   # Container image configuration
   image:
-    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
+    repository: gitea.whiskey.works/whiskey-works/nvmet-csi
     tag: ""  # Defaults to Chart.appVersion if empty
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
 
   # Log verbosity level (0-10, higher is more verbose)
   logLevel: 5
@@ -190,9 +190,9 @@ linuxZOLPlan:
 node:
   # Container image configuration
   image:
-    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
+    repository: gitea.whiskey.works/whiskey-works/nvmet-csi
     tag: ""  # Defaults to Chart.appVersion if empty
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
 
   # Log verbosity level (0-10, higher is more verbose)
   logLevel: 5

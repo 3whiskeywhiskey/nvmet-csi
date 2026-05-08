@@ -12,6 +12,10 @@ on:
       - '.planning/**'
       - '.github/**'
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   NIX_BUILDER_REMOTE: nix-builder@nix-builder-ssh.build-infrastructure.svc.cluster.local
@@ -27,7 +31,7 @@ env:
 
 jobs:
   quick-build:
-    name: Build Binary Only
+    name: Build Binary and Image
     runs-on:
       - nix-ephemeral
     steps:
@@ -81,5 +85,43 @@ jobs:
         run: |
           cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
           ls -lh bin/
-          ./bin/rds-csi-plugin-* --version || true
+          ./bin/nvmet-csi-plugin-* --version || true
           echo "Binary built successfully"
+
+      - name: Configure image tags
+        run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}")"
+          branch="${GITHUB_REF#refs/heads/}"
+          release_tag="${branch}-$(date -u +%Y%m%d-%H%M%S)-${short_sha}"
+          image_tags="${release_tag} ${branch}"
+          if [ "${branch}" = "main" ]; then
+            image_tags="${image_tags} latest"
+          fi
+          echo "IMAGE_TAGS=${image_tags}" >> "$GITHUB_ENV"
+          echo "Publishing ${REGISTRY}/${IMAGE_NAME} for ${GITHUB_REF} at ${GITHUB_SHA} as ${image_tags}"
+
+      - name: Build Nix OCI image archive
+        run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          nix build .#packages.x86_64-linux.nvmet-csi-image -o result-nvmet-csi-image
+
+      - name: Inspect Nix OCI image archive
+        run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          nix develop .#agent -c skopeo inspect "docker-archive:$(readlink -f result-nvmet-csi-image)"
+
+      - name: Push image via skopeo
+        run: |
+          cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
+          archive="$(readlink -f result-nvmet-csi-image)"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}" ARCHIVE="${archive}" nix develop .#agent -c bash -c '
+            set -euo pipefail
+            skopeo login "$REGISTRY" \
+              --username '${{ secrets.REGISTRY_USER }}' \
+              --password '${{ secrets.REGISTRY_TOKEN }}'
+            for tag in $IMAGE_TAGS; do
+              echo "Pushing $IMAGE:$tag"
+              skopeo --insecure-policy copy docker-archive:"$ARCHIVE" docker://"$IMAGE:$tag"
+            done
+          '

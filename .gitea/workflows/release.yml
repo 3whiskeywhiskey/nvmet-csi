@@ -27,6 +27,10 @@ env:
   REGISTRY: gitea.whiskey.works
   IMAGE_NAME: whiskey-works/nvmet-csi
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   full-test:
     name: Run Full Test Suite
@@ -199,3 +203,34 @@ jobs:
           echo "Tests passed"
           echo "Binaries built"
           ls -lh bin/
+
+      - name: Build Nix OCI image archive
+        run: |
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          nix build .#packages.x86_64-linux.nvmet-csi-image -o result-nvmet-csi-image
+
+      - name: Inspect Nix OCI image archive
+        run: |
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          nix develop .#agent -c skopeo inspect "docker-archive:$(readlink -f result-nvmet-csi-image)"
+
+      - name: Push release image via skopeo
+        run: |
+          cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
+          archive="$(readlink -f result-nvmet-csi-image)"
+          version="${{ steps.version.outputs.version }}"
+          image_tags="${version}"
+          case "$version" in
+            v*) image_tags="${image_tags} latest" ;;
+          esac
+
+          IMAGE="${REGISTRY}/${IMAGE_NAME}" ARCHIVE="${archive}" IMAGE_TAGS="${image_tags}" nix develop .#agent -c bash -c '
+            set -euo pipefail
+            skopeo login "$REGISTRY" \
+              --username '${{ secrets.REGISTRY_USER }}' \
+              --password '${{ secrets.REGISTRY_TOKEN }}'
+            for tag in $IMAGE_TAGS; do
+              echo "Pushing $IMAGE:$tag"
+              skopeo --insecure-policy copy docker-archive:"$ARCHIVE" docker://"$IMAGE:$tag"
+            done
+          '
