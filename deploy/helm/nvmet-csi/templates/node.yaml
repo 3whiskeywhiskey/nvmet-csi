@@ -72,7 +72,7 @@ spec:
                   fieldPath: spec.nodeName
             # NQN prefix for volume filtering - REQUIRED for safety
             - name: CSI_MANAGED_NQN_PREFIX
-              value: {{ .Values.rds.nqnPrefix | quote }}
+              value: {{ .Values.managedNQNPrefix | quote }}
           securityContext:
             # SECURITY NOTE: CSI node plugins require privileged mode
             # Reason: Bidirectional mount propagation is a hard Kubernetes requirement

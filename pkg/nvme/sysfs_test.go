@@ -78,7 +78,7 @@ func TestSysfsScanner_ScanControllers(t *testing.T) {
 
 	t.Run("single controller", func(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
-			{name: "nvme0", nqn: "nqn.2000-02.com.mikrotik:pvc-test-123"},
+			{name: "nvme0", nqn: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
@@ -99,9 +99,9 @@ func TestSysfsScanner_ScanControllers(t *testing.T) {
 
 	t.Run("multiple controllers", func(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
-			{name: "nvme0", nqn: "nqn.2000-02.com.mikrotik:pvc-0"},
-			{name: "nvme1", nqn: "nqn.2000-02.com.mikrotik:pvc-1"},
-			{name: "nvme2", nqn: "nqn.2000-02.com.mikrotik:pvc-2"},
+			{name: "nvme0", nqn: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-0"},
+			{name: "nvme1", nqn: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-1"},
+			{name: "nvme2", nqn: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-2"},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
@@ -135,7 +135,7 @@ func TestSysfsScanner_ScanControllers(t *testing.T) {
 func TestSysfsScanner_ReadSubsysNQN(t *testing.T) {
 	t.Run("valid NQN file", func(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
-			{name: "nvme0", nqn: "nqn.2000-02.com.mikrotik:pvc-test-123"},
+			{name: "nvme0", nqn: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
@@ -146,7 +146,7 @@ func TestSysfsScanner_ReadSubsysNQN(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		expected := "nqn.2000-02.com.mikrotik:pvc-test-123"
+		expected := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"
 		if nqn != expected {
 			t.Errorf("Expected NQN %q, got %q", expected, nqn)
 		}
@@ -161,7 +161,7 @@ func TestSysfsScanner_ReadSubsysNQN(t *testing.T) {
 
 		// Write NQN with extra whitespace
 		nqnPath := filepath.Join(ctrlDir, "subsysnqn")
-		if err := os.WriteFile(nqnPath, []byte("  nqn.2000-02.com.mikrotik:pvc-test  \n\t"), 0644); err != nil {
+		if err := os.WriteFile(nqnPath, []byte("  nqn.2026-05.works.whiskey.nvmet-csi:pvc-test  \n\t"), 0644); err != nil {
 			t.Fatalf("Failed to write subsysnqn: %v", err)
 		}
 
@@ -171,7 +171,7 @@ func TestSysfsScanner_ReadSubsysNQN(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		expected := "nqn.2000-02.com.mikrotik:pvc-test"
+		expected := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test"
 		if nqn != expected {
 			t.Errorf("Expected NQN %q, got %q", expected, nqn)
 		}
@@ -227,7 +227,7 @@ func TestSysfsScanner_FindBlockDevice(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				namespaces:   []string{},          // No namespace dirs under controller
 				blockDevices: []string{"nvme0n1"}, // Block device exists in /sys/class/block
 			},
@@ -251,7 +251,7 @@ func TestSysfsScanner_FindBlockDevice(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				namespaces:   []string{},
 				blockDevices: []string{"nvme0c1n1", "nvme0n1"}, // Both exist
 			},
@@ -283,7 +283,7 @@ func TestSysfsScanner_FindBlockDevice(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				namespaces:   []string{},
 				blockDevices: []string{"nvme0c1n1"}, // Pattern nvme0n* won't match this
 			},
@@ -303,7 +303,7 @@ func TestSysfsScanner_FindBlockDevice(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				namespaces:   []string{},
 				blockDevices: []string{}, // No block devices
 			},
@@ -322,7 +322,7 @@ func TestSysfsScanner_FindBlockDevice(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				namespaces:   []string{},
 				blockDevices: []string{"nvme0n1", "nvme0n2"}, // Multiple namespaces
 			},
@@ -349,13 +349,13 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test-123",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		devicePath, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-test-123")
+		devicePath, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123")
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -370,23 +370,23 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-other",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-other",
 				blockDevices: []string{"nvme0n1"},
 			},
 			{
 				name:         "nvme1",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-target",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-target",
 				blockDevices: []string{"nvme1n1"},
 			},
 			{
 				name:         "nvme2",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-another",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-another",
 				blockDevices: []string{"nvme2n1"},
 			},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		devicePath, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-target")
+		devicePath, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-target")
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -401,13 +401,13 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-other",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-other",
 				blockDevices: []string{"nvme0n1"},
 			},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		_, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-nonexistent")
+		_, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-nonexistent")
 		if err == nil {
 			t.Error("Expected error for non-existent NQN, got nil")
 		}
@@ -417,13 +417,13 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		tmpDir := createMockSysfs(t, []mockController{
 			{
 				name:         "nvme0",
-				nqn:          "nqn.2000-02.com.mikrotik:pvc-test",
+				nqn:          "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				blockDevices: []string{}, // No block device
 			},
 		})
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		_, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-test")
+		_, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err == nil {
 			t.Error("Expected error when NQN found but no block device, got nil")
 		}
@@ -438,7 +438,7 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		}
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		_, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-test")
+		_, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err == nil {
 			t.Error("Expected error for empty sysfs, got nil")
 		}
@@ -460,7 +460,7 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 			t.Fatalf("Failed to create controller dir: %v", err)
 		}
 		nqnPath := filepath.Join(ctrl1Dir, "subsysnqn")
-		if err := os.WriteFile(nqnPath, []byte("nqn.2000-02.com.mikrotik:pvc-test\n"), 0644); err != nil {
+		if err := os.WriteFile(nqnPath, []byte("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test\n"), 0644); err != nil {
 			t.Fatalf("Failed to write subsysnqn: %v", err)
 		}
 
@@ -471,7 +471,7 @@ func TestSysfsScanner_FindDeviceByNQN(t *testing.T) {
 		}
 
 		scanner := NewSysfsScannerWithRoot(tmpDir)
-		devicePath, err := scanner.FindDeviceByNQN("nqn.2000-02.com.mikrotik:pvc-test")
+		devicePath, err := scanner.FindDeviceByNQN("nqn.2026-05.works.whiskey.nvmet-csi:pvc-test")
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}

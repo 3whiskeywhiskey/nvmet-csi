@@ -35,7 +35,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "minimal target with default config",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -45,7 +45,7 @@ func TestBuildConnectArgs(t *testing.T) {
 				"-t", "tcp",
 				"-a", "10.0.0.1",
 				"-s", "4420",
-				"-n", "nqn.2000-02.com.mikrotik:pvc-test-123",
+				"-n", "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				"-l", "-1", // ctrl_loss_tmo=-1
 				"-c", "5", // reconnect_delay=5
 			},
@@ -55,7 +55,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "with host NQN",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 				HostNQN:       "nqn.2014-08.org.nvmexpress:uuid:host-123",
@@ -71,7 +71,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "CtrlLossTmo=0 (kernel default, should NOT add -l flag)",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -87,7 +87,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "CtrlLossTmo=600 (explicit timeout)",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -103,7 +103,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "custom ReconnectDelay=10",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -119,7 +119,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "KeepAliveTmo=30",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -135,7 +135,7 @@ func TestBuildConnectArgs(t *testing.T) {
 			name: "ReconnectDelay=0 (should NOT add -c flag)",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -183,7 +183,7 @@ func TestBuildConnectArgs_FirstArg(t *testing.T) {
 	// Verify first arg is always "connect"
 	target := Target{
 		Transport:     "tcp",
-		NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+		NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 		TargetAddress: "10.0.0.1",
 		TargetPort:    4420,
 	}

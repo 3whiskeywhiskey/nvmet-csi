@@ -104,6 +104,9 @@ type Config struct {
 
 	// HealthcheckInterval is how often to check for stuck operations
 	HealthcheckInterval time.Duration
+
+	// ManagedNQNPrefix is the safety filter for disconnect operations.
+	ManagedNQNPrefix string
 }
 
 // DefaultConfig returns default configuration
@@ -116,6 +119,7 @@ func DefaultConfig() Config {
 		CommandTimeout:      20 * time.Second,
 		EnableHealthcheck:   true,
 		HealthcheckInterval: 5 * time.Second,
+		ManagedNQNPrefix:    utils.ManagedNQNPrefix,
 	}
 }
 
@@ -651,12 +655,18 @@ func (c *connector) DisconnectWithContext(ctx context.Context, nqn string) error
 		return fmt.Errorf("invalid NQN: %w", err)
 	}
 
-	// CRITICAL: Only disconnect CSI-managed volumes to prevent bricking nodes
-	// System volumes (e.g., nixos-*) must never be disconnected by the CSI driver
-	// TODO: Make this prefix configurable via driver flag
-	if !strings.HasPrefix(nqn, "nqn.2000-02.com.mikrotik:pvc-") {
-		klog.Warningf("Refusing to disconnect non-CSI volume: %s (expected pvc-* prefix)", nqn)
-		return fmt.Errorf("refusing to disconnect non-CSI volume: %s (only pvc-* volumes are managed by this driver)", nqn)
+	managedNQNPrefix := c.config.ManagedNQNPrefix
+	if managedNQNPrefix == "" {
+		managedNQNPrefix = utils.ManagedNQNPrefix
+	}
+	if err := ValidateNQNPrefix(managedNQNPrefix); err != nil {
+		return fmt.Errorf("invalid managed NQN prefix: %w", err)
+	}
+
+	// CRITICAL: Only disconnect CSI-managed volumes to prevent bricking nodes.
+	if !strings.HasPrefix(nqn, managedNQNPrefix) {
+		klog.Warningf("Refusing to disconnect non-CSI volume: %s (expected prefix %s)", nqn, managedNQNPrefix)
+		return fmt.Errorf("refusing to disconnect non-CSI volume: %s (only volumes with prefix %s are managed by this driver)", nqn, managedNQNPrefix)
 	}
 
 	// Apply timeout from config if no deadline set

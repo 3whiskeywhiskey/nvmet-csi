@@ -9,6 +9,7 @@ provisioner: nvmet.csi.whiskey.works
 parameters:
   backend: linux-zol-nvmet
   executor: host-namespace
+  nqnPrefix: nqn.2026-05.works.whiskey.nvmet-csi
   zfsPool: tank/nvmet
   targetAddress: "10.42.0.10"
   nvmeAddress: "10.42.0.10"
@@ -27,6 +28,7 @@ provisioner: nvmet.csi.whiskey.works
 parameters:
   backend: linux-zol-nvmet
   executor: ssh
+  nqnPrefix: nqn.2026-05.works.whiskey.nvmet-csi
   sshTarget: storage@r740xd
   zfsPool: tank/nvmet
   targetAddress: "10.42.0.10"

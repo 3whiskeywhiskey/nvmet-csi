@@ -18,6 +18,14 @@
       "description": "CSI driver name used in CSIDriver, sidecars, node registration, and StorageClasses",
       "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
     },
+    "nqnPrefix": {
+      "type": "string",
+      "description": "Default NQN namespace used when provisioning volumes"
+    },
+    "managedNQNPrefix": {
+      "type": "string",
+      "description": "NQN prefix used by node-side disconnect and orphan cleanup safety filters"
+    },
     "rds": {
       "type": "object",
       "description": "RDS connection configuration",
@@ -67,10 +75,6 @@
         "insecureSkipVerify": {
           "type": "boolean",
           "description": "Skip SSH host key verification (INSECURE - testing only)"
-        },
-        "nqnPrefix": {
-          "type": "string",
-          "description": "NQN prefix for CSI-managed volumes"
         },
         "mutationGuard": {
           "type": "object",
@@ -203,6 +207,30 @@
             "type": "string",
             "description": "Filesystem type",
             "enum": ["ext4", "ext3", "xfs"]
+          },
+          "nqnPrefix": {
+            "type": "string",
+            "description": "StorageClass-specific NQN namespace override"
+          },
+          "backend": {
+            "type": "string",
+            "description": "Storage backend type"
+          },
+          "executor": {
+            "type": "string",
+            "description": "Backend executor mode"
+          },
+          "zfsPool": {
+            "type": "string",
+            "description": "ZFS dataset or pool for linux-zol-nvmet"
+          },
+          "targetAddress": {
+            "type": "string",
+            "description": "NVMe/TCP target address"
+          },
+          "sshTarget": {
+            "type": "string",
+            "description": "SSH target for remote backend control"
           },
           "reclaimPolicy": {
             "type": "string",

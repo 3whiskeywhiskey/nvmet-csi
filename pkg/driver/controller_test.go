@@ -145,6 +145,23 @@ func TestControllerGetCapabilities(t *testing.T) {
 	}
 }
 
+func TestVolumeIDToNQNFromParamsHonorsStorageClassPrefix(t *testing.T) {
+	volumeID := "pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	params := map[string]string{
+		paramNQNPrefix: "nqn.2000-02.com.example.storage",
+	}
+
+	nqn, err := volumeIDToNQNFromParams(params, volumeID)
+	if err != nil {
+		t.Fatalf("volumeIDToNQNFromParams() error = %v", err)
+	}
+
+	expected := "nqn.2000-02.com.example.storage:pvc-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	if nqn != expected {
+		t.Fatalf("volumeIDToNQNFromParams() = %q, want %q", nqn, expected)
+	}
+}
+
 func TestCreateVolumeValidation(t *testing.T) {
 	cs := &ControllerServer{
 		driver: &Driver{

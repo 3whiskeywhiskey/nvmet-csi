@@ -24,7 +24,7 @@ data:
   rds-mutation-min-interval: "250ms"
   rds-mutation-burst: "1"
   rds-mutation-timeout: "30s"
-  nqn-prefix: "nqn.2000-02.com.mikrotik:pvc-"
+  nqn-prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
 ```
 
 ### SSH Credentials
@@ -55,14 +55,14 @@ accidental disconnection of system volumes (e.g., NixOS diskless nodes that moun
 from RDS).
 
 **Environment Variable:** `CSI_MANAGED_NQN_PREFIX`
-**Default:** `nqn.2000-02.com.mikrotik:pvc-`
+**Default:** `nqn.2026-05.works.whiskey.nvmet-csi:pvc-`
 **Required:** Yes (driver refuses to start without it)
 
 Configure via Kubernetes ConfigMap:
 
 ```yaml
 data:
-  nqn-prefix: "nqn.2000-02.com.mikrotik:pvc-"
+  nqn-prefix: "nqn.2026-05.works.whiskey.nvmet-csi:pvc-"
 ```
 
 The node plugin reads this value from the ConfigMap:

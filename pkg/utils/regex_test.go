@@ -130,7 +130,7 @@ func TestNQNPattern(t *testing.T) {
 	}{
 		{
 			name:        "valid MikroTik NQN",
-			input:       "nqn.2000-02.com.mikrotik:pvc-abc123",
+			input:       "nqn.2026-05.works.whiskey.nvmet-csi:pvc-abc123",
 			shouldMatch: true,
 		},
 		{

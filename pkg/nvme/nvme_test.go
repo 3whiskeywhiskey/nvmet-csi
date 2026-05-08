@@ -124,7 +124,7 @@ func TestConnect(t *testing.T) {
 			name: "successful connection",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -136,11 +136,11 @@ func TestConnect(t *testing.T) {
 			name: "already connected",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
-			listOutput:  `{"Subsystems":[{"NQN":"nqn.2000-02.com.mikrotik:pvc-test-123"}]}`,
+			listOutput:  `{"Subsystems":[{"NQN":"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"}]}`,
 			devicePath:  "/dev/nvme0n1",
 			expectError: false,
 		},
@@ -165,13 +165,13 @@ func TestDisconnect(t *testing.T) {
 	}{
 		{
 			name:        "disconnect connected device",
-			nqn:         "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:         "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			connected:   true,
 			expectError: false,
 		},
 		{
 			name:        "disconnect already disconnected",
-			nqn:         "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:         "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			connected:   false,
 			expectError: false,
 		},
@@ -213,20 +213,20 @@ func TestIsConnected(t *testing.T) {
 	}{
 		{
 			name:       "device connected",
-			nqn:        "nqn.2000-02.com.mikrotik:pvc-test-123",
-			listOutput: `{"Subsystems":[{"NQN":"nqn.2000-02.com.mikrotik:pvc-test-123"}]}`,
+			nqn:        "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
+			listOutput: `{"Subsystems":[{"NQN":"nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"}]}`,
 			expected:   true,
 		},
 		{
 			name:       "device not connected",
-			nqn:        "nqn.2000-02.com.mikrotik:pvc-test-123",
+			nqn:        "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
 			listOutput: "No NVMe subsystems",
 			expected:   false,
 		},
 		{
 			name:       "different device connected",
-			nqn:        "nqn.2000-02.com.mikrotik:pvc-test-123",
-			listOutput: `{"Subsystems":[{"NQN":"nqn.2000-02.com.mikrotik:pvc-other"}]}`,
+			nqn:        "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123",
+			listOutput: `{"Subsystems":[{"NQN":"nqn.2026-05.works.whiskey.nvmet-csi:pvc-other"}]}`,
 			expected:   false,
 		},
 	}
@@ -254,7 +254,7 @@ func TestIsConnected(t *testing.T) {
 }
 
 func TestConnectWithConfigOrphanedSubsystemReturnsDisconnectError(t *testing.T) {
-	nqn := "nqn.2000-02.com.mikrotik:pvc-orphan-repair"
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-orphan-repair"
 	c := &connector{
 		execCommand: mockExecCommandWithDisconnectFailure(
 			`{"Subsystems":[{"NQN":"` + nqn + `"}]}`,
@@ -293,7 +293,7 @@ func TestConnectWithConfigOrphanedSubsystemReturnsDisconnectError(t *testing.T) 
 }
 
 func TestConnectWithConfigReturnsCleanupDisconnectErrorWhenDeviceMissing(t *testing.T) {
-	nqn := "nqn.2000-02.com.mikrotik:pvc-device-wait-cleanup"
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-device-wait-cleanup"
 	c := &connector{
 		execCommand:      mockExecCommandConnectThenDisconnectFailure(nqn),
 		config:           DefaultConfig(),
@@ -338,7 +338,7 @@ func TestGetDevicePathNotFound(t *testing.T) {
 	}
 
 	// Test with non-existent NQN
-	_, err := c.GetDevicePath("nqn.2000-02.com.mikrotik:non-existent")
+	_, err := c.GetDevicePath("nqn.2026-05.works.whiskey.nvmet-csi:non-existent")
 	if err == nil {
 		t.Error("Expected error for non-existent device, got nil")
 	}
@@ -357,7 +357,7 @@ func TestWaitForDeviceTimeout(t *testing.T) {
 	}
 
 	// Test timeout with non-existent device
-	_, err := c.WaitForDevice("nqn.2000-02.com.mikrotik:non-existent", 500*time.Millisecond)
+	_, err := c.WaitForDevice("nqn.2026-05.works.whiskey.nvmet-csi:non-existent", 500*time.Millisecond)
 	if err == nil {
 		t.Error("Expected timeout error, got nil")
 	}
@@ -376,7 +376,7 @@ func TestTargetValidation(t *testing.T) {
 			name: "valid target with all fields",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 				HostNQN:       "nqn.2014-08.org.nvmexpress:uuid:test",
@@ -387,7 +387,7 @@ func TestTargetValidation(t *testing.T) {
 			name: "valid target without host NQN",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    4420,
 			},
@@ -407,7 +407,7 @@ func TestTargetValidation(t *testing.T) {
 			name: "empty address",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				TargetAddress: "",
 				TargetPort:    4420,
 			},
@@ -417,7 +417,7 @@ func TestTargetValidation(t *testing.T) {
 			name: "zero port",
 			target: Target{
 				Transport:     "tcp",
-				NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+				NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 				TargetAddress: "10.0.0.1",
 				TargetPort:    0,
 			},
@@ -466,7 +466,7 @@ func TestGetDevicePathWithMockFilesystem(t *testing.T) {
 	}
 
 	// Create subsysnqn file
-	nqn := "nqn.2000-02.com.mikrotik:pvc-test-123"
+	nqn := "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test-123"
 	nqnPath := filepath.Join(deviceDir, "subsysnqn")
 	if err := os.WriteFile(nqnPath, []byte(nqn+"\n"), 0644); err != nil {
 		t.Fatalf("Failed to create subsysnqn file: %v", err)
@@ -588,7 +588,7 @@ func TestConnectWrapper(t *testing.T) {
 
 	target := Target{
 		Transport:     "tcp",
-		NQN:           "nqn.2000-02.com.mikrotik:pvc-test",
+		NQN:           "nqn.2026-05.works.whiskey.nvmet-csi:pvc-test",
 		TargetAddress: "10.0.0.1",
 		TargetPort:    4420,
 	}

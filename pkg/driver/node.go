@@ -73,7 +73,9 @@ func NewNodeServer(driver *Driver, nodeID string, k8sClient kubernetes.Interface
 	if driver.nvmeConnector != nil {
 		connector = driver.nvmeConnector
 	} else {
-		connector = nvme.NewConnector()
+		nvmeConfig := nvme.DefaultConfig()
+		nvmeConfig.ManagedNQNPrefix = driver.managedNQNPrefix
+		connector = nvme.NewConnectorWithConfig(nvmeConfig)
 		// Pass Prometheus metrics to connector if available
 		if driver.metrics != nil {
 			connector.SetPromMetrics(driver.metrics)

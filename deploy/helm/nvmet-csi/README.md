@@ -100,6 +100,13 @@ kubectl get storageclass
 
 All configuration is done via the `values.yaml` file or `--set` flags during installation.
 
+### Global Settings
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `nqnPrefix` | Default NQN namespace used for provisioned volumes | `nqn.2026-05.works.whiskey.nvmet-csi` |
+| `managedNQNPrefix` | Node-side safety filter for disconnect and orphan cleanup | `nqn.2026-05.works.whiskey.nvmet-csi:pvc-` |
+
 ### RDS Connection Settings
 
 | Parameter | Description | Default |
@@ -112,7 +119,6 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `rds.basePath` | Base path for volumes on RDS | `/storage-pool/metal-csi` |
 | `rds.secretName` | Kubernetes Secret containing RDS credentials | `nvmet-csi-secret` |
 | `rds.insecureSkipVerify` | Skip SSH host key verification (INSECURE - testing only) | `false` |
-| `rds.nqnPrefix` | NQN prefix for CSI-managed volumes | `nqn.2000-02.com.mikrotik:pvc-` |
 | `rds.mutationGuard.minInterval` | Minimum spacing between mutating RDS operations | `250ms` |
 | `rds.mutationGuard.burst` | Maximum RDS mutations allowed to burst | `1` |
 | `rds.mutationGuard.timeout` | Maximum wait for a mutation guard token | `30s` |
