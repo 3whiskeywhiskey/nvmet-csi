@@ -7,6 +7,13 @@ controller:
   linuxZOLHostAccess:
     enabled: true
 
+linuxZOLPreflight:
+  enabled: true
+  executor: host-namespace
+  zfsPool: tank/nvmet
+  targetAddress: "10.42.0.10"
+  nvmePort: "4420"
+
 storageClasses:
   - name: nvmet-zol-r740xd
     enabled: true
