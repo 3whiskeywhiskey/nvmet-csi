@@ -218,6 +218,90 @@
         }
       }
     },
+    "linuxZOLPlan": {
+      "type": "object",
+      "description": "Optional read-only Linux ZoL/nvmet volume plan Job",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Render a Job that prints a Linux ZoL/nvmet dry-run volume plan"
+        },
+        "action": {
+          "type": "string",
+          "description": "Plan action to build",
+          "enum": ["ensure", "delete"]
+        },
+        "executor": {
+          "type": "string",
+          "description": "Plan executor mode",
+          "enum": ["local", "ssh", "host-namespace"]
+        },
+        "zfsPool": {
+          "type": "string",
+          "description": "ZFS pool or dataset to observe"
+        },
+        "targetAddress": {
+          "type": "string",
+          "description": "NVMe/TCP target address expected on the Linux ZoL host"
+        },
+        "nvmePort": {
+          "type": "string",
+          "description": "NVMe/TCP port to plan"
+        },
+        "sshTarget": {
+          "type": "string",
+          "description": "SSH target for executor=ssh"
+        },
+        "deviceRoot": {
+          "type": "string",
+          "description": "Optional zvol device root override"
+        },
+        "configFSRoot": {
+          "type": "string",
+          "description": "Optional nvmet configfs root override"
+        },
+        "volumeID": {
+          "type": "string",
+          "description": "Disposable volume ID to plan"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "description": "Desired size in bytes for action=ensure",
+          "minimum": 1
+        },
+        "nqn": {
+          "type": "string",
+          "description": "Optional exact NQN for action=ensure"
+        },
+        "nqnPrefix": {
+          "type": "string",
+          "description": "Optional NQN namespace override for deriving the planned NQN"
+        },
+        "backoffLimit": {
+          "type": "integer",
+          "description": "Kubernetes Job backoff limit",
+          "minimum": 0
+        },
+        "ttlSecondsAfterFinished": {
+          "type": "integer",
+          "description": "Kubernetes Job TTL after completion",
+          "minimum": 0
+        },
+        "restartPolicy": {
+          "type": "string",
+          "description": "Pod restart policy for the plan Job",
+          "enum": ["Never", "OnFailure"]
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Optional node selector override for the plan Job"
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Optional tolerations override for the plan Job"
+        }
+      }
+    },
     "node": {
       "type": "object",
       "description": "Node DaemonSet configuration",

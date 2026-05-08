@@ -100,6 +100,9 @@ matters more than a single migration surface.
   `executor`, `zfsPool`, `targetAddress`, and `nvmePort` values as the test
   StorageClass. The rendered Job is read-only and should complete successfully
   before any PVCs are created.
+- Also enable `linuxZOLPlan.enabled=true` with a disposable
+  `linuxZOLPlan.volumeID` and the same target values. The rendered Job prints
+  the observed action and exact zfs/configfs commands, but does not apply them.
 
 ### Phase 1: Linux ZoL Dry Run and Command Audit
 

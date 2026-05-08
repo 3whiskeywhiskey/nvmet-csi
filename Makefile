@@ -351,6 +351,14 @@ verify-helm:
 	grep -q -- "-linux-zol-preflight-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-target-address=10.42.0.10" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "app.kubernetes.io/component: linux-zol-plan" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-action=ensure" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-target-address=10.42.0.10" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-volume-id=pvc-11111111-1111-1111-1111-111111111111" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-size-bytes=1073741824" /tmp/nvmet-zol-helm.yaml
 	@if grep -q -- "-rds-address" /tmp/nvmet-zol-helm.yaml; then \
 		echo "ERROR: RDS address rendered for ZoL-only Helm install"; \
 		exit 1; \

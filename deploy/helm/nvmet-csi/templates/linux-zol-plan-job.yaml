@@ -1,0 +1,92 @@
+{{- if .Values.linuxZOLPlan.enabled }}
+{{- $mountHost := or .Values.controller.linuxZOLHostAccess.enabled (eq .Values.linuxZOLPlan.executor "host-namespace") }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nvmet-csi.fullname" . }}-linux-zol-plan
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: linux-zol-plan
+spec:
+  backoffLimit: {{ .Values.linuxZOLPlan.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.linuxZOLPlan.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "nvmet-csi.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: linux-zol-plan
+    spec:
+      serviceAccountName: {{ include "nvmet-csi.controllerServiceAccountName" . }}
+      restartPolicy: {{ .Values.linuxZOLPlan.restartPolicy }}
+      {{- if $mountHost }}
+      hostPID: {{ .Values.controller.linuxZOLHostAccess.hostPID }}
+      {{- end }}
+      {{- if .Values.linuxZOLPlan.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.linuxZOLPlan.nodeSelector | nindent 8 }}
+      {{- else }}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.linuxZOLPlan.tolerations }}
+      tolerations:
+        {{- toYaml .Values.linuxZOLPlan.tolerations | nindent 8 }}
+      {{- else }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: linux-zol-plan
+          image: {{ include "nvmet-csi.controllerImage" . }}
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          args:
+            - "-linux-zol-plan"
+            - "-linux-zol-plan-action={{ .Values.linuxZOLPlan.action }}"
+            - "-linux-zol-plan-executor={{ .Values.linuxZOLPlan.executor }}"
+            - "-linux-zol-plan-zfs-pool={{ required "linuxZOLPlan.zfsPool is required when linuxZOLPlan.enabled=true" .Values.linuxZOLPlan.zfsPool }}"
+            - "-linux-zol-plan-target-address={{ required "linuxZOLPlan.targetAddress is required when linuxZOLPlan.enabled=true" .Values.linuxZOLPlan.targetAddress }}"
+            - "-linux-zol-plan-nvme-port={{ .Values.linuxZOLPlan.nvmePort }}"
+            - "-linux-zol-plan-volume-id={{ required "linuxZOLPlan.volumeID is required when linuxZOLPlan.enabled=true" .Values.linuxZOLPlan.volumeID }}"
+            - "-linux-zol-plan-size-bytes={{ .Values.linuxZOLPlan.sizeBytes | int64 }}"
+            - "-linux-zol-plan-nqn-prefix={{ .Values.linuxZOLPlan.nqnPrefix | default .Values.nqnPrefix }}"
+            {{- if .Values.linuxZOLPlan.nqn }}
+            - "-linux-zol-plan-nqn={{ .Values.linuxZOLPlan.nqn }}"
+            {{- end }}
+            {{- if .Values.linuxZOLPlan.sshTarget }}
+            - "-linux-zol-plan-ssh-target={{ .Values.linuxZOLPlan.sshTarget }}"
+            {{- end }}
+            {{- if .Values.linuxZOLPlan.deviceRoot }}
+            - "-linux-zol-plan-device-root={{ .Values.linuxZOLPlan.deviceRoot }}"
+            {{- end }}
+            {{- if .Values.linuxZOLPlan.configFSRoot }}
+            - "-linux-zol-plan-configfs-root={{ .Values.linuxZOLPlan.configFSRoot }}"
+            {{- end }}
+          {{- if $mountHost }}
+          securityContext:
+            privileged: {{ .Values.controller.linuxZOLHostAccess.privileged }}
+            runAsUser: 0
+          volumeMounts:
+            - name: host-dev
+              mountPath: /dev
+            - name: host-nvmet-configfs
+              mountPath: /sys/kernel/config/nvmet
+              mountPropagation: HostToContainer
+          {{- end }}
+      {{- if $mountHost }}
+      volumes:
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-nvmet-configfs
+          hostPath:
+            path: /sys/kernel/config/nvmet
+            type: Directory
+      {{- end }}
+{{- end }}
