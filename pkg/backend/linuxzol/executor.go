@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -11,6 +12,7 @@ import (
 type Command struct {
 	Name  string
 	Args  []string
+	Env   []string
 	Stdin string
 }
 
@@ -32,6 +34,9 @@ func (e LocalExecutor) Run(ctx context.Context, cmd Command) (string, error) {
 		ctx = context.Background()
 	}
 	command := exec.CommandContext(ctx, cmd.Name, cmd.Args...)
+	if len(cmd.Env) > 0 {
+		command.Env = append(os.Environ(), cmd.Env...)
+	}
 	if cmd.Stdin != "" {
 		command.Stdin = strings.NewReader(cmd.Stdin)
 	}
@@ -103,7 +108,6 @@ func (e HostNamespaceExecutor) command(cmd Command) Command {
 		"-t", fmt.Sprintf("%d", targetPID),
 		"-m",
 		"--",
-		"env", "PATH=" + hostPath,
 		cmd.Name,
 	}
 	args = append(args, cmd.Args...)
@@ -111,6 +115,7 @@ func (e HostNamespaceExecutor) command(cmd Command) Command {
 	return Command{
 		Name:  "nsenter",
 		Args:  args,
+		Env:   []string{"PATH=" + hostPath},
 		Stdin: cmd.Stdin,
 	}
 }

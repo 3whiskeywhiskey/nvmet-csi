@@ -118,7 +118,7 @@ spec:
             - name: host-dev
               mountPath: /dev
             - name: host-nvmet-configfs
-              mountPath: /sys/kernel/config/nvmet
+              mountPath: /sys/kernel/config
               mountPropagation: HostToContainer
             {{- end }}
           resources:
@@ -209,6 +209,8 @@ spec:
           image: "{{ .Values.sidecars.livenessProbe.image.repository }}:{{ .Values.sidecars.livenessProbe.image.tag }}"
           args:
             - "--csi-address=$(ADDRESS)"
+            - "--health-port=10301"
+            - "--probe-timeout=3s"
             - "--v=5"
           env:
             - name: ADDRESS
@@ -235,6 +237,6 @@ spec:
             type: Directory
         - name: host-nvmet-configfs
           hostPath:
-            path: /sys/kernel/config/nvmet
+            path: /sys/kernel/config
             type: Directory
         {{- end }}
