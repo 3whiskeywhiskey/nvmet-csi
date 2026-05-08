@@ -339,12 +339,27 @@ verify-helm:
 	grep -q -- "-node-orphan-cleanup-max-disconnects=2" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
 	helm template nvmet-zol deploy/helm/nvmet-csi --namespace nvmet-csi \
 		-f deploy/helm/nvmet-csi/ci/nvmet-zol-values.yaml > /tmp/nvmet-zol-helm.yaml
+	helm template nvmet-zol deploy/helm/nvmet-csi --namespace nvmet-csi \
+		-f deploy/helm/nvmet-csi/examples/nvmet-zol-r740xd-values.yaml > /tmp/nvmet-zol-r740xd-example.yaml
+	grep -q -- "name: nvmet-zol-r740xd" /tmp/nvmet-zol-r740xd-example.yaml
+	grep -q -- "kubernetes.io/hostname: r740xd" /tmp/nvmet-zol-r740xd-example.yaml
+	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-r740xd-example.yaml
+	grep -q -- "-linux-zol-plan" /tmp/nvmet-zol-r740xd-example.yaml
 	grep -q -- "name: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "provisioner: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "name: nvmet-zol-r740xd" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-driver-name=nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "kubernetes.io/hostname: r740xd" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "backend: \"linux-zol-nvmet\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "executor: \"host-namespace\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "zfsPool: \"tank/nvmet\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "targetAddress: \"10.42.0.10\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "nvmeAddress: \"10.42.0.10\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "nvmePort: \"4420\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "hostPID: true" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "path: /sys/kernel/config/nvmet" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "mountPath: /sys/kernel/config/nvmet" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "kind: Job" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "app.kubernetes.io/component: linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
@@ -365,6 +380,14 @@ verify-helm:
 	fi
 	@if grep -q -- "name: rds-credentials" /tmp/nvmet-zol-helm.yaml; then \
 		echo "ERROR: RDS credentials rendered for ZoL-only Helm install"; \
+		exit 1; \
+	fi
+	@if grep -q -- "name: rds-nvme" /tmp/nvmet-zol-helm.yaml; then \
+		echo "ERROR: RDS StorageClass rendered for ZoL-only Helm install"; \
+		exit 1; \
+	fi
+	@if grep -q -- "storageclass.kubernetes.io/is-default-class" /tmp/nvmet-zol-helm.yaml; then \
+		echo "ERROR: ZoL validation StorageClass rendered as default"; \
 		exit 1; \
 	fi
 

@@ -111,8 +111,8 @@ controller:
   # Priority class for controller pod
   priorityClassName: system-cluster-critical
 
-  # Host access needed for linux-zol-nvmet executor=local. Keep disabled for
-  # RouterOS/RDS and linux-zol-nvmet executor=ssh deployments.
+  # Host access needed for linux-zol-nvmet executor=host-namespace. Keep
+  # disabled for RouterOS/RDS and linux-zol-nvmet executor=ssh deployments.
   linuxZOLHostAccess:
     enabled: false
     privileged: true

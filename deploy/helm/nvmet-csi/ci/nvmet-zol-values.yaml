@@ -4,8 +4,13 @@ rds:
   enabled: false
 
 controller:
+  nodeSelector:
+    kubernetes.io/hostname: r740xd
+  affinity: {}
   linuxZOLHostAccess:
     enabled: true
+    privileged: true
+    hostPID: true
 
 linuxZOLPreflight:
   enabled: true
@@ -32,6 +37,7 @@ storageClasses:
     executor: host-namespace
     zfsPool: tank/nvmet
     targetAddress: "10.42.0.10"
+    nvmeAddress: "10.42.0.10"
     fsType: ext4
     nvmePort: "4420"
     volumeBindingMode: WaitForFirstConsumer
