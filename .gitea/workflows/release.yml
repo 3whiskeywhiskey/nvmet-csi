@@ -207,12 +207,12 @@ jobs:
       - name: Build Nix OCI image archive
         run: |
           cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
-          nix build .#packages.x86_64-linux.nvmet-csi-image -o result-nvmet-csi-image
+          nix build --store "$NIX_BUILDER_STORE" .#packages.x86_64-linux.nvmet-csi-image --no-link --print-out-paths > result-nvmet-csi-image.path
 
       - name: Inspect Nix OCI image archive
         run: |
           cd "/tmp/nvmet-csi-release-build-${GITHUB_RUN_ID}"
-          nix develop .#agent -c skopeo inspect "docker-archive:$(readlink -f result-nvmet-csi-image)"
+          bash scripts/inspect-remote-image.sh "$(cat result-nvmet-csi-image.path)"
 
       - name: Push release image via skopeo
         env:
@@ -224,20 +224,11 @@ jobs:
             echo "::error::REGISTRY_USER and REGISTRY_TOKEN repository secrets are required to publish images"
             exit 1
           fi
-          archive="$(readlink -f result-nvmet-csi-image)"
+          archive="$(cat result-nvmet-csi-image.path)"
           version="${{ steps.version.outputs.version }}"
           image_tags="${version}"
           case "$version" in
             v*) image_tags="${image_tags} latest" ;;
           esac
 
-          IMAGE="${REGISTRY}/${IMAGE_NAME}" ARCHIVE="${archive}" IMAGE_TAGS="${image_tags}" nix develop .#agent -c bash -c '
-            set -euo pipefail
-            printf "%s" "$REGISTRY_TOKEN" | skopeo login "$REGISTRY" \
-              --username "$REGISTRY_USER" \
-              --password-stdin
-            for tag in $IMAGE_TAGS; do
-              echo "Pushing $IMAGE:$tag"
-              skopeo --insecure-policy copy docker-archive:"$ARCHIVE" docker://"$IMAGE:$tag"
-            done
-          '
+          IMAGE="${REGISTRY}/${IMAGE_NAME}" IMAGE_TAGS="${image_tags}" bash scripts/push-remote-image.sh "$archive"
