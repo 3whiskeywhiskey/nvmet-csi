@@ -1,7 +1,7 @@
 # nvmet-csi Side-by-Side Validation Plan
 
 This plan covers the safe path for validating `nvmet-csi` beside the existing
-nvmet-csi deployment. The goal is to prove the Linux ZoL/nvmet path first on the
+`rds-csi` deployment. The goal is to prove the Linux ZoL/nvmet path first on the
 r740xd NVMe ZFS pool, then add RDS compatibility testing only after the driver
 has already demonstrated calm reconciliation behavior without touching RDS.
 
@@ -38,7 +38,7 @@ Required isolation:
 
 - separate namespace, ServiceAccounts, RBAC objects, sockets, and `CSIDriver`;
 - no default StorageClass during validation;
-- no reuse of the existing `nvmet.csi.whiskey.works` driver name;
+- no reuse of the existing `rds-csi` driver name;
 - separate controller logs and metrics labels so mutation counts are attributable
   to the new driver;
 - existing nvmet-csi StorageClasses remain untouched until explicit cutover.
@@ -123,6 +123,8 @@ matters more than a single migration surface.
 ### Phase 2: Local ZoL Smoke Test
 
 - Install `nvmet-csi` side-by-side with only `nvmet-zol-r740xd` enabled.
+  Use `deploy/helm/nvmet-csi/examples/nvmet-zol-r740xd-values.yaml` as the
+  starting values file and adjust only the host label, pool, and target address.
 - Create one disposable PVC and one pod.
 - Verify zvol properties identify the CSI volume ID, NQN, and port.
 - Verify nvmet subsystem, namespace, port listener attributes, and port link

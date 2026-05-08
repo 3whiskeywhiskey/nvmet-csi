@@ -119,7 +119,7 @@
         },
         "linuxZOLHostAccess": {
           "type": "object",
-          "description": "Host access for linux-zol-nvmet executor=local controller deployments",
+          "description": "Host access for linux-zol-nvmet executor=host-namespace controller deployments",
           "properties": {
             "enabled": {
               "type": "boolean",

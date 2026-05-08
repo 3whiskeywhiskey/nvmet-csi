@@ -1,0 +1,56 @@
+# Side-by-side Linux ZoL + kernel nvmet install profile for the r740xd storage
+# host. Keep this StorageClass non-default while validating beside rds-csi.
+
+driverName: nvmet.csi.whiskey.works
+
+rds:
+  enabled: false
+
+controller:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/hostname: r740xd
+  affinity: {}
+  linuxZOLHostAccess:
+    enabled: true
+    privileged: true
+    hostPID: true
+  orphanReconciler:
+    enabled: false
+    dryRun: true
+  staleVolumeAttachmentCleanup:
+    enabled: false
+    dryRun: true
+
+linuxZOLPreflight:
+  enabled: true
+  executor: host-namespace
+  zfsPool: tank/nvmet
+  targetAddress: "10.42.0.10"
+  nvmePort: "4420"
+
+linuxZOLPlan:
+  enabled: true
+  action: ensure
+  executor: host-namespace
+  zfsPool: tank/nvmet
+  targetAddress: "10.42.0.10"
+  nvmePort: "4420"
+  volumeID: pvc-11111111-1111-1111-1111-111111111111
+  sizeBytes: 1073741824
+
+storageClasses:
+  - name: nvmet-zol-r740xd
+    enabled: true
+    isDefault: false
+    backend: linux-zol-nvmet
+    executor: host-namespace
+    zfsPool: tank/nvmet
+    targetAddress: "10.42.0.10"
+    nvmeAddress: "10.42.0.10"
+    nvmePort: "4420"
+    fsType: ext4
+    volumeBindingMode: WaitForFirstConsumer
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    mountOptions: []
