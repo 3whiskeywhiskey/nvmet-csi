@@ -93,7 +93,16 @@ jobs:
           cd "/tmp/nvmet-csi-quick-${GITHUB_RUN_ID}"
           short_sha="$(printf '%.7s' "${GITHUB_SHA}")"
           branch="${GITHUB_REF#refs/heads/}"
-          image_tag_branch="$(printf '%s' "${branch}" | tr -c 'A-Za-z0-9_.-' '-' | sed 's/^-*//; s/-*$//; s/--*/-/g')"
+          image_tag_branch="$(printf '%s' "${branch}" | tr -c 'A-Za-z0-9_.-' '-')"
+          while [ "${image_tag_branch#-}" != "${image_tag_branch}" ]; do
+            image_tag_branch="${image_tag_branch#-}"
+          done
+          while [ "${image_tag_branch%-}" != "${image_tag_branch}" ]; do
+            image_tag_branch="${image_tag_branch%-}"
+          done
+          while [[ "${image_tag_branch}" == *--* ]]; do
+            image_tag_branch="${image_tag_branch//--/-}"
+          done
           if [ -z "${image_tag_branch}" ]; then
             image_tag_branch="branch"
           fi
