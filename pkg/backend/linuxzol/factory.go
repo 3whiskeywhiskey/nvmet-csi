@@ -22,6 +22,8 @@ func NewCommandBackend(opts CommandBackendOptions) (*Backend, error) {
 	switch executorType {
 	case storagebackend.ExecutorLocal:
 		executor = LocalExecutor{}
+	case storagebackend.ExecutorHostNamespace:
+		executor = HostNamespaceExecutor{}
 	case storagebackend.ExecutorSSH:
 		if opts.SSHTarget == "" {
 			return nil, fmt.Errorf("SSH target is required for %s executor", storagebackend.ExecutorSSH)

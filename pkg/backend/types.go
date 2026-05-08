@@ -17,8 +17,9 @@ const (
 	TypeRouterOSRDS   = "routeros-rds"
 	TypeLinuxZOLNVMET = "linux-zol-nvmet"
 
-	ExecutorLocal = "local"
-	ExecutorSSH   = "ssh"
+	ExecutorLocal         = "local"
+	ExecutorSSH           = "ssh"
+	ExecutorHostNamespace = "host-namespace"
 )
 
 var (

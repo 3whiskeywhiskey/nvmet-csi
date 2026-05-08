@@ -342,6 +342,8 @@ verify-helm:
 	grep -q -- "name: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "provisioner: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-driver-name=nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "executor: \"host-namespace\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "hostPID: true" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
 	@if grep -q -- "-rds-address" /tmp/nvmet-zol-helm.yaml; then \
 		echo "ERROR: RDS address rendered for ZoL-only Helm install"; \

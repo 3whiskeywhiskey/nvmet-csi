@@ -79,3 +79,38 @@ func remoteCommandString(cmd Command) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+type HostNamespaceExecutor struct {
+	TargetPID int
+	HostPath  string
+}
+
+func (e HostNamespaceExecutor) Run(ctx context.Context, cmd Command) (string, error) {
+	return LocalExecutor{}.Run(ctx, e.command(cmd))
+}
+
+func (e HostNamespaceExecutor) command(cmd Command) Command {
+	targetPID := e.TargetPID
+	if targetPID <= 0 {
+		targetPID = 1
+	}
+	hostPath := e.HostPath
+	if hostPath == "" {
+		hostPath = "/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	}
+
+	args := []string{
+		"-t", fmt.Sprintf("%d", targetPID),
+		"-m",
+		"--",
+		"env", "PATH=" + hostPath,
+		cmd.Name,
+	}
+	args = append(args, cmd.Args...)
+
+	return Command{
+		Name:  "nsenter",
+		Args:  args,
+		Stdin: cmd.Stdin,
+	}
+}

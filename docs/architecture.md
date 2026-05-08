@@ -102,9 +102,11 @@ select a backend type and executor:
 
 - `backend=routeros-rds`, `executor=ssh`: compatibility path for MikroTik
   RouterOS/RDS. This is the current implemented backend.
-- `backend=linux-zol-nvmet`, `executor=local`: kube-native path where the
-  controller pod is scheduled onto the ZFS/nvmet host and manipulates zvols and
-  configfs locally.
+- `backend=linux-zol-nvmet`, `executor=host-namespace`: kube-native path where
+  the controller pod is scheduled onto the ZFS/nvmet host and enters the host
+  mount namespace to manipulate zvols and configfs with the host's ZFS userland.
+- `backend=linux-zol-nvmet`, `executor=local`: test/container-local path where
+  `zfs` and configfs tools are available inside the controller container.
 - `backend=linux-zol-nvmet`, `executor=ssh`: remote-host path, similar to
   democratic-csi's trusted SSH model.
 
@@ -116,10 +118,10 @@ The Linux ZoL/nvmet backend package is wired into the controller through explici
 StorageClass parameters. It normalizes a volume request into a zvol device path,
 observes existing zvol and nvmet state before mutating, and plans only create,
 resize, delete, no-op, or conflict actions. Its command-backed host emits
-conservative `zfs` and configfs operations through either a local executor or an
-SSH executor. Delete/expand paths that do not carry StorageClass parameters
-recover backend selection from PersistentVolume attributes when Kubernetes API
-access is available.
+conservative `zfs` and configfs operations through host-namespace, local, or SSH
+executors. Delete/expand paths that do not carry StorageClass parameters recover
+backend selection from PersistentVolume attributes when Kubernetes API access is
+available.
 
 ### CSI Controller Plugin
 

@@ -53,7 +53,7 @@ Start with explicit StorageClasses rather than PVC annotations.
 
 Recommended initial classes:
 
-- `nvmet-zol-r740xd`: `backend=linux-zol-nvmet`, `executor=local`;
+- `nvmet-zol-r740xd`: `backend=linux-zol-nvmet`, `executor=host-namespace`;
 - `nvmet-zol-r740xd-ssh`: `backend=linux-zol-nvmet`, `executor=ssh`;
 - `nvmet-rds-compat`: `backend=routeros-rds`, used only after ZoL validation.
 
@@ -63,12 +63,14 @@ stable backend selection contract. A single `nvmet-csi` controller can serve
 multiple backend types if it can reach and safely control each target, but the
 StorageClass should make that target explicit and auditable.
 
-For the local ZoL path, schedule the controller on the r740xd ZFS/nvmet host and
-grant only the host access it needs:
+For the host-namespace ZoL path, schedule the controller on the r740xd ZFS/nvmet
+host and grant only the host access it needs:
 
 - ZFS tools and access to the selected pool;
 - `/sys/kernel/config/nvmet` for configfs export management;
 - `/dev/zvol` for zvol device paths;
+- host PID namespace access so the controller can enter the host mount namespace
+  and use the host's matching ZFS userland;
 - node selector or affinity pinning to the storage host;
 - tolerations only if the storage host is tainted for infrastructure workloads.
 

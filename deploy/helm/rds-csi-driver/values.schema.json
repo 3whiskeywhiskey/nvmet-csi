@@ -124,6 +124,10 @@
             "privileged": {
               "type": "boolean",
               "description": "Run the controller container privileged for local ZFS/configfs control"
+            },
+            "hostPID": {
+              "type": "boolean",
+              "description": "Expose host PID namespace so host-namespace executor can enter the host mount namespace"
             }
           }
         },

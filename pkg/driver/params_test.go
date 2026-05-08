@@ -53,6 +53,17 @@ func TestParseBackendSelection(t *testing.T) {
 			wantType: backend.TypeLinuxZOLNVMET,
 			wantExec: backend.ExecutorSSH,
 		},
+		{
+			name: "linux zol nvmet host namespace",
+			params: map[string]string{
+				"backend":       backend.TypeLinuxZOLNVMET,
+				"executor":      backend.ExecutorHostNamespace,
+				"zfsPool":       "tank/nvmet",
+				"targetAddress": "10.42.0.10",
+			},
+			wantType: backend.TypeLinuxZOLNVMET,
+			wantExec: backend.ExecutorHostNamespace,
+		},
 	}
 
 	for _, tt := range tests {
