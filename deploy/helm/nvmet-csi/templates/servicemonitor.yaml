@@ -3,17 +3,17 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "rds-csi.fullname" . }}
+  name: {{ include "nvmet-csi.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     {{- with .Values.monitoring.serviceMonitor.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   selector:
     matchLabels:
-      {{- include "rds-csi.selectorLabels" . | nindent 6 }}
+      {{- include "nvmet-csi.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: controller
   endpoints:
     - port: metrics

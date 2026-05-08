@@ -25,7 +25,7 @@ RDS is load-bearing shared infrastructure for routing, MinIO, and NVMe/TCP
 storage. Do not reboot RDS, repeatedly restart MinIO, or perform manual
 Kubernetes node mount surgery unless the operator explicitly approves it.
 
-During the `rds-csi` to `nvmet-csi` refactor, treat RouterOS/RDS as fragile:
+During the `nvmet-csi` to `nvmet-csi` refactor, treat RouterOS/RDS as fragile:
 avoid add/remove storms, prefer observe-before-mutate reconciliation, rate-limit
 RouterOS storage mutations, and make stale attachment/session remediation
 explicit and auditable. See `docs/routeros-rds-hardening.md` before changing
@@ -79,7 +79,7 @@ make clean
 make install-tools
 ```
 
-**Local Testing:** Use `make build-local` to build a binary you can run on your development machine. The binary will be named like `bin/rds-csi-plugin-darwin-arm64` based on your platform.
+**Local Testing:** Use `make build-local` to build a binary you can run on your development machine. The binary will be named like `bin/nvmet-csi-plugin-darwin-arm64` based on your platform.
 
 ### Nix Shell for Dependencies
 
@@ -111,7 +111,7 @@ make logs-node
 
 ### Gitea Integration
 
-Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The repository is hosted at `git.srvlab.io/whiskey/rds-csi-driver`.
+Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The repository is hosted at `git.srvlab.io/whiskey/nvmet-csi`.
 
 ## Architecture
 
@@ -122,7 +122,7 @@ Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The
 │ Kubernetes Cluster                                          │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │ RDS CSI Controller (Deployment)                      │  │
+│  │ nvmet-csi Controller (Deployment)                      │  │
 │  │ - CreateVolume via SSH → RDS                         │  │
 │  │ - DeleteVolume via SSH → RDS                         │  │
 │  │ - Volume ID generation and metadata                  │  │
@@ -130,7 +130,7 @@ Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The
 │                 │ SSH (RouterOS CLI)                       │
 │                 │                                          │
 │  ┌──────────────▼───────────────────────────────────────┐  │
-│  │ RDS CSI Node Plugin (DaemonSet)                      │  │
+│  │ nvmet-csi Node Plugin (DaemonSet)                      │  │
 │  │ - NodeStageVolume: nvme connect                      │  │
 │  │ - NodePublishVolume: mount filesystem                │  │
 │  │ - NodeUnstageVolume: nvme disconnect                 │  │
@@ -147,7 +147,7 @@ Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The
 
 ### Code Structure
 
-- **`cmd/rds-csi-plugin/`**: Main entry point for both controller and node plugin
+- **`cmd/nvmet-csi-plugin/`**: Main entry point for both controller and node plugin
 - **`pkg/driver/`**: CSI driver implementation (Identity, Controller, Node services)
 - **`pkg/rds/`**: SSH client and RouterOS CLI command wrappers
 - **`pkg/utils/`**: Utility functions (volume ID generation, NVMe helpers, etc.)
@@ -275,7 +275,7 @@ Device appears as `/dev/nvmeXnY` after successful connection.
 
 ## Security Considerations
 
-- **SSH Keys**: Private key stored in Kubernetes Secret, mounted to controller at `/etc/rds-csi/ssh-key` with mode 0600
+- **SSH Keys**: Private key stored in Kubernetes Secret, mounted to controller at `/etc/nvmet-csi/ssh-key` with mode 0600
 - **Command Injection**: Strict validation of volume IDs (only alphanumeric + hyphen), reject shell metacharacters
 - **RBAC**: Controller requires access to PVs, PVCs, StorageClasses, Events, Secrets; Node requires access to Nodes
 - **Network Isolation**: Control plane (SSH port 22) and data plane (NVMe/TCP port 4420) should use separate VLANs

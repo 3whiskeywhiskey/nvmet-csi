@@ -16,7 +16,7 @@ import (
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // createTestListers creates test node and PV listers from a fake clientset
@@ -56,7 +56,7 @@ func requireStaleVAMetric(t *testing.T, metrics *observability.Metrics, labels .
 	body := rec.Body.String()
 
 	for _, line := range strings.Split(body, "\n") {
-		if !strings.HasPrefix(line, "rds_csi_attachment_stale_volumeattachment_cleanup_total{") || !strings.HasSuffix(line, " 1") {
+		if !strings.HasPrefix(line, "nvmet_csi_attachment_stale_volumeattachment_cleanup_total{") || !strings.HasSuffix(line, " 1") {
 			continue
 		}
 		matched := true

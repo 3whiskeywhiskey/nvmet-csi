@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 // setupTestBasePaths configures allowed base paths for testing

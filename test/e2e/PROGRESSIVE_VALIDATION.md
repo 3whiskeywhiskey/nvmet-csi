@@ -1,6 +1,6 @@
 # Progressive Hardware Validation Runbook
 
-**Purpose:** Systematically validate RDS CSI driver functionality on metal cluster, building from basic operations through complex scenarios to KubeVirt live migration.
+**Purpose:** Systematically validate nvmet-csi driver functionality on metal cluster, building from basic operations through complex scenarios to KubeVirt live migration.
 
 **Cluster:** metal (production)
 **Driver Version:** v0.6.0 (with Phase 14 safety features)
@@ -13,7 +13,7 @@
 Before starting validation, ensure the environment is ready:
 
 - [ ] Latest driver image built and pushed (with Phase 14 features)
-- [ ] ConfigMap `rds-csi-config` contains `nqn-prefix` key
+- [ ] ConfigMap `nvmet-csi-config` contains `nqn-prefix` key
 - [ ] All nodes healthy and ready
 - [ ] RDS accessible at 10.42.241.3:22
 - [ ] No existing test PVCs from previous runs
@@ -21,13 +21,13 @@ Before starting validation, ensure the environment is ready:
 ```bash
 # Verify cluster state
 kubectl get nodes
-kubectl -n rds-csi get pods -o wide
-kubectl -n rds-csi get configmap rds-csi-config -o yaml | grep nqn-prefix
+kubectl -n nvmet-csi get pods -o wide
+kubectl -n nvmet-csi get configmap nvmet-csi-config -o yaml | grep nqn-prefix
 
 # Clean up any previous test resources
-kubectl delete pvc -l test=rds-csi-validation --all-namespaces
-kubectl delete pod -l test=rds-csi-validation --all-namespaces
-kubectl delete vm -l test=rds-csi-validation --all-namespaces
+kubectl delete pvc -l test=nvmet-csi-validation --all-namespaces
+kubectl delete pod -l test=nvmet-csi-validation --all-namespaces
+kubectl delete vm -l test=nvmet-csi-validation --all-namespaces
 ```
 
 ---
@@ -47,7 +47,7 @@ metadata:
   name: test-basic-fs
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteOnce
@@ -55,7 +55,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 EOF
 
 # Wait for PVC to bind
@@ -124,7 +124,7 @@ metadata:
   name: test-fs-lifecycle
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteOnce
@@ -132,7 +132,7 @@ spec:
   resources:
     requests:
       storage: 2Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 EOF
 
 # Verify PVC is Pending (WaitForFirstConsumer)
@@ -150,7 +150,7 @@ metadata:
   name: test-fs-writer
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   containers:
   - name: writer
@@ -183,7 +183,7 @@ NODE=$(kubectl get pod test-fs-writer -o jsonpath='{.spec.nodeName}')
 echo "Pod running on: $NODE"
 
 # Check node plugin logs for staging
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=50 | grep -i "stage\|mount"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=50 | grep -i "stage\|mount"
 # Expected: NodeStageVolume succeeded, NVMe connected, filesystem formatted/mounted
 ```
 
@@ -210,7 +210,7 @@ kubectl delete pod test-fs-writer
 
 ```bash
 # Check node logs for unstage
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=50 | grep -i "unstage\|disconnect"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=50 | grep -i "unstage\|disconnect"
 # Expected: NodeUnstageVolume succeeded, NVMe disconnected
 ```
 
@@ -226,7 +226,7 @@ metadata:
   name: test-fs-reader
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   containers:
   - name: reader
@@ -294,7 +294,7 @@ metadata:
   name: test-block-lifecycle
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteOnce
@@ -302,7 +302,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 EOF
 ```
 
@@ -316,7 +316,7 @@ metadata:
   name: test-block-writer
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   containers:
   - name: writer
@@ -370,7 +370,7 @@ kubectl exec test-block-writer -- dd if=/dev/xvda bs=1 count=15 2>/dev/null
 
 ```bash
 # Check node logs - should NOT format filesystem for block volumes
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=50 | grep -i "block\|stage"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=50 | grep -i "block\|stage"
 # Expected: "Block volume detected, skipping filesystem format"
 ```
 
@@ -405,7 +405,7 @@ metadata:
   name: test-health-check
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteOnce
@@ -413,7 +413,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 ---
 apiVersion: v1
 kind: Pod
@@ -421,7 +421,7 @@ metadata:
   name: test-health-pod
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   containers:
   - name: app
@@ -443,7 +443,7 @@ kubectl wait --for=condition=Ready pod/test-health-pod --timeout=120s
 
 ```bash
 # Check logs for health check
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=100 | grep -i "health\|fsck"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=100 | grep -i "health\|fsck"
 # Expected: "Running filesystem health check" or "Filesystem health check passed"
 ```
 
@@ -460,7 +460,7 @@ kubectl delete pvc test-health-check
 
 ```bash
 # Check node logs for circuit breaker initialization
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=200 | grep -i "circuit"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=200 | grep -i "circuit"
 # Expected: Circuit breaker should be initialized per volume
 ```
 
@@ -468,7 +468,7 @@ kubectl -n rds-csi logs -l app=rds-csi-node --tail=200 | grep -i "circuit"
 
 ```bash
 # Verify terminationGracePeriodSeconds in DaemonSet
-kubectl -n rds-csi get daemonset rds-csi-node -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}'
+kubectl -n nvmet-csi get daemonset nvmet-csi-node -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}'
 # Expected: 60
 ```
 
@@ -479,11 +479,11 @@ kubectl -n rds-csi get daemonset rds-csi-node -o jsonpath='{.spec.template.spec.
 TEST_NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 
 # Delete node pod to trigger graceful shutdown
-NODE_POD=$(kubectl -n rds-csi get pod -l app=rds-csi-node --field-selector spec.nodeName=$TEST_NODE -o jsonpath='{.items[0].metadata.name}')
-kubectl -n rds-csi delete pod $NODE_POD
+NODE_POD=$(kubectl -n nvmet-csi get pod -l app=nvmet-csi-node --field-selector spec.nodeName=$TEST_NODE -o jsonpath='{.items[0].metadata.name}')
+kubectl -n nvmet-csi delete pod $NODE_POD
 
 # Watch pod termination timing
-kubectl -n rds-csi get pod $NODE_POD -w
+kubectl -n nvmet-csi get pod $NODE_POD -w
 # Expected: Pod should terminate within 60 seconds
 ```
 
@@ -509,7 +509,7 @@ metadata:
   name: test-rwo-conflict
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteOnce
@@ -517,7 +517,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 EOF
 ```
 
@@ -534,7 +534,7 @@ metadata:
   name: test-rwo-pod-a
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   nodeName: $NODE_A
   containers:
@@ -566,7 +566,7 @@ metadata:
   name: test-rwo-pod-b
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   nodeName: $NODE_B
   containers:
@@ -590,7 +590,7 @@ kubectl describe pod test-rwo-pod-b | tail -20
 **Verify attachment conflict in controller logs:**
 
 ```bash
-kubectl -n rds-csi logs -l app=rds-csi-controller --tail=50 | grep -i "conflict\|already attached"
+kubectl -n nvmet-csi logs -l app=nvmet-csi-controller --tail=50 | grep -i "conflict\|already attached"
 # Expected: "RWO volume already attached to node X, rejecting attachment to node Y"
 ```
 
@@ -636,7 +636,7 @@ metadata:
   name: test-vm-disk
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   accessModes:
     - ReadWriteMany
@@ -644,7 +644,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: rds-csi
+  storageClassName: nvmet-csi
 EOF
 
 kubectl get pvc test-vm-disk -w
@@ -661,7 +661,7 @@ metadata:
   name: test-validation-vm
   namespace: default
   labels:
-    test: rds-csi-validation
+    test: nvmet-csi-validation
 spec:
   running: true
   template:
@@ -847,7 +847,7 @@ echo "✓ Data integrity verified after migration"
 
 ```bash
 # Port-forward to controller metrics endpoint
-kubectl -n rds-csi port-forward deployment/rds-csi-controller 9809:9809 &
+kubectl -n nvmet-csi port-forward deployment/nvmet-csi-controller 9809:9809 &
 PF_PID=$!
 sleep 2
 
@@ -895,17 +895,17 @@ After completing all validation tests:
 
 ```bash
 # Verify cleanup
-kubectl get pvc -l test=rds-csi-validation --all-namespaces
-kubectl get pod -l test=rds-csi-validation --all-namespaces
-kubectl get vm -l test=rds-csi-validation --all-namespaces
+kubectl get pvc -l test=nvmet-csi-validation --all-namespaces
+kubectl get pod -l test=nvmet-csi-validation --all-namespaces
+kubectl get vm -l test=nvmet-csi-validation --all-namespaces
 
 # Check RDS for orphaned volumes
 ssh metal-csi@10.42.241.3 '/disk print detail where slot~"pvc-"'
 # Expected: Only production volumes, no test volumes
 
 # Review driver logs for any errors
-kubectl -n rds-csi logs -l app=rds-csi-controller --tail=100
-kubectl -n rds-csi logs -l app=rds-csi-node --tail=100
+kubectl -n nvmet-csi logs -l app=nvmet-csi-controller --tail=100
+kubectl -n nvmet-csi logs -l app=nvmet-csi-node --tail=100
 ```
 
 ---
@@ -915,8 +915,8 @@ kubectl -n rds-csi logs -l app=rds-csi-node --tail=100
 ### PVC Stuck in Pending
 
 **Check:**
-- StorageClass exists: `kubectl get storageclass rds-csi`
-- Controller logs: `kubectl -n rds-csi logs -l app=rds-csi-controller`
+- StorageClass exists: `kubectl get storageclass nvmet-csi`
+- Controller logs: `kubectl -n nvmet-csi logs -l app=nvmet-csi-controller`
 - Events: `kubectl describe pvc <name>`
 
 **Common causes:**
@@ -927,7 +927,7 @@ kubectl -n rds-csi logs -l app=rds-csi-node --tail=100
 ### Pod Stuck in ContainerCreating
 
 **Check:**
-- Node plugin logs: `kubectl -n rds-csi logs -l app=rds-csi-node`
+- Node plugin logs: `kubectl -n nvmet-csi logs -l app=nvmet-csi-node`
 - Pod events: `kubectl describe pod <name>`
 - NVMe connection status on node
 

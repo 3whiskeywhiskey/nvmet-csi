@@ -71,7 +71,7 @@ changes.
 
 ## Metrics
 
-Prometheus exposes `rds_csi_attachment_stale_volumeattachment_cleanup_total`
+Prometheus exposes `nvmet_csi_attachment_stale_volumeattachment_cleanup_total`
 with fixed `result` and `dry_run` labels. Expected results are:
 
 - `candidate`: a stale `VolumeAttachment` matched the safety rules.

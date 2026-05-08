@@ -10,8 +10,8 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
   {{- end }}
   labels:
-    {{- include "rds-csi.labels" $ | nindent 4 }}
-provisioner: {{ include "rds-csi.driverName" $ }}
+    {{- include "nvmet-csi.labels" $ | nindent 4 }}
+provisioner: {{ include "nvmet-csi.driverName" $ }}
 parameters:
   {{- if $sc.backend }}
   backend: {{ $sc.backend | quote }}

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
 )
 
 // mockMounter implements Mounter interface for testing

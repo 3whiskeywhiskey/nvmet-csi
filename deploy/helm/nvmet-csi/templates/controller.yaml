@@ -3,22 +3,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-controller
+  name: {{ include "nvmet-csi.fullname" . }}-controller
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
 spec:
   replicas: {{ .Values.controller.replicas }}
   selector:
     matchLabels:
-      {{- include "rds-csi.controllerSelectorLabels" . | nindent 6 }}
+      {{- include "nvmet-csi.controllerSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "rds-csi.controllerSelectorLabels" . | nindent 8 }}
+        {{- include "nvmet-csi.controllerSelectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "rds-csi.controllerServiceAccountName" . }}
+      serviceAccountName: {{ include "nvmet-csi.controllerServiceAccountName" . }}
       {{- if .Values.controller.linuxZOLHostAccess.enabled }}
       hostPID: {{ .Values.controller.linuxZOLHostAccess.hostPID }}
       {{- end }}
@@ -40,21 +40,21 @@ spec:
       {{- end }}
 
       containers:
-        # RDS CSI Driver Controller
-        - name: rds-csi-driver
-          image: {{ include "rds-csi.controllerImage" . }}
+        # nvmet-csi driver Controller
+        - name: nvmet-csi-plugin
+          image: {{ include "nvmet-csi.controllerImage" . }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
             - "-node-id=$(NODE_ID)"
-            - "-driver-name={{ include "rds-csi.driverName" . }}"
+            - "-driver-name={{ include "nvmet-csi.driverName" . }}"
             - "-controller"
             {{- if .Values.rds.enabled }}
             - "-rds-address={{ .Values.rds.managementIP }}"
             - "-rds-port={{ .Values.rds.sshPort }}"
             - "-rds-user={{ .Values.rds.sshUser }}"
-            - "-rds-key-file=/etc/rds-csi/rds-private-key"
-            - "-rds-host-key=/etc/rds-csi/rds-host-key"
+            - "-rds-key-file=/etc/nvmet-csi/rds-private-key"
+            - "-rds-host-key=/etc/nvmet-csi/rds-host-key"
             - "-rds-volume-base-path={{ .Values.rds.basePath }}"
             - "-rds-mutation-min-interval={{ .Values.rds.mutationGuard.minInterval }}"
             - "-rds-mutation-burst={{ .Values.rds.mutationGuard.burst }}"
@@ -111,7 +111,7 @@ spec:
               mountPath: /var/lib/csi/sockets/pluginproxy/
             {{- if .Values.rds.enabled }}
             - name: rds-credentials
-              mountPath: /etc/rds-csi
+              mountPath: /etc/nvmet-csi
               readOnly: true
             {{- end }}
             {{- if .Values.controller.linuxZOLHostAccess.enabled }}

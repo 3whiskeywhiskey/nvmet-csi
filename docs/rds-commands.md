@@ -1,10 +1,10 @@
 # MikroTik RDS RouterOS Commands Reference
 
-This document provides a reference for the RouterOS CLI commands used by the RDS CSI Driver to manage NVMe/TCP volumes on MikroTik ROSE Data Server (RDS).
+This document provides a reference for the RouterOS CLI commands used by the nvmet-csi driver to manage NVMe/TCP volumes on MikroTik ROSE Data Server (RDS).
 
 ## Overview
 
-The RDS CSI Driver interacts with the RDS via **SSH** using RouterOS command-line interface (CLI). All volume operations are executed remotely using these commands.
+The nvmet-csi driver interacts with the RDS via **SSH** using RouterOS command-line interface (CLI). All volume operations are executed remotely using these commands.
 
 **Connection Method**: `ssh <user>@<rds-ip> '<command>'`
 
@@ -442,18 +442,18 @@ Typical latencies (measured from homelab environment):
 
 **Key Generation**:
 ```bash
-ssh-keygen -t ed25519 -f rds-csi-key -N "" -C "rds-csi-driver"
+ssh-keygen -t ed25519 -f nvmet-csi-key -N "" -C "nvmet-csi"
 ```
 
 **Public Key Installation on RDS**:
 ```bash
-/user ssh-keys import public-key-file=rds-csi-key.pub user=admin
+/user ssh-keys import public-key-file=nvmet-csi-key.pub user=admin
 ```
 
 **Key Storage in Kubernetes**:
 ```bash
 kubectl create secret generic rds-ssh-key \
-  --from-file=id_ed25519=rds-csi-key \
+  --from-file=id_ed25519=nvmet-csi-key \
   --namespace kube-system
 ```
 

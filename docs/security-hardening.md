@@ -1,6 +1,6 @@
 # Security Hardening Guide
 
-This document describes the security hardening measures implemented in the RDS CSI Driver.
+This document describes the security hardening measures implemented in the nvmet-csi driver.
 
 ## Container Security
 
@@ -68,12 +68,12 @@ If the node plugin fails to start or mount operations fail:
 
 1. **Check pod logs**:
    ```bash
-   kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-driver
+   kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin
    ```
 
 2. **Check for permission errors**:
    ```bash
-   kubectl describe pod -n kube-system -l app=rds-csi-node
+   kubectl describe pod -n kube-system -l app=nvmet-csi-node
    ```
 
 3. **Verify capabilities**:
@@ -89,7 +89,7 @@ If the node plugin fails to start or mount operations fail:
 
 5. **Test mount operations manually**:
    ```bash
-   kubectl exec -n kube-system <pod-name> -c rds-csi-driver -- mount
+   kubectl exec -n kube-system <pod-name> -c nvmet-csi-plugin -- mount
    ```
 
 #### Fallback Option

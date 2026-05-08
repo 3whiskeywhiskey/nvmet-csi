@@ -24,8 +24,8 @@ TEST_NAMESPACE="default"
 STORAGE_CLASS="rds-nvme"
 TEST_PVC_PREFIX="test-security-fix"
 TEST_POD_PREFIX="test-pod-security-fix"
-CONTROLLER_DEPLOY="rds-csi-controller"
-NODE_DS="rds-csi-node"
+CONTROLLER_DEPLOY="nvmet-csi-controller"
+NODE_DS="nvmet-csi-node"
 
 # Colors
 RED='\033[0;31m'
@@ -128,7 +128,7 @@ cleanup_test_resources() {
 # Main test header
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║     RDS CSI Driver - Security Fix #${FIX_NUMBER} Testing           ║${NC}"
+echo -e "${GREEN}║     nvmet-csi driver - Security Fix #${FIX_NUMBER} Testing           ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -222,7 +222,7 @@ spec:
         - sh
         - -c
         - |
-          echo "Testing RDS CSI volume - Security Fix #${FIX_NUMBER}" > /data/test-file.txt
+          echo "Testing nvmet-csi volume - Security Fix #${FIX_NUMBER}" > /data/test-file.txt
           echo "Timestamp: \$(date)" >> /data/test-file.txt
           echo "Contents written successfully"
           cat /data/test-file.txt
@@ -285,7 +285,7 @@ fi
 # Test 4: Log Inspection
 echo -e "${YELLOW}═══ Test 4: Log Inspection ═══${NC}"
 log_info "Checking controller logs for errors..."
-CONTROLLER_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=rds-csi-controller -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+CONTROLLER_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=nvmet-csi-controller -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [[ -n "${CONTROLLER_POD}" ]]; then
     ERROR_COUNT=$(kubectl logs "${CONTROLLER_POD}" -n "${NAMESPACE}" --tail=100 2>/dev/null | grep -i "error" | grep -v "level=info" | wc -l || echo "0")
     if [[ "${ERROR_COUNT}" -eq 0 ]]; then
@@ -299,14 +299,14 @@ else
 fi
 
 log_info "Checking node logs for errors..."
-NODE_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=rds-csi-node -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+NODE_POD=$(kubectl get pods -n "${NAMESPACE}" -l app=nvmet-csi-node -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [[ -n "${NODE_POD}" ]]; then
-    ERROR_COUNT=$(kubectl logs "${NODE_POD}" -n "${NAMESPACE}" -c rds-csi-driver --tail=100 2>/dev/null | grep -i "error" | grep -v "level=info" | wc -l || echo "0")
+    ERROR_COUNT=$(kubectl logs "${NODE_POD}" -n "${NAMESPACE}" -c nvmet-csi-plugin --tail=100 2>/dev/null | grep -i "error" | grep -v "level=info" | wc -l || echo "0")
     if [[ "${ERROR_COUNT}" -eq 0 ]]; then
         log_success "No errors in node logs"
     else
         log_warning "Found ${ERROR_COUNT} error messages in node logs"
-        kubectl logs "${NODE_POD}" -n "${NAMESPACE}" -c rds-csi-driver --tail=50 | grep -i "error" || true
+        kubectl logs "${NODE_POD}" -n "${NAMESPACE}" -c nvmet-csi-plugin --tail=50 | grep -i "error" || true
     fi
 else
     log_warning "Node pod not found"

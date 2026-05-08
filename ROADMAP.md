@@ -1,6 +1,6 @@
-# RDS CSI Driver - Roadmap
+# nvmet-csi driver - Roadmap
 
-This document provides a high-level overview of the RDS CSI Driver development milestones and current status. For detailed phase plans, see `.planning/ROADMAP.md`.
+This document provides a high-level overview of the nvmet-csi driver development milestones and current status. For detailed phase plans, see `.planning/ROADMAP.md`.
 
 ## Overview
 

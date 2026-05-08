@@ -1,15 +1,15 @@
-# RDS CSI Driver
+# nvmet-csi driver
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/3whiskeywhiskey/rds-csi)](https://goreportcard.com/report/github.com/3whiskeywhiskey/rds-csi)
-[![Dev Build](https://github.com/3whiskeywhiskey/rds-csi/actions/workflows/dev.yml/badge.svg)](https://github.com/3whiskeywhiskey/rds-csi/actions/workflows/dev.yml)
-[![Main Build](https://github.com/3whiskeywhiskey/rds-csi/actions/workflows/main.yml/badge.svg)](https://github.com/3whiskeywhiskey/rds-csi/actions/workflows/main.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/3whiskeywhiskey/nvmet-csi)](https://goreportcard.com/report/github.com/3whiskeywhiskey/nvmet-csi)
+[![Dev Build](https://github.com/3whiskeywhiskey/nvmet-csi/actions/workflows/dev.yml/badge.svg)](https://github.com/3whiskeywhiskey/nvmet-csi/actions/workflows/dev.yml)
+[![Main Build](https://github.com/3whiskeywhiskey/nvmet-csi/actions/workflows/main.yml/badge.svg)](https://github.com/3whiskeywhiskey/nvmet-csi/actions/workflows/main.yml)
 
 Kubernetes CSI (Container Storage Interface) driver for **MikroTik ROSE Data Server (RDS)** NVMe/TCP storage.
 
 ## Overview
 
-The RDS CSI Driver enables dynamic provisioning of persistent block storage volumes for Kubernetes workloads using MikroTik's ROSE Data Server as the storage backend. It leverages NVMe over TCP (NVMe/TCP) for high-performance remote block device access.
+The nvmet-csi driver enables dynamic provisioning of persistent block storage volumes for Kubernetes workloads using MikroTik's ROSE Data Server as the storage backend. It leverages NVMe over TCP (NVMe/TCP) for high-performance remote block device access.
 
 ### Features
 
@@ -40,7 +40,7 @@ The RDS CSI Driver enables dynamic provisioning of persistent block storage volu
 │  └──────────────┘                    │                     │
 │                                      ▼                      │
 │                     ┌────────────────────────────────┐     │
-│                     │  RDS CSI Driver                │     │
+│                     │  nvmet-csi driver                │     │
 │                     │  - Controller (Deployment)     │     │
 │                     │  - Node Plugin (DaemonSet)     │     │
 │                     └──────────┬─────────────────────┘     │
@@ -142,7 +142,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: rds-nvme-tcp
-provisioner: rds.csi.srvlab.io
+provisioner: nvmet.csi.whiskey.works
 parameters:
   # RDS connection details
   rdsAddress: "10.42.68.1"
@@ -301,13 +301,13 @@ For detailed installation instructions, see [Kubernetes Setup Guide](docs/kubern
 
 ```bash
 # Controller pod
-kubectl get pods -n kube-system -l app=rds-csi-controller
+kubectl get pods -n kube-system -l app=nvmet-csi-controller
 
 # Node plugin pods
-kubectl get pods -n kube-system -l app=rds-csi-node
+kubectl get pods -n kube-system -l app=nvmet-csi-node
 
 # Check logs
-kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin
+kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin
 ```
 
 ### Common Issues
@@ -330,8 +330,8 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for more details.
 
 ```bash
 # Clone repository
-git clone https://github.com/3whiskeywhiskey/rds-csi.git
-cd rds-csi
+git clone https://github.com/3whiskeywhiskey/nvmet-csi.git
+cd nvmet-csi
 
 # Build binary
 make build
@@ -373,7 +373,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Support
 
-- **Issues**: [github.com/3whiskeywhiskey/rds-csi/issues](https://github.com/3whiskeywhiskey/rds-csi/issues)
+- **Issues**: [github.com/3whiskeywhiskey/nvmet-csi/issues](https://github.com/3whiskeywhiskey/nvmet-csi/issues)
 - **Discussions**: Use issue tracker for questions and feature requests
 
 ## Acknowledgments

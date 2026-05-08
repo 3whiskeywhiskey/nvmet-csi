@@ -5,8 +5,8 @@ import (
 
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // TestAttachmentManager_SetMetricsMethod verifies the SetMetrics method exists and works.
@@ -41,7 +41,7 @@ func TestAttachmentManager_SetMetricsNil(t *testing.T) {
 // does not create an attachment manager (controller-only component).
 func TestNewDriver_NodeModeSkipsAttachmentManager(t *testing.T) {
 	config := DriverConfig{
-		DriverName:            "rds.csi.srvlab.io",
+		DriverName:            "nvmet.csi.whiskey.works",
 		NodeID:                "test-node",
 		EnableController:      false, // Node mode only
 		EnableNode:            true,
@@ -75,7 +75,7 @@ func TestNewDriver_NodeModeSkipsAttachmentManager(t *testing.T) {
 // is not created when controller mode is disabled (node-only mode).
 func TestNewDriver_NodeWatcherNilWhenControllerDisabled(t *testing.T) {
 	config := DriverConfig{
-		DriverName:            "rds.csi.srvlab.io",
+		DriverName:            "nvmet.csi.whiskey.works",
 		NodeID:                "test-node",
 		EnableController:      false, // Node mode only
 		EnableNode:            true,
@@ -105,7 +105,7 @@ func TestNewDriver_NodeWatcherNilWhenControllerDisabled(t *testing.T) {
 // is not created when RDS client is nil (should not happen in practice, but safety check).
 func TestNewDriver_ConnectionManagerNilWhenNoRDSClient(t *testing.T) {
 	config := DriverConfig{
-		DriverName:            "rds.csi.srvlab.io",
+		DriverName:            "nvmet.csi.whiskey.works",
 		NodeID:                "test-node",
 		EnableController:      false, // No controller = no RDS client
 		EnableNode:            true,

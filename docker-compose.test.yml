@@ -4,7 +4,7 @@ services:
   # Mock RDS SSH server for integration testing
   mock-rds:
     image: linuxserver/openssh-server:latest
-    container_name: rds-csi-mock-rds
+    container_name: nvmet-csi-mock-rds
     environment:
       - PUID=1000
       - PGID=1000
@@ -26,13 +26,13 @@ services:
       timeout: 3s
       retries: 5
 
-  # RDS CSI Controller for testing
+  # nvmet-csi Controller for testing
   csi-controller:
     build:
       context: .
       dockerfile: Dockerfile
       target: controller
-    container_name: rds-csi-controller
+    container_name: nvmet-csi-controller
     environment:
       - CSI_ENDPOINT=unix:///csi/csi.sock
       - RDS_ADDRESS=mock-rds
@@ -64,7 +64,7 @@ services:
   # CSI Sanity Tests
   csi-sanity:
     image: golang:1.24-alpine
-    container_name: rds-csi-sanity
+    container_name: nvmet-csi-sanity
     working_dir: /workspace
     environment:
       - CSI_ENDPOINT=unix:///csi/csi.sock
@@ -98,7 +98,7 @@ services:
   # Integration test runner
   integration-tests:
     image: golang:1.24-alpine
-    container_name: rds-csi-integration
+    container_name: nvmet-csi-integration
     working_dir: /workspace
     environment:
       - CGO_ENABLED=0

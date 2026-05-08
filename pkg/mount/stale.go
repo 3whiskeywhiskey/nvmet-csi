@@ -7,7 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
 )
 
 // StaleReason describes why a mount is considered stale

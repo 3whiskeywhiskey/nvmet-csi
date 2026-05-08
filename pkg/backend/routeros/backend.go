@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 type Backend struct {

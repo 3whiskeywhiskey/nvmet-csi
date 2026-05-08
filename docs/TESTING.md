@@ -1,10 +1,10 @@
 # Testing Guide
 
-Comprehensive guide to testing the RDS CSI driver, including unit tests, integration tests, CSI sanity tests, and E2E tests.
+Comprehensive guide to testing the nvmet-csi driver, including unit tests, integration tests, CSI sanity tests, and E2E tests.
 
 ## Overview
 
-The RDS CSI driver employs a multi-layered testing strategy:
+The nvmet-csi driver employs a multi-layered testing strategy:
 
 1. **Unit Tests** - Test individual functions and packages in isolation
 2. **Integration Tests** - Test driver + mock RDS interaction

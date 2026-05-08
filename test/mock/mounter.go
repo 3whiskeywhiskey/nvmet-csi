@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
 )
 
 // MockMounter is a mock implementation of mount.Mounter for testing

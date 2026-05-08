@@ -1,4 +1,4 @@
-# VolumeSnapshotClass for RDS CSI Driver
+# VolumeSnapshotClass for nvmet-csi driver
 # Requires VolumeSnapshot CRDs to be installed cluster-wide:
 #   kubectl kustomize https://github.com/kubernetes-csi/external-snapshotter/client/config/crd | kubectl create -f -
 # And snapshot-controller to be deployed:
@@ -9,7 +9,7 @@ kind: VolumeSnapshotClass
 metadata:
   name: {{ .Values.snapshotClass.name }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
-driver: rds.csi.srvlab.io
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
+driver: nvmet.csi.whiskey.works
 deletionPolicy: {{ .Values.snapshotClass.deletionPolicy | default "Delete" }}
 {{- end }}

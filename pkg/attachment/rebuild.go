@@ -13,7 +13,7 @@ import (
 
 const (
 	// driverName is the CSI driver name used to filter PVs
-	driverName = "rds.csi.srvlab.io"
+	driverName = "nvmet.csi.whiskey.works"
 )
 
 // RebuildState rebuilds attachment state from VolumeAttachment objects.

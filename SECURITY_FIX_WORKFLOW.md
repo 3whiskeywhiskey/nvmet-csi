@@ -22,7 +22,7 @@ We have 11 security fix branches to merge in order:
 For each fix:
 1. ✅ Merge branch to dev
 2. ✅ Push to GitHub → triggers CI/CD
-3. ✅ Wait for image build (ghcr.io/3whiskeywhiskey/rds-csi:dev)
+3. ✅ Wait for image build (ghcr.io/3whiskeywhiskey/nvmet-csi:dev)
 4. ✅ Deploy to cluster: `./scripts/deploy-dev.sh --wait`
 5. ✅ Test thoroughly: `./scripts/test-security-fix.sh <N>`
 6. ✅ Verify existing PVCs are healthy
@@ -64,7 +64,7 @@ git push github dev
 ### Deployment
 ```bash
 # Wait for GitHub Actions to complete
-# Monitor: https://github.com/3whiskeywhiskey/rds-csi/actions
+# Monitor: https://github.com/3whiskeywhiskey/nvmet-csi/actions
 
 # Deploy when ready
 ./scripts/deploy-dev.sh --wait
@@ -89,13 +89,13 @@ git push github dev
 **Deployment Details:**
 - Merged to dev: 2025-11-09 23:54 UTC
 - CI/CD build: 13f03fbe0eb554171e96c14505c323d73a376410
-- Image: ghcr.io/3whiskeywhiskey/rds-csi:dev
+- Image: ghcr.io/3whiskeywhiskey/nvmet-csi:dev
 - Deployed: 2025-11-09 23:59 UTC
 
 **Key Changes:**
 - Added SSH host key verification to prevent MITM attacks
 - RDS host key: `ssh-rsa AAAAB3Nza...` (SHA256:8ax7brQftlTiwCDHHVPj/vU2rWguXKvsTn7mLyW1NqA)
-- Updated Secret `rds-csi-secret` with actual RDS host public key
+- Updated Secret `nvmet-csi-secret` with actual RDS host public key
 - Controller successfully validates host key on connection
 
 **Test Results:**
@@ -114,7 +114,7 @@ All 11 existing PVCs remained healthy and bound:
 1. Initial deployment had wrong image (`:latest` instead of `:dev`)
 2. Secret contained placeholder host key instead of actual RDS key
 3. Fixed by: Updating image to `:dev` and patching Secret with real host key
-4. Test script had wrong StorageClass name (`rds-csi` → `rds-nvme`)
+4. Test script had wrong StorageClass name (`nvmet-csi` → `rds-nvme`)
 
 **Time to Complete:** ~2 hours (including troubleshooting and testing)
 
@@ -152,7 +152,7 @@ git push github dev
 **Deployment Details:**
 - Merged to dev: 2025-11-10 00:22 UTC
 - CI/CD build: 44f80f1
-- Image: ghcr.io/3whiskeywhiskey/rds-csi:dev
+- Image: ghcr.io/3whiskeywhiskey/nvmet-csi:dev
 - Deployed: 2025-11-10 00:31 UTC
 
 **Key Changes:**
@@ -501,7 +501,7 @@ After all fixes are merged and tested:
 ## Quick Reference
 
 **Check CI/CD status:**
-- https://github.com/3whiskeywhiskey/rds-csi/actions
+- https://github.com/3whiskeywhiskey/nvmet-csi/actions
 
 **Deploy:**
 ```bash
@@ -515,8 +515,8 @@ After all fixes are merged and tested:
 
 **Check logs:**
 ```bash
-kubectl logs -n kube-system deployment/rds-csi-controller -f
-kubectl logs -n kube-system daemonset/rds-csi-node -f
+kubectl logs -n kube-system deployment/nvmet-csi-controller -f
+kubectl logs -n kube-system daemonset/nvmet-csi-node -f
 ```
 
 **Check existing PVCs:**

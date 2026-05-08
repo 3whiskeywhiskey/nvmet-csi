@@ -15,11 +15,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
-	linuxzolbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/linuxzol"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/driver"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	linuxzolbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/linuxzol"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 const (
@@ -29,15 +29,15 @@ const (
 
 var (
 	// Driver configuration
-	endpoint   = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/rds.csi.srvlab.io/csi.sock", "CSI endpoint")
+	endpoint   = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/nvmet.csi.whiskey.works/csi.sock", "CSI endpoint")
 	nodeID     = flag.String("node-id", "", "Node ID (required for node service)")
-	driverName = flag.String("driver-name", "rds.csi.srvlab.io", "Name of the CSI driver")
+	driverName = flag.String("driver-name", "nvmet.csi.whiskey.works", "Name of the CSI driver")
 
 	// RDS configuration
 	rdsAddress        = flag.String("rds-address", "", "RDS server IP address (required for controller)")
 	rdsPort           = flag.Int("rds-port", 22, "RDS SSH port")
 	rdsUser           = flag.String("rds-user", "admin", "RDS SSH user")
-	rdsKeyFile        = flag.String("rds-key-file", "/etc/rds-csi/ssh-key/id_rsa", "Path to RDS SSH private key")
+	rdsKeyFile        = flag.String("rds-key-file", "/etc/nvmet-csi/ssh-key/id_rsa", "Path to RDS SSH private key")
 	rdsHostKey        = flag.String("rds-host-key", "", "Path to RDS SSH host public key (required for secure verification)")
 	rdsInsecure       = flag.Bool("rds-insecure-skip-verify", false, "Skip SSH host key verification (INSECURE - for testing only)")
 	rdsVolumeBasePath = flag.String("rds-volume-base-path", "", "Base path for volumes on RDS (e.g., /storage-pool/metal-csi, required for file orphan detection)")
@@ -238,7 +238,7 @@ func main() {
 	}
 
 	// Create driver
-	klog.Info("Creating RDS CSI driver")
+	klog.Info("Creating nvmet-csi driver")
 	drv, err := driver.NewDriver(config)
 	if err != nil {
 		klog.Fatalf("Failed to create driver: %v", err)

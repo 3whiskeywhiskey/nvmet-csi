@@ -1,5 +1,5 @@
 ---
-# VolumeSnapshotClass for RDS CSI Driver
+# VolumeSnapshotClass for nvmet-csi driver
 # Requires VolumeSnapshot CRDs to be installed cluster-wide:
 #   kubectl kustomize https://github.com/kubernetes-csi/external-snapshotter/client/config/crd | kubectl create -f -
 # And snapshot-controller to be deployed:
@@ -7,10 +7,10 @@
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
-  name: rds-csi-snapclass
+  name: nvmet-csi-snapclass
   labels:
-    app: rds-csi
-driver: rds.csi.srvlab.io
+    app: nvmet-csi
+driver: nvmet.csi.whiskey.works
 deletionPolicy: Delete
 # parameters: {}
 # No special parameters needed for Btrfs snapshots.

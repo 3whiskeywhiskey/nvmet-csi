@@ -1,5 +1,5 @@
 // Package attachment provides thread-safe tracking of volume-to-node attachments
-// for the RDS CSI driver. It uses in-memory state with RWMutex for concurrent access
+// for the nvmet-csi driver. It uses in-memory state with RWMutex for concurrent access
 // and per-volume locks to serialize operations on individual volumes.
 package attachment
 
@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // AttachmentManager tracks which volumes are attached to which nodes

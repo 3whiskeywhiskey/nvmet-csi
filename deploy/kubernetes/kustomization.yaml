@@ -11,13 +11,13 @@ resources:
 
 # Images can be customized here
 images:
-  - name: ghcr.io/3whiskeywhiskey/rds-csi-driver
+  - name: ghcr.io/3whiskeywhiskey/nvmet-csi
     newTag: latest
 
 # ConfigMap generator for RDS settings
 # Users can override these with kustomize overlays
 configMapGenerator:
-  - name: rds-csi-config
+  - name: nvmet-csi-config
     behavior: replace
     literals:
       - rds-address=10.42.241.3
@@ -28,14 +28,14 @@ configMapGenerator:
 # Secret generator for RDS credentials
 # NOTE: This is a placeholder - replace with actual credentials
 secretGenerator:
-  - name: rds-csi-secret
+  - name: nvmet-csi-secret
     type: Opaque
     files:
       - rds-private-key=rds-private-key.example
 
 # Common labels applied to all resources
 commonLabels:
-  app.kubernetes.io/name: rds-csi-driver
+  app.kubernetes.io/name: nvmet-csi
   app.kubernetes.io/component: csi-driver
   app.kubernetes.io/part-of: storage
 

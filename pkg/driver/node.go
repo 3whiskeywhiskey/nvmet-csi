@@ -17,11 +17,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/circuitbreaker"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/security"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/circuitbreaker"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/security"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 const (
@@ -916,7 +916,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		// Using simple default topology - can be extended for zone/region awareness
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				"topology.rds.csi.srvlab.io/zone": "default",
+				"topology.nvmet.csi.whiskey.works/zone": "default",
 			},
 		},
 	}, nil

@@ -1,6 +1,6 @@
-# RDS CSI Driver Helm Chart
+# nvmet-csi driver Helm Chart
 
-Helm chart for deploying the RDS CSI Driver - a Kubernetes CSI (Container Storage Interface) driver that provides dynamic provisioning of persistent block storage volumes using MikroTik RouterOS Data Server (RDS) with NVMe over TCP.
+Helm chart for deploying the nvmet-csi driver - a Kubernetes CSI (Container Storage Interface) driver that provides dynamic provisioning of persistent block storage volumes using MikroTik RouterOS Data Server (RDS) with NVMe over TCP.
 
 ## Prerequisites
 
@@ -16,13 +16,13 @@ This Helm chart is distributed via the git repository only. To use it:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/3whiskeywhiskey/rds-csi.git
-   cd rds-csi
+   git clone https://github.com/3whiskeywhiskey/nvmet-csi.git
+   cd nvmet-csi
    ```
 
 2. Install directly from the local path:
    ```bash
-   helm install rds-csi ./deploy/helm/rds-csi-driver --namespace rds-csi --create-namespace
+   helm install nvmet-csi ./deploy/helm/nvmet-csi --namespace nvmet-csi --create-namespace
    ```
 
 There is no OCI registry or Helm repository hosting at this time.
@@ -32,7 +32,7 @@ There is no OCI registry or Helm repository hosting at this time.
 ### 1. Create Namespace
 
 ```bash
-kubectl create namespace rds-csi
+kubectl create namespace nvmet-csi
 ```
 
 ### 2. Create Secret
@@ -50,8 +50,8 @@ The driver requires a Kubernetes Secret containing SSH credentials and optionall
 apiVersion: v1
 kind: Secret
 metadata:
-  name: rds-csi-secret
-  namespace: rds-csi
+  name: nvmet-csi-secret
+  namespace: nvmet-csi
 type: Opaque
 data:
   # Base64-encoded SSH private key (e.g., from ~/.ssh/id_rsa)
@@ -67,8 +67,8 @@ data:
 **Create from files:**
 
 ```bash
-kubectl create secret generic rds-csi-secret \
-  -n rds-csi \
+kubectl create secret generic nvmet-csi-secret \
+  -n nvmet-csi \
   --from-file=rds-private-key=/path/to/ssh-key \
   --from-file=rds-host-key=/path/to/host-key \
   --from-file=snmp-community=<(echo -n "public")
@@ -77,8 +77,8 @@ kubectl create secret generic rds-csi-secret \
 ### 3. Install Chart
 
 ```bash
-helm install rds-csi ./deploy/helm/rds-csi-driver \
-  --namespace rds-csi \
+helm install nvmet-csi ./deploy/helm/nvmet-csi \
+  --namespace nvmet-csi \
   --set rds.managementIP=10.42.241.3 \
   --set rds.storageIP=10.42.68.1
 ```
@@ -87,10 +87,10 @@ helm install rds-csi ./deploy/helm/rds-csi-driver \
 
 ```bash
 # Check pods
-kubectl get pods -n rds-csi
+kubectl get pods -n nvmet-csi
 
 # Verify CSI driver registration
-kubectl get csidriver rds.csi.srvlab.io
+kubectl get csidriver nvmet.csi.whiskey.works
 
 # Check available StorageClasses
 kubectl get storageclass
@@ -110,7 +110,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `rds.nvmePort` | NVMe/TCP port for storage connections | `4420` |
 | `rds.sshUser` | SSH username on RouterOS | `metal-csi` |
 | `rds.basePath` | Base path for volumes on RDS | `/storage-pool/metal-csi` |
-| `rds.secretName` | Kubernetes Secret containing RDS credentials | `rds-csi-secret` |
+| `rds.secretName` | Kubernetes Secret containing RDS credentials | `nvmet-csi-secret` |
 | `rds.insecureSkipVerify` | Skip SSH host key verification (INSECURE - testing only) | `false` |
 | `rds.nqnPrefix` | NQN prefix for CSI-managed volumes | `nqn.2000-02.com.mikrotik:pvc-` |
 | `rds.mutationGuard.minInterval` | Minimum spacing between mutating RDS operations | `250ms` |
@@ -122,7 +122,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `controller.replicas` | Number of controller replicas (must be 1) | `1` |
-| `controller.image.repository` | Controller container image repository | `ghcr.io/3whiskeywhiskey/rds-csi` |
+| `controller.image.repository` | Controller container image repository | `ghcr.io/3whiskeywhiskey/nvmet-csi` |
 | `controller.image.tag` | Controller image tag (defaults to Chart.appVersion) | `""` |
 | `controller.image.pullPolicy` | Image pull policy | `Always` |
 | `controller.logLevel` | Log verbosity level (0-10) | `5` |
@@ -152,7 +152,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `node.image.repository` | Node plugin container image repository | `ghcr.io/3whiskeywhiskey/rds-csi` |
+| `node.image.repository` | Node plugin container image repository | `ghcr.io/3whiskeywhiskey/nvmet-csi` |
 | `node.image.tag` | Node image tag (defaults to Chart.appVersion) | `""` |
 | `node.image.pullPolicy` | Image pull policy | `Always` |
 | `node.logLevel` | Log verbosity level (0-10) | `5` |
@@ -221,7 +221,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `snapshotClass.enabled` | Enable VolumeSnapshotClass creation | `true` |
-| `snapshotClass.name` | VolumeSnapshotClass name | `rds-csi-snapclass` |
+| `snapshotClass.name` | VolumeSnapshotClass name | `nvmet-csi-snapclass` |
 | `snapshotClass.deletionPolicy` | Deletion policy (Delete or Retain) | `Delete` |
 
 **Important:** Snapshot functionality requires VolumeSnapshot CRDs and snapshot-controller to be installed separately. See installation instructions in NOTES.txt.
@@ -234,13 +234,13 @@ The driver requires a Kubernetes Secret with specific keys. Here's the complete 
 apiVersion: v1
 kind: Secret
 metadata:
-  name: rds-csi-secret
-  namespace: rds-csi
+  name: nvmet-csi-secret
+  namespace: nvmet-csi
 type: Opaque
 data:
   # SSH private key for RouterOS authentication
-  # Generate: ssh-keygen -t rsa -b 4096 -f rds-csi-key
-  # Encode: cat rds-csi-key | base64 -w 0
+  # Generate: ssh-keygen -t rsa -b 4096 -f nvmet-csi-key
+  # Encode: cat nvmet-csi-key | base64 -w 0
   rds-private-key: LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K...
 
   # SSH host public key from RouterOS
@@ -278,8 +278,8 @@ Optional StorageClass for KubeVirt live migration support. Disabled by default.
 **Enable for KubeVirt:**
 
 ```bash
-helm install rds-csi ./deploy/helm/rds-csi-driver \
-  --namespace rds-csi \
+helm install nvmet-csi ./deploy/helm/nvmet-csi \
+  --namespace nvmet-csi \
   --set storageClasses[1].enabled=true
 ```
 
@@ -292,9 +292,9 @@ The driver exposes Prometheus metrics on port 9809 (configurable).
 ### Metrics Exposed
 
 **CSI Operation Metrics:**
-- `rds_csi_operations_total` - Counter of CSI operations by method and status
-- `rds_csi_operation_duration_seconds` - Histogram of CSI operation latencies
-- `rds_csi_nvme_connections_active` - Gauge of active NVMe/TCP connections
+- `nvmet_csi_operations_total` - Counter of CSI operations by method and status
+- `nvmet_csi_operation_duration_seconds` - Histogram of CSI operation latencies
+- `nvmet_csi_nvme_connections_active` - Gauge of active NVMe/TCP connections
 
 **RDS Disk Metrics** (when `monitoring.rdsMonitoring.enabled=true`):
 - `rds_disk_read_ops_per_second` - Read IOPS
@@ -323,11 +323,11 @@ The driver exposes Prometheus metrics on port 9809 (configurable).
 
 ```yaml
 scrape_configs:
-  - job_name: 'rds-csi'
+  - job_name: 'nvmet-csi'
     kubernetes_sd_configs:
       - role: service
         namespaces:
-          names: [rds-csi]
+          names: [nvmet-csi]
     relabel_configs:
       - source_labels: [__meta_kubernetes_service_name]
         regex: .*-metrics
@@ -339,8 +339,8 @@ scrape_configs:
 Enable ServiceMonitor creation:
 
 ```bash
-helm install rds-csi ./deploy/helm/rds-csi-driver \
-  --namespace rds-csi \
+helm install nvmet-csi ./deploy/helm/nvmet-csi \
+  --namespace nvmet-csi \
   --set monitoring.serviceMonitor.enabled=true
 ```
 
@@ -351,8 +351,8 @@ The ServiceMonitor will be created only if the Prometheus Operator CRD is detect
 To upgrade an existing installation:
 
 ```bash
-helm upgrade rds-csi ./deploy/helm/rds-csi-driver \
-  --namespace rds-csi \
+helm upgrade nvmet-csi ./deploy/helm/nvmet-csi \
+  --namespace nvmet-csi \
   --reset-then-reuse-values
 ```
 
@@ -361,7 +361,7 @@ helm upgrade rds-csi ./deploy/helm/rds-csi-driver \
 ### Chart Versioning vs App Versioning
 
 - **Chart version** (`version` in Chart.yaml): Incremented for Helm chart changes
-- **App version** (`appVersion` in Chart.yaml): Tracks the RDS CSI driver version
+- **App version** (`appVersion` in Chart.yaml): Tracks the nvmet-csi driver version
 
 The chart version and app version are independent. A chart version bump may contain only configuration changes without a new driver release.
 
@@ -370,14 +370,14 @@ The chart version and app version are independent. A chart version bump may cont
 To uninstall the driver:
 
 ```bash
-helm uninstall rds-csi -n rds-csi
+helm uninstall nvmet-csi -n nvmet-csi
 ```
 
 **IMPORTANT:** This will NOT delete existing PersistentVolumes or PersistentVolumeClaims. Volumes will remain provisioned on the RDS server. To clean up volumes, delete all PVCs before uninstalling:
 
 ```bash
 kubectl delete pvc -n <namespace> --all
-helm uninstall rds-csi -n rds-csi
+helm uninstall nvmet-csi -n nvmet-csi
 ```
 
 ## Troubleshooting
@@ -386,12 +386,12 @@ helm uninstall rds-csi -n rds-csi
 
 1. Verify Secret exists and has correct keys:
    ```bash
-   kubectl get secret rds-csi-secret -n rds-csi -o yaml
+   kubectl get secret nvmet-csi-secret -n nvmet-csi -o yaml
    ```
 
 2. Check controller logs:
    ```bash
-   kubectl logs -n rds-csi -l app.kubernetes.io/component=controller -c rds-csi-plugin
+   kubectl logs -n nvmet-csi -l app.kubernetes.io/component=controller -c nvmet-csi-plugin
    ```
 
 3. Common issues:
@@ -403,7 +403,7 @@ helm uninstall rds-csi -n rds-csi
 
 1. Check provisioner sidecar logs:
    ```bash
-   kubectl logs -n rds-csi -l app.kubernetes.io/component=controller -c csi-provisioner
+   kubectl logs -n nvmet-csi -l app.kubernetes.io/component=controller -c csi-provisioner
    ```
 
 2. Common issues:
@@ -415,7 +415,7 @@ helm uninstall rds-csi -n rds-csi
 
 1. Check node plugin logs:
    ```bash
-   kubectl logs -n rds-csi -l app.kubernetes.io/component=node -c rds-csi-plugin
+   kubectl logs -n nvmet-csi -l app.kubernetes.io/component=node -c nvmet-csi-plugin
    ```
 
 2. Common issues:
@@ -437,13 +437,13 @@ helm uninstall rds-csi -n rds-csi
 
 3. Check snapshotter sidecar logs:
    ```bash
-   kubectl logs -n rds-csi -l app.kubernetes.io/component=controller -c csi-snapshotter
+   kubectl logs -n nvmet-csi -l app.kubernetes.io/component=controller -c csi-snapshotter
    ```
 
 ## Documentation
 
 For more information:
-- **Project repository**: https://github.com/3whiskeywhiskey/rds-csi
+- **Project repository**: https://github.com/3whiskeywhiskey/nvmet-csi
 - **CSI specification**: https://github.com/container-storage-interface/spec
 - **RouterOS documentation**: https://help.mikrotik.com/docs/
 

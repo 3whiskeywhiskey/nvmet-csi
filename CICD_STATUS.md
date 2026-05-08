@@ -2,7 +2,7 @@
 
 ## GitHub Actions Workflow
 
-**Workflow URL:** https://github.com/3whiskeywhiskey/rds-csi/actions
+**Workflow URL:** https://github.com/3whiskeywhiskey/nvmet-csi/actions
 
 ### Current Status
 
@@ -25,8 +25,8 @@ When you push to the `dev` branch, GitHub Actions automatically:
    - Authenticates to GitHub Container Registry (ghcr.io)
    - Builds for linux/amd64 and linux/arm64
    - Tags with:
-     - `ghcr.io/3whiskeywhiskey/rds-csi:dev`
-     - `ghcr.io/3whiskeywhiskey/rds-csi:dev-<git-sha>`
+     - `ghcr.io/3whiskeywhiskey/nvmet-csi:dev`
+     - `ghcr.io/3whiskeywhiskey/nvmet-csi:dev-<git-sha>`
    - Pushes to registry
 
 ### Expected Duration
@@ -39,20 +39,20 @@ When you push to the `dev` branch, GitHub Actions automatically:
 
 #### Via GitHub Web UI
 ```
-https://github.com/3whiskeywhiskey/rds-csi/actions
+https://github.com/3whiskeywhiskey/nvmet-csi/actions
 ```
 
 #### Via GitHub CLI (if installed)
 ```bash
-gh run list --repo 3whiskeywhiskey/rds-csi --branch dev
-gh run watch --repo 3whiskeywhiskey/rds-csi
+gh run list --repo 3whiskeywhiskey/nvmet-csi --branch dev
+gh run watch --repo 3whiskeywhiskey/nvmet-csi
 ```
 
 #### Via API (curl)
 ```bash
 # Get latest workflow run status
 curl -s -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/3whiskeywhiskey/rds-csi/actions/runs?branch=dev \
+  https://api.github.com/repos/3whiskeywhiskey/nvmet-csi/actions/runs?branch=dev \
   | jq '.workflow_runs[0] | {status, conclusion, created_at, html_url}'
 ```
 
@@ -99,12 +99,12 @@ make docker-multiarch IMAGE_TAG=dev
 
 **Check package visibility:**
 1. Go to https://github.com/3whiskeywhiskey?tab=packages
-2. Find `rds-csi-driver` package
+2. Find `nvmet-csi` package
 3. Ensure visibility is correct (public or private with access)
 
 **Pull the image to verify:**
 ```bash
-docker pull ghcr.io/3whiskeywhiskey/rds-csi:dev
+docker pull ghcr.io/3whiskeywhiskey/nvmet-csi:dev
 ```
 
 ### Workflow Triggers
@@ -119,8 +119,8 @@ Once CI/CD completes successfully:
 
 1. **Verify image exists:**
    ```bash
-   docker pull ghcr.io/3whiskeywhiskey/rds-csi:dev
-   docker inspect ghcr.io/3whiskeywhiskey/rds-csi:dev | jq '.[0].Config.Labels'
+   docker pull ghcr.io/3whiskeywhiskey/nvmet-csi:dev
+   docker inspect ghcr.io/3whiskeywhiskey/nvmet-csi:dev | jq '.[0].Config.Labels'
    ```
 
 2. **Deploy to cluster:**
@@ -163,13 +163,13 @@ To modify the workflow, edit this file and push to dev branch.
 
 **Check if image is ready:**
 ```bash
-docker pull ghcr.io/3whiskeywhiskey/rds-csi:dev && echo "✅ Image ready"
+docker pull ghcr.io/3whiskeywhiskey/nvmet-csi:dev && echo "✅ Image ready"
 ```
 
 **Watch for new image:**
 ```bash
 while true; do
-  if docker pull ghcr.io/3whiskeywhiskey/rds-csi:dev 2>&1 | grep -q "Downloaded newer image"; then
+  if docker pull ghcr.io/3whiskeywhiskey/nvmet-csi:dev 2>&1 | grep -q "Downloaded newer image"; then
     echo "✅ New image available!"
     break
   fi
@@ -180,8 +180,8 @@ done
 
 **Check current deployed version:**
 ```bash
-kubectl get deployment rds-csi-controller -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}'
-kubectl get daemonset rds-csi-node -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl get deployment nvmet-csi-controller -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl get daemonset nvmet-csi-node -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}'
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Container Image Signing and Public Release Guide
 
-This document describes recommended practices for signing container images and publishing releases of the RDS CSI driver.
+This document describes recommended practices for signing container images and publishing releases of the nvmet-csi driver.
 
 ## Overview
 
@@ -144,16 +144,16 @@ jobs:
 ```bash
 # Verify signature
 cosign verify \
-  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/rds-csi/.*" \
+  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/nvmet-csi/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+  ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Verify and download SBOM
 cosign verify-attestation \
   --type spdx \
-  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/rds-csi/.*" \
+  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/nvmet-csi/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+  ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 ```
 
 ### Method 2: Key-Based Signing (for Air-Gapped Environments)
@@ -176,7 +176,7 @@ cosign generate-key-pair
 ```bash
 # Sign with private key
 export COSIGN_PASSWORD="your-secure-password"
-cosign sign --key cosign.key ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign sign --key cosign.key ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 ```
 
 **Distribute public key:**
@@ -187,7 +187,7 @@ Place `cosign.pub` in your repository at `deploy/cosign.pub` or publish to your 
 
 ```bash
 # Users verify with public key
-cosign verify --key cosign.pub ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign verify --key cosign.pub ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 ```
 
 ## Release Process
@@ -208,12 +208,12 @@ git push origin v0.1.0
 ```bash
 # Verify image was signed
 cosign verify \
-  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/rds-csi/.*" \
+  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/nvmet-csi/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+  ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Inspect transparency log
-rekor-cli search --artifact ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+rekor-cli search --artifact ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 ```
 
 ### 3. Create GitHub Release
@@ -221,22 +221,22 @@ rekor-cli search --artifact ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
 ```bash
 # Use GitHub CLI or web interface
 gh release create v0.1.0 \
-  --title "RDS CSI Driver v0.1.0" \
+  --title "nvmet-csi driver v0.1.0" \
   --notes "See CHANGELOG.md for details" \
   deploy/kubernetes/*.yaml \
-  deploy/helm/rds-csi-driver-*.tgz
+  deploy/helm/nvmet-csi-*.tgz
 ```
 
 ### 4. Publish Helm Chart
 
 ```bash
 # Sign Helm chart
-helm package deploy/helm/rds-csi-driver
-cosign sign-blob --yes rds-csi-driver-0.1.0.tgz > rds-csi-driver-0.1.0.tgz.sig
+helm package deploy/helm/nvmet-csi
+cosign sign-blob --yes nvmet-csi-0.1.0.tgz > nvmet-csi-0.1.0.tgz.sig
 
 # Publish to Helm repository (e.g., GitHub Pages)
-cr upload --owner 3whiskeywhiskey --git-repo rds-csi
-cr index --owner 3whiskeywhiskey --git-repo rds-csi --push
+cr upload --owner 3whiskeywhiskey --git-repo nvmet-csi
+cr index --owner 3whiskeywhiskey --git-repo nvmet-csi --push
 ```
 
 ## Security Policies
@@ -251,7 +251,7 @@ Use admission controllers to enforce signature verification:
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: verify-rds-csi-images
+  name: verify-nvmet-csi-images
 spec:
   validationFailureAction: enforce
   background: false
@@ -264,11 +264,11 @@ spec:
                 - Pod
       verifyImages:
         - imageReferences:
-            - "ghcr.io/3whiskeywhiskey/rds-csi:*"
+            - "ghcr.io/3whiskeywhiskey/nvmet-csi:*"
           attestors:
             - entries:
                 - keyless:
-                    subject: "https://github.com/3whiskeywhiskey/rds-csi/.github/workflows/*"
+                    subject: "https://github.com/3whiskeywhiskey/nvmet-csi/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
                     rekor:
                       url: https://rekor.sigstore.dev
@@ -298,19 +298,19 @@ Generate and attach SBOMs to images for supply chain transparency:
 
 ```bash
 # Generate SBOM with Syft
-syft packages ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0 -o spdx-json > sbom.spdx.json
+syft packages ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0 -o spdx-json > sbom.spdx.json
 
 # Attach to image
-cosign attach sbom --sbom sbom.spdx.json ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign attach sbom --sbom sbom.spdx.json ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Sign SBOM
-cosign sign --yes ghcr.io/3whiskeywhiskey/rds-csi:sbom-<digest>
+cosign sign --yes ghcr.io/3whiskeywhiskey/nvmet-csi:sbom-<digest>
 
 # Users can verify and inspect
 cosign verify-attestation --type spdx \
-  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/rds-csi/.*" \
+  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/nvmet-csi/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0 | jq .
+  ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0 | jq .
 ```
 
 ## Vulnerability Scanning
@@ -389,15 +389,15 @@ Integrate vulnerability scanning into the release process:
 ```bash
 # Check certificate identity
 cosign verify \
-  --certificate-identity="https://github.com/3whiskeywhiskey/rds-csi/.github/workflows/release.yml@refs/tags/v0.1.0" \
+  --certificate-identity="https://github.com/3whiskeywhiskey/nvmet-csi/.github/workflows/release.yml@refs/tags/v0.1.0" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+  ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Inspect signature
-cosign tree ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign tree ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Check Rekor transparency log
-rekor-cli search --artifact ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+rekor-cli search --artifact ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 rekor-cli get --uuid <UUID-from-search>
 ```
 
@@ -405,10 +405,10 @@ rekor-cli get --uuid <UUID-from-search>
 
 ```bash
 # Check if signatures exist
-cosign tree ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign tree ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 
 # Manually sign if needed
-cosign sign --yes ghcr.io/3whiskeywhiskey/rds-csi:v0.1.0
+cosign sign --yes ghcr.io/3whiskeywhiskey/nvmet-csi:v0.1.0
 ```
 
 ## Example: Complete Release Workflow
@@ -426,11 +426,11 @@ if [ -z "$VERSION" ]; then
 fi
 
 # 1. Update version in files
-sed -i "s/version: .*/version: $VERSION/" deploy/helm/rds-csi-driver/Chart.yaml
-sed -i "s/appVersion: .*/appVersion: $VERSION/" deploy/helm/rds-csi-driver/Chart.yaml
+sed -i "s/version: .*/version: $VERSION/" deploy/helm/nvmet-csi/Chart.yaml
+sed -i "s/appVersion: .*/appVersion: $VERSION/" deploy/helm/nvmet-csi/Chart.yaml
 
 # 2. Commit and tag
-git add deploy/helm/rds-csi-driver/Chart.yaml
+git add deploy/helm/nvmet-csi/Chart.yaml
 git commit -m "Release $VERSION"
 git tag -a "$VERSION" -m "Release $VERSION"
 
@@ -444,13 +444,13 @@ gh run watch
 # 5. Verify signed image
 echo "Verifying signed image..."
 cosign verify \
-  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/rds-csi/.*" \
+  --certificate-identity-regexp="https://github.com/3whiskeywhiskey/nvmet-csi/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  "ghcr.io/3whiskeywhiskey/rds-csi:$VERSION"
+  "ghcr.io/3whiskeywhiskey/nvmet-csi:$VERSION"
 
 # 6. Create GitHub release
 gh release create "$VERSION" \
-  --title "RDS CSI Driver $VERSION" \
+  --title "nvmet-csi driver $VERSION" \
   --notes-file "CHANGELOG.md" \
   deploy/kubernetes/*.yaml
 

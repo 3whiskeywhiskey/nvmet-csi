@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== RDS CSI Driver - Next Version Calculator ===${NC}\n"
+echo -e "${BLUE}=== nvmet-csi driver - Next Version Calculator ===${NC}\n"
 
 # Get the latest tag
 LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")

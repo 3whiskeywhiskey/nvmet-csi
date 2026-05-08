@@ -2,7 +2,7 @@
 set -e
 
 # CSI Sanity Test Runner
-# This script runs the official CSI sanity tests against the RDS CSI driver
+# This script runs the official CSI sanity tests against the nvmet-csi driver
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -13,7 +13,7 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 # Configuration
 CSI_ENDPOINT="${CSI_ENDPOINT:-unix:///tmp/csi-sanity.sock}"
 SOCKET_PATH="/tmp/csi-sanity.sock"
-DRIVER_BINARY="${PROJECT_ROOT}/bin/rds-csi-plugin-$(go env GOOS)-$(go env GOARCH)"
+DRIVER_BINARY="${PROJECT_ROOT}/bin/nvmet-csi-plugin-$(go env GOOS)-$(go env GOARCH)"
 RDS_ADDRESS="${RDS_ADDRESS:-}"
 RDS_PORT="${RDS_PORT:-22}"
 RDS_USER="${RDS_USER:-admin}"

@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
 )
 
 // mockRDSClient implements rds.RDSClient for testing
@@ -180,7 +180,7 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-123",
 							},
 						},
@@ -191,7 +191,7 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-456",
 							},
 						},
@@ -212,7 +212,7 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-123",
 							},
 						},
@@ -242,7 +242,7 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-123",
 							},
 						},
@@ -579,7 +579,7 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-123",
 							},
 						},
@@ -606,7 +606,7 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-123",
 							},
 						},
@@ -617,7 +617,7 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 					Spec: v1.PersistentVolumeSpec{
 						PersistentVolumeSource: v1.PersistentVolumeSource{
 							CSI: &v1.CSIPersistentVolumeSource{
-								Driver:       "rds.csi.srvlab.io",
+								Driver:       "nvmet.csi.whiskey.works",
 								VolumeHandle: "pvc-456",
 							},
 						},
@@ -689,7 +689,7 @@ func activePV(name, volumeHandle string) *v1.PersistentVolume {
 		Spec: v1.PersistentVolumeSpec{
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				CSI: &v1.CSIPersistentVolumeSource{
-					Driver:       "rds.csi.srvlab.io",
+					Driver:       "nvmet.csi.whiskey.works",
 					VolumeHandle: volumeHandle,
 				},
 			},

@@ -1,24 +1,24 @@
 {{- if .Values.scheduledSnapshots.enabled }}
 ---
-# Source: rds-csi-driver/templates/scheduled-snapshots.yaml
+# Source: nvmet-csi/templates/scheduled-snapshots.yaml
 # ServiceAccount for scheduled snapshot CronJob pods
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "rds-csi.snapshotScheduleServiceAccountName" . }}
+  name: {{ include "nvmet-csi.snapshotScheduleServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: snapshot-scheduler
 ---
 # Role with permissions to manage VolumeSnapshots (namespaced, not ClusterRole)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-snapshot-scheduler
+  name: {{ include "nvmet-csi.fullname" . }}-snapshot-scheduler
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: snapshot-scheduler
 rules:
   - apiGroups: ["snapshot.storage.k8s.io"]
@@ -32,18 +32,18 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-snapshot-scheduler
+  name: {{ include "nvmet-csi.fullname" . }}-snapshot-scheduler
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: snapshot-scheduler
 subjects:
   - kind: ServiceAccount
-    name: {{ include "rds-csi.snapshotScheduleServiceAccountName" . }}
+    name: {{ include "nvmet-csi.snapshotScheduleServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
-  name: {{ include "rds-csi.fullname" . }}-snapshot-scheduler
+  name: {{ include "nvmet-csi.fullname" . }}-snapshot-scheduler
   apiGroup: rbac.authorization.k8s.io
 {{- range .Values.scheduledSnapshots.schedules }}
 {{- $schedule := . }}
@@ -52,12 +52,12 @@ roleRef:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "rds-csi.fullname" $ }}-{{ $schedule.name }}
+  name: {{ include "nvmet-csi.fullname" $ }}-{{ $schedule.name }}
   namespace: {{ $.Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" $ | nindent 4 }}
+    {{- include "nvmet-csi.labels" $ | nindent 4 }}
     app.kubernetes.io/component: snapshot-scheduler
-    rds-csi.srvlab.io/schedule: {{ $schedule.name | quote }}
+    nvmet-csi.whiskey.works/schedule: {{ $schedule.name | quote }}
 spec:
   schedule: {{ $schedule.schedule | default "0 2 * * *" | quote }}
   concurrencyPolicy: Forbid
@@ -69,11 +69,11 @@ spec:
       template:
         metadata:
           labels:
-            {{- include "rds-csi.selectorLabels" $ | nindent 12 }}
+            {{- include "nvmet-csi.selectorLabels" $ | nindent 12 }}
             app.kubernetes.io/component: snapshot-scheduler
-            rds-csi.srvlab.io/schedule: {{ $schedule.name | quote }}
+            nvmet-csi.whiskey.works/schedule: {{ $schedule.name | quote }}
         spec:
-          serviceAccountName: {{ include "rds-csi.snapshotScheduleServiceAccountName" $ }}
+          serviceAccountName: {{ include "nvmet-csi.snapshotScheduleServiceAccountName" $ }}
           restartPolicy: Never
           containers:
             - name: snapshot-manager
@@ -108,9 +108,9 @@ spec:
                     name: ${SNAPSHOT_NAME}
                     namespace: ${NAMESPACE}
                     labels:
-                      app.kubernetes.io/managed-by: rds-csi-snapshot-scheduler
-                      rds-csi.srvlab.io/schedule: "{{ $schedule.name }}"
-                      rds-csi.srvlab.io/pvc: "{{ $schedule.pvcName }}"
+                      app.kubernetes.io/managed-by: nvmet-csi-snapshot-scheduler
+                      nvmet-csi.whiskey.works/schedule: "{{ $schedule.name }}"
+                      nvmet-csi.whiskey.works/pvc: "{{ $schedule.pvcName }}"
                   spec:
                     volumeSnapshotClassName: ${SNAPSHOT_CLASS}
                     source:
@@ -133,7 +133,7 @@ spec:
                   # Write snapshots to temp file (sorted oldest first)
                   # Avoids subshell variable scope issues from piped while read
                   kubectl get volumesnapshot -n "${NAMESPACE}" \
-                    -l "rds-csi.srvlab.io/schedule={{ $schedule.name }}" \
+                    -l "nvmet-csi.whiskey.works/schedule={{ $schedule.name }}" \
                     -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.creationTimestamp}{"\n"}{end}' \
                     | sort -k2 > /tmp/snapshots.txt
 

@@ -6,7 +6,7 @@ Your release is named {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
 IMPORTANT: Prerequisites Check
 ================================================================================
 
-The RDS CSI driver requires a Kubernetes Secret containing SSH credentials.
+The nvmet-csi driver requires a Kubernetes Secret containing SSH credentials.
 
 1. Verify the Secret exists:
 
@@ -53,11 +53,11 @@ Verify Deployment
 
 3. Verify CSI driver registration:
 
-   kubectl get csidriver rds.csi.srvlab.io
+   kubectl get csidriver nvmet.csi.whiskey.works
 
 4. Check controller logs for connection status:
 
-   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=controller -c rds-csi-plugin
+   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=controller -c nvmet-csi-plugin
 
 ================================================================================
 Available StorageClasses
@@ -147,7 +147,7 @@ To view recent snapshot jobs:
 
 To view created snapshots for a schedule:
 
-  kubectl get volumesnapshot -n {{ .Release.Namespace }} -l rds-csi.srvlab.io/schedule=<schedule-name>
+  kubectl get volumesnapshot -n {{ .Release.Namespace }} -l nvmet-csi.whiskey.works/schedule=<schedule-name>
 
 {{- end }}
 
@@ -161,7 +161,7 @@ Prometheus metrics are exposed on port {{ .Values.monitoring.port }}.
 To access metrics locally:
 
   kubectl port-forward -n {{ .Release.Namespace }} \
-    svc/{{ include "rds-csi.fullname" . }}-metrics \
+    svc/{{ include "nvmet-csi.fullname" . }}-metrics \
     {{ .Values.monitoring.port }}:{{ .Values.monitoring.port }}
 
 Then visit: http://localhost:{{ .Values.monitoring.port }}/metrics
@@ -195,7 +195,7 @@ required configuration. Instead, use --reset-then-reuse-values or provide
 a full values.yaml file.
 
 Check for breaking changes in the release notes:
-https://github.com/3whiskeywhiskey/rds-csi/releases
+https://github.com/3whiskeywhiskey/nvmet-csi/releases
 {{- end }}
 
 ================================================================================
@@ -203,10 +203,10 @@ Documentation
 ================================================================================
 
 For more information, visit:
-https://github.com/3whiskeywhiskey/rds-csi
+https://github.com/3whiskeywhiskey/nvmet-csi
 
 To view all configuration options:
 
-  helm show values deploy/helm/rds-csi-driver/
+  helm show values deploy/helm/nvmet-csi/
 
 ================================================================================

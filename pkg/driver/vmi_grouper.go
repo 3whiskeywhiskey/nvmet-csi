@@ -18,7 +18,7 @@ import (
 // When multiple volumes belonging to the same VMI are attached/detached
 // concurrently, the upstream kubevirt-csi-driver can encounter race conditions
 // that cause VM pause events. By serializing operations per-VMI at the
-// rds-csi level, we reduce the likelihood of these conflicts.
+// nvmet-csi level, we reduce the likelihood of these conflicts.
 type VMIGrouper struct {
 	k8sClient kubernetes.Interface
 

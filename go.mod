@@ -1,4 +1,4 @@
-module git.srvlab.io/whiskey/rds-csi-driver
+module git.srvlab.io/whiskey/nvmet-csi
 
 go 1.24
 

@@ -1,5 +1,5 @@
 // Package attachment provides thread-safe tracking of volume-to-node attachments
-// for the RDS CSI driver.
+// for the nvmet-csi driver.
 package attachment
 
 import (
@@ -16,7 +16,7 @@ import (
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // EventPoster is an interface for posting Kubernetes events for attachment lifecycle.

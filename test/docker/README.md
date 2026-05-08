@@ -28,7 +28,7 @@ A containerized SSH server that simulates MikroTik RDS RouterOS CLI. This allows
 
 ### csi-controller
 
-The RDS CSI driver controller service connected to the mock RDS.
+The nvmet-csi driver controller service connected to the mock RDS.
 
 ### csi-sanity
 

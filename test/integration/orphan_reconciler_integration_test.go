@@ -9,10 +9,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
-	"git.srvlab.io/whiskey/rds-csi-driver/test/mock"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
 )
 
 // TestOrphanReconciler_WithMockRDS tests the orphan reconciler with the mock RDS server
@@ -69,7 +69,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 			Spec: v1.PersistentVolumeSpec{
 				PersistentVolumeSource: v1.PersistentVolumeSource{
 					CSI: &v1.CSIPersistentVolumeSource{
-						Driver:       "rds.csi.srvlab.io",
+						Driver:       "nvmet.csi.whiskey.works",
 						VolumeHandle: "pvc-test-1",
 					},
 				},
@@ -248,7 +248,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 			Spec: v1.PersistentVolumeSpec{
 				PersistentVolumeSource: v1.PersistentVolumeSource{
 					CSI: &v1.CSIPersistentVolumeSource{
-						Driver:       "rds.csi.srvlab.io",
+						Driver:       "nvmet.csi.whiskey.works",
 						VolumeHandle: "pvc-active-1",
 					},
 				},

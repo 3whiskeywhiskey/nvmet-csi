@@ -2,7 +2,7 @@
 
 ## Overview
 
-The RDS CSI Driver uses GitHub Actions for continuous integration and deployment. The workflows are designed to:
+The nvmet-csi driver uses GitHub Actions for continuous integration and deployment. The workflows are designed to:
 
 1. Verify code quality on every PR
 2. Build and push development images on `dev` branch
@@ -31,8 +31,8 @@ The RDS CSI Driver uses GitHub Actions for continuous integration and deployment
 **Purpose:** Continuous deployment of development builds
 
 **Images Published:**
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:dev`
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:dev-<commit-sha>`
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:dev`
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:dev-<commit-sha>`
 
 **Steps:**
 - Run full verification suite
@@ -46,9 +46,9 @@ The RDS CSI Driver uses GitHub Actions for continuous integration and deployment
 **Purpose:** Keep `:latest` tag up-to-date with main branch
 
 **Images Published:**
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:latest`
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:<version>` (current version from git tags)
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:main-<commit-sha>`
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:latest`
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:<version>` (current version from git tags)
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:main-<commit-sha>`
 
 **Steps:**
 - Run full verification suite
@@ -74,10 +74,10 @@ The RDS CSI Driver uses GitHub Actions for continuous integration and deployment
   - Commit messages starting with `fix:`
 
 **Images Published:**
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:latest`
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:v1.2.3` (full version)
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:v1.2` (major.minor)
-- `ghcr.io/3whiskeywhiskey/rds-csi-driver:v1` (major only)
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:latest`
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:v1.2.3` (full version)
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:v1.2` (major.minor)
+- `ghcr.io/3whiskeywhiskey/nvmet-csi:v1` (major only)
 
 **Steps:**
 1. Check commits since last tag to determine if release is needed
@@ -209,8 +209,8 @@ The version is embedded into the binary at build time via ldflags:
 All images are published to GitHub Container Registry:
 - **Registry**: `ghcr.io`
 - **Organization**: `3whiskeywhiskey`
-- **Repository**: `rds-csi-driver`
-- **Full Image**: `ghcr.io/3whiskeywhiskey/rds-csi-driver:<tag>`
+- **Repository**: `nvmet-csi`
+- **Full Image**: `ghcr.io/3whiskeywhiskey/nvmet-csi:<tag>`
 
 ## Authentication
 

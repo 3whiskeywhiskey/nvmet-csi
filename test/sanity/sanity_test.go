@@ -10,8 +10,8 @@ import (
 	"github.com/kubernetes-csi/csi-test/v5/pkg/sanity"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/driver"
-	"git.srvlab.io/whiskey/rds-csi-driver/test/mock"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
+	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
 )
 
 const (
@@ -57,7 +57,7 @@ AUTw5BKMQuNGfVXzAAAADHRlc3RAcmRzLWNzaQECAwQFBg==
 -----END OPENSSH PRIVATE KEY-----`
 )
 
-// TestCSISanity runs the official CSI sanity test suite against the RDS CSI driver
+// TestCSISanity runs the official CSI sanity test suite against the nvmet-csi driver
 // with mock RDS and NVMe backends for fast and reliable testing.
 //
 // This validates:
@@ -104,7 +104,7 @@ func TestCSISanity(t *testing.T) {
 	// Create driver with both controller and node services enabled
 	t.Log("Creating CSI driver with mock RDS and NVMe...")
 	driverConfig := driver.DriverConfig{
-		DriverName:            "rds.csi.srvlab.io",
+		DriverName:            "nvmet.csi.whiskey.works",
 		Version:               "test",
 		NodeID:                "test-node-1", // Node ID required for node service
 		RDSAddress:            mockRDS.Address(),

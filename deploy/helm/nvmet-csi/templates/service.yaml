@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-metrics
+  name: {{ include "nvmet-csi.fullname" . }}-metrics
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
 spec:
   type: ClusterIP
@@ -15,6 +15,6 @@ spec:
       targetPort: {{ .Values.monitoring.port }}
       protocol: TCP
   selector:
-    {{- include "rds-csi.selectorLabels" . | nindent 4 }}
+    {{- include "nvmet-csi.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: controller
 {{- end }}

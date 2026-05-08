@@ -12,7 +12,7 @@ A CLI tool for monitoring Gitea Actions workflows (similar to `gh` for GitHub Ac
 export GITEA_TOKEN="your-gitea-token"
 export GITEA_HOST="https://gitea.whiskey.works"  # optional, defaults to this
 export GITEA_REPO_OWNER="whiskey"  # optional
-export GITEA_REPO_NAME="rds-csi"   # optional
+export GITEA_REPO_NAME="nvmet-csi"   # optional
 ```
 
 ### Usage

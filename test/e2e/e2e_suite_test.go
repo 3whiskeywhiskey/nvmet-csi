@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/driver"
-	"git.srvlab.io/whiskey/rds-csi-driver/test/mock"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
+	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
 )
 
 // Suite-level variables
@@ -35,7 +35,7 @@ var (
 // TestE2E is the entry point for the Ginkgo test suite
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "RDS CSI Driver E2E Suite")
+	RunSpecs(t, "nvmet-csi driver E2E Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -60,7 +60,7 @@ var _ = BeforeSuite(func() {
 	// Create driver with both controller and node enabled
 	By("Creating CSI driver")
 	driverConfig := driver.DriverConfig{
-		DriverName:            "rds.csi.srvlab.io",
+		DriverName:            "nvmet.csi.whiskey.works",
 		Version:               "test",
 		NodeID:                "test-node-1",
 		RDSAddress:            mockRDS.Address(),

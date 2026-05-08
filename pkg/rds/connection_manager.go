@@ -9,7 +9,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // ConnectionManagerConfig holds configuration for ConnectionManager.

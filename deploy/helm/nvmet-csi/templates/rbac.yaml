@@ -3,9 +3,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-controller-role
+  name: {{ include "nvmet-csi.fullname" . }}-controller-role
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
 rules:
   # Access to PersistentVolumes
@@ -82,9 +82,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-node-role
+  name: {{ include "nvmet-csi.fullname" . }}-node-role
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: node
 rules:
   # Access to CSINodes
@@ -107,17 +107,17 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-controller-binding
+  name: {{ include "nvmet-csi.fullname" . }}-controller-binding
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "rds-csi.fullname" . }}-controller-role
+  name: {{ include "nvmet-csi.fullname" . }}-controller-role
 subjects:
   - kind: ServiceAccount
-    name: {{ include "rds-csi.controllerServiceAccountName" . }}
+    name: {{ include "nvmet-csi.controllerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 
 ---
@@ -125,15 +125,15 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "rds-csi.fullname" . }}-node-binding
+  name: {{ include "nvmet-csi.fullname" . }}-node-binding
   labels:
-    {{- include "rds-csi.labels" . | nindent 4 }}
+    {{- include "nvmet-csi.labels" . | nindent 4 }}
     app.kubernetes.io/component: node
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "rds-csi.fullname" . }}-node-role
+  name: {{ include "nvmet-csi.fullname" . }}-node-role
 subjects:
   - kind: ServiceAccount
-    name: {{ include "rds-csi.nodeServiceAccountName" . }}
+    name: {{ include "nvmet-csi.nodeServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}

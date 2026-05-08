@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
 )
 
 // TestDebugRouterOSOutput shows the actual RouterOS command output

@@ -3,14 +3,14 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: rds-csi-node
-  namespace: rds-csi
+  name: nvmet-csi-node
+  namespace: nvmet-csi
   labels:
-    app: rds-csi-node
+    app: nvmet-csi-node
 spec:
   selector:
     matchLabels:
-      app: rds-csi-node
+      app: nvmet-csi-node
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -18,9 +18,9 @@ spec:
   template:
     metadata:
       labels:
-        app: rds-csi-node
+        app: nvmet-csi-node
     spec:
-      serviceAccountName: rds-csi-node
+      serviceAccountName: nvmet-csi-node
       hostNetwork: true  # Required for NVMe/TCP connections
       dnsPolicy: ClusterFirstWithHostNet
       priorityClassName: system-node-critical
@@ -42,9 +42,9 @@ spec:
         - operator: Exists
 
       containers:
-        # RDS CSI Driver Node
-        - name: rds-csi-driver
-          image: ghcr.io/3whiskeywhiskey/rds-csi:dev
+        # nvmet-csi driver Node
+        - name: nvmet-csi-plugin
+          image: ghcr.io/3whiskeywhiskey/nvmet-csi:dev
           imagePullPolicy: Always
           args:
             - "-endpoint=$(CSI_ENDPOINT)"
@@ -66,7 +66,7 @@ spec:
             - name: CSI_MANAGED_NQN_PREFIX
               valueFrom:
                 configMapKeyRef:
-                  name: rds-csi-config
+                  name: nvmet-csi-config
                   key: nqn-prefix
           securityContext:
             # SECURITY NOTE: CSI node plugins require privileged mode
@@ -123,7 +123,7 @@ spec:
             - name: ADDRESS
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins/rds.csi.srvlab.io/csi.sock
+              value: /var/lib/kubelet/plugins/nvmet.csi.whiskey.works/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -165,7 +165,7 @@ spec:
         # Plugin directory for CSI socket
         - name: plugin-dir
           hostPath:
-            path: /var/lib/kubelet/plugins/rds.csi.srvlab.io/
+            path: /var/lib/kubelet/plugins/nvmet.csi.whiskey.works/
             type: DirectoryOrCreate
 
         # Registration directory for kubelet

@@ -1,6 +1,6 @@
-# Log Aggregation Guide for RDS CSI Driver
+# Log Aggregation Guide for nvmet-csi driver
 
-This guide explains how to collect, aggregate, and analyze security logs from the RDS CSI Driver using popular log management platforms.
+This guide explains how to collect, aggregate, and analyze security logs from the nvmet-csi driver using popular log management platforms.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This guide explains how to collect, aggregate, and analyze security logs from th
 
 ## Overview
 
-The RDS CSI Driver implements comprehensive security logging through a centralized security logging package (`pkg/security`). All security-relevant events are logged in a structured format with consistent fields for easy parsing and analysis.
+The nvmet-csi driver implements comprehensive security logging through a centralized security logging package (`pkg/security`). All security-relevant events are logged in a structured format with consistent fields for easy parsing and analysis.
 
 ### Security Event Categories
 
@@ -106,7 +106,7 @@ helm install loki grafana/loki-stack \
 
 ### Promtail Configuration
 
-Promtail automatically collects logs from all pods. To enhance parsing of RDS CSI logs, add a pipeline stage:
+Promtail automatically collects logs from all pods. To enhance parsing of nvmet-csi logs, add a pipeline stage:
 
 ```yaml
 # promtail-config.yaml
@@ -115,7 +115,7 @@ scrape_configs:
     pipeline_stages:
       # Parse structured security logs
       - match:
-          selector: '{app="rds-csi-controller"} |= "[SECURITY]"'
+          selector: '{app="nvmet-csi-controller"} |= "[SECURITY]"'
           stages:
             - regex:
                 expression: '\[SECURITY\] category=(?P<category>\S+) type=(?P<type>\S+) severity=(?P<severity>\S+) outcome=(?P<outcome>\S+)'
@@ -127,7 +127,7 @@ scrape_configs:
 
       # Extract additional fields
       - match:
-          selector: '{app="rds-csi-controller"} |= "[SECURITY]"'
+          selector: '{app="nvmet-csi-controller"} |= "[SECURITY]"'
           stages:
             - regex:
                 expression: 'volume_id=(?P<volume_id>\S+)'
@@ -143,37 +143,37 @@ scrape_configs:
 #### View All Security Events
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]"
+{app="nvmet-csi-controller"} |= "[SECURITY]"
 ```
 
 #### Filter by Severity
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]" |= "severity=critical"
+{app="nvmet-csi-controller"} |= "[SECURITY]" |= "severity=critical"
 ```
 
 #### Authentication Events
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]" |= "category=authentication"
+{app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=authentication"
 ```
 
 #### Failed Operations
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]" |= "outcome=failure"
+{app="nvmet-csi-controller"} |= "[SECURITY]" |= "outcome=failure"
 ```
 
 #### Volume Operations for Specific Volume
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]" |= "category=volume_operation" |= "volume_id=pvc-abc123"
+{app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=volume_operation" |= "volume_id=pvc-abc123"
 ```
 
 #### Security Violations
 
 ```logql
-{app="rds-csi-controller"} |= "[SECURITY]" |= "category=security_violation"
+{app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=security_violation"
 ```
 
 ### Grafana Dashboard
@@ -182,22 +182,22 @@ Create a Grafana dashboard with the following panels:
 
 1. **Security Events Over Time** (Time series)
    ```logql
-   sum(count_over_time({app="rds-csi-controller"} |= "[SECURITY]"[5m])) by (severity)
+   sum(count_over_time({app="nvmet-csi-controller"} |= "[SECURITY]"[5m])) by (severity)
    ```
 
 2. **Authentication Failures** (Stat)
    ```logql
-   count_over_time({app="rds-csi-controller"} |= "[SECURITY]" |= "category=authentication" |= "outcome=failure"[24h])
+   count_over_time({app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=authentication" |= "outcome=failure"[24h])
    ```
 
 3. **Volume Operations by Outcome** (Pie chart)
    ```logql
-   sum(count_over_time({app="rds-csi-controller"} |= "[SECURITY]" |= "category=volume_operation"[1h])) by (outcome)
+   sum(count_over_time({app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=volume_operation"[1h])) by (outcome)
    ```
 
 4. **Top Security Violations** (Table)
    ```logql
-   topk(10, sum(count_over_time({app="rds-csi-controller"} |= "[SECURITY]" |= "category=security_violation"[24h])) by (type))
+   topk(10, sum(count_over_time({app="nvmet-csi-controller"} |= "[SECURITY]" |= "category=security_violation"[24h])) by (type))
    ```
 
 ## Integration with ELK Stack
@@ -246,7 +246,7 @@ processors:
       - logs_path:
           logs_path: "/var/log/containers/"
 
-  # Parse RDS CSI security logs
+  # Parse nvmet-csi security logs
   - dissect:
       tokenizer: "[SECURITY] %{log_content}"
       field: "message"
@@ -267,14 +267,14 @@ processors:
 
 output.elasticsearch:
   hosts: ["elasticsearch:9200"]
-  index: "rds-csi-security-%{+yyyy.MM.dd}"
+  index: "nvmet-csi-security-%{+yyyy.MM.dd}"
 ```
 
 ### Elasticsearch Index Template
 
 ```json
 {
-  "index_patterns": ["rds-csi-security-*"],
+  "index_patterns": ["nvmet-csi-security-*"],
   "mappings": {
     "properties": {
       "security.fields.category": { "type": "keyword" },
@@ -297,7 +297,7 @@ output.elasticsearch:
 
 #### All Security Events
 ```
-kubernetes.labels.app:"rds-csi-controller" AND message:"[SECURITY]"
+kubernetes.labels.app:"nvmet-csi-controller" AND message:"[SECURITY]"
 ```
 
 #### Critical Security Events
@@ -331,7 +331,7 @@ helm install splunk-connect splunk/splunk-connect-for-kubernetes \
   --create-namespace \
   --set splunk.hec.host=<splunk-host> \
   --set splunk.hec.token=<hec-token> \
-  --set splunk.hec.indexName=rds-csi-security
+  --set splunk.hec.indexName=nvmet-csi-security
 ```
 
 ### Splunk Field Extractions
@@ -341,7 +341,7 @@ Create field extractions for structured parsing:
 ```
 Settings > Fields > Field extractions > New Field Extraction
 
-Source type: rds-csi-logs
+Source type: nvmet-csi-logs
 Regex:
 \[SECURITY\] category=(?<category>\S+) type=(?<type>\S+) severity=(?<severity>\S+) outcome=(?<outcome>\S+).*volume_id=(?<volume_id>\S+).*node_id=(?<node_id>\S+)
 ```
@@ -350,27 +350,27 @@ Regex:
 
 #### Security Events by Severity
 ```spl
-index=rds-csi-security "[SECURITY]"
+index=nvmet-csi-security "[SECURITY]"
 | stats count by severity
 | sort -count
 ```
 
 #### Volume Operation Timeline
 ```spl
-index=rds-csi-security category=volume_operation
+index=nvmet-csi-security category=volume_operation
 | timechart count by type
 ```
 
 #### Failed Operations with Details
 ```spl
-index=rds-csi-security outcome=failure
+index=nvmet-csi-security outcome=failure
 | table _time, category, type, volume_id, node_id, error
 | sort -_time
 ```
 
 #### Authentication Anomalies
 ```spl
-index=rds-csi-security category=authentication outcome=failure
+index=nvmet-csi-security category=authentication outcome=failure
 | stats count by source_ip, username
 | where count > 5
 ```
@@ -396,7 +396,7 @@ helm install datadog datadog/datadog \
 
 ### Log Processing Pipeline
 
-In Datadog, create a processing pipeline for RDS CSI logs:
+In Datadog, create a processing pipeline for nvmet-csi logs:
 
 1. **Grok Parser** to extract structured fields:
    ```
@@ -410,9 +410,9 @@ In Datadog, create a processing pipeline for RDS CSI logs:
 ### Datadog Queries
 
 ```
-service:rds-csi-controller @security.severity:critical
-service:rds-csi-controller @security.category:authentication @security.outcome:failure
-service:rds-csi-controller @security.type:volume_create_failure
+service:nvmet-csi-controller @security.severity:critical
+service:nvmet-csi-controller @security.category:authentication @security.outcome:failure
+service:nvmet-csi-controller @security.type:volume_create_failure
 ```
 
 ## Log Queries and Dashboards
@@ -517,11 +517,11 @@ Action: Notify operations team
 
 ```yaml
 groups:
-  - name: rds-csi-security
+  - name: nvmet-csi-security
     rules:
       - alert: RDSCSIHostKeyMismatch
         expr: |
-          increase(rds_csi_security_ssh_host_key_mismatches_total[5m]) > 0
+          increase(nvmet_csi_security_ssh_host_key_mismatches_total[5m]) > 0
         for: 0m
         labels:
           severity: critical
@@ -531,7 +531,7 @@ groups:
 
       - alert: RDSCSIAuthFailures
         expr: |
-          rate(rds_csi_security_ssh_auth_failures_total[5m]) > 0.1
+          rate(nvmet_csi_security_ssh_auth_failures_total[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -540,7 +540,7 @@ groups:
 
       - alert: RDSCSISecurityViolation
         expr: |
-          increase(rds_csi_security_validation_failures_total[1m]) > 0
+          increase(nvmet_csi_security_validation_failures_total[1m]) > 0
         for: 0m
         labels:
           severity: critical
@@ -608,7 +608,7 @@ For regulated environments:
 
 1. Check pod logs are being collected:
    ```bash
-   kubectl logs -n kube-system -l app=rds-csi-controller
+   kubectl logs -n kube-system -l app=nvmet-csi-controller
    ```
 
 2. Verify log collector is running:

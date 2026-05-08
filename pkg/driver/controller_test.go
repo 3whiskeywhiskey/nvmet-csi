@@ -16,9 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 func TestValidateVolumeCapabilities(t *testing.T) {

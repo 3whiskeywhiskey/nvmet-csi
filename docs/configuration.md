@@ -1,6 +1,6 @@
-# RDS CSI Driver Configuration
+# nvmet-csi driver Configuration
 
-This document describes the configuration options for the RDS CSI driver.
+This document describes the configuration options for the nvmet-csi driver.
 
 ## Basic Configuration
 
@@ -8,14 +8,14 @@ The driver is configured through command-line flags and environment variables. K
 
 ### RDS Connection Settings
 
-Configure RDS server connection via ConfigMap `rds-csi-config`:
+Configure RDS server connection via ConfigMap `nvmet-csi-config`:
 
 ```yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: rds-csi-config
-  namespace: rds-csi
+  name: nvmet-csi-config
+  namespace: nvmet-csi
 data:
   rds-address: "10.42.241.3"
   rds-port: "22"
@@ -29,14 +29,14 @@ data:
 
 ### SSH Credentials
 
-Provide SSH credentials via Secret `rds-csi-secret`:
+Provide SSH credentials via Secret `nvmet-csi-secret`:
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: rds-csi-secret
-  namespace: rds-csi
+  name: nvmet-csi-secret
+  namespace: nvmet-csi
 type: Opaque
 stringData:
   rds-private-key: |
@@ -72,7 +72,7 @@ env:
   - name: CSI_MANAGED_NQN_PREFIX
     valueFrom:
       configMapKeyRef:
-        name: rds-csi-config
+        name: nvmet-csi-config
         key: nqn-prefix
 ```
 
@@ -112,7 +112,7 @@ failing volumes. After 3 consecutive failures, the circuit opens and returns
 ```yaml
 metadata:
   annotations:
-    rds.csi.srvlab.io/reset-circuit-breaker: "true"
+    nvmet.csi.whiskey.works/reset-circuit-breaker: "true"
 ```
 
 ### Graceful Shutdown
@@ -226,12 +226,12 @@ Metrics are exposed at `http://<pod-ip>:9809/metrics`.
 
 Node orphan cleanup emits:
 
-- `rds_csi_orphans_cleaned_total`: successful orphaned NVMe disconnects.
-- `rds_csi_orphan_cleanup_total{action,result,dry_run}`: fixed-label counters for detected managed orphans, dry-run skips, actual disconnect attempts, failures, successes, and per-pass limit hits.
+- `nvmet_csi_orphans_cleaned_total`: successful orphaned NVMe disconnects.
+- `nvmet_csi_orphan_cleanup_total{action,result,dry_run}`: fixed-label counters for detected managed orphans, dry-run skips, actual disconnect attempts, failures, successes, and per-pass limit hits.
 
 Stale `VolumeAttachment` cleanup emits:
 
-- `rds_csi_attachment_stale_volumeattachment_cleanup_total{result,dry_run}`: fixed-label counters for candidates, planned dry-run deletes, active delete attempts, successes, failures, and already-gone objects.
+- `nvmet_csi_attachment_stale_volumeattachment_cleanup_total{result,dry_run}`: fixed-label counters for candidates, planned dry-run deletes, active delete attempts, successes, failures, and already-gone objects.
 
 ## Security Configuration
 
@@ -241,7 +241,7 @@ Stale `VolumeAttachment` cleanup emits:
 
 ```yaml
 args:
-  - "-rds-host-key=/etc/rds-csi/rds-host-key"
+  - "-rds-host-key=/etc/nvmet-csi/rds-host-key"
 ```
 
 **Testing only:** Skip host key verification (INSECURE):

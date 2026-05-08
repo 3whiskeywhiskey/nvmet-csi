@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "RDS CSI Driver Helm Values",
-  "description": "Configuration values for the RDS CSI driver Helm chart",
+  "title": "nvmet-csi driver Helm Values",
+  "description": "Configuration values for the nvmet-csi driver Helm chart",
   "required": ["rds"],
   "properties": {
     "nameOverride": {

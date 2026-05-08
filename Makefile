@@ -1,8 +1,8 @@
-# RDS CSI Driver Makefile
+# nvmet-csi driver Makefile
 
 # Image configuration
 REGISTRY ?= ghcr.io/3whiskeywhiskey
-IMAGE_NAME ?= rds-csi-driver
+IMAGE_NAME ?= nvmet-csi
 IMAGE_TAG ?= dev
 IMAGE = $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -16,7 +16,7 @@ LOCAL_OS := $(shell go env GOOS)
 LOCAL_ARCH := $(shell go env GOARCH)
 
 # Binary output
-BINARY_NAME = rds-csi-plugin
+BINARY_NAME = nvmet-csi-plugin
 BUILD_DIR = bin
 DOCKERFILE = Dockerfile
 
@@ -28,7 +28,7 @@ GOFLAGS ?= -v
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-VERSION_PKG = git.srvlab.io/whiskey/rds-csi-driver/pkg/driver
+VERSION_PKG = git.srvlab.io/whiskey/nvmet-csi/pkg/driver
 
 VERSION_LDFLAGS := -X $(VERSION_PKG).version=$(GIT_TAG) \
                     -X $(VERSION_PKG).gitCommit=$(GIT_COMMIT) \
@@ -40,7 +40,7 @@ all: build
 
 .PHONY: help
 help:
-	@echo "RDS CSI Driver - Build Targets:"
+	@echo "nvmet-csi driver - Build Targets:"
 	@echo ""
 	@echo "Build Commands:"
 	@echo "  make build            - Build binary for Linux/amd64 (container target)"
@@ -85,7 +85,7 @@ build: mod-tidy
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME) \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)"
 
 .PHONY: build-local
@@ -96,7 +96,7 @@ build-local:
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME)-$(LOCAL_OS)-$(LOCAL_ARCH) \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)-$(LOCAL_OS)-$(LOCAL_ARCH)"
 	@echo ""
 	@echo "To run locally: ./$(BUILD_DIR)/$(BINARY_NAME)-$(LOCAL_OS)-$(LOCAL_ARCH) --help"
@@ -110,7 +110,7 @@ build-darwin-amd64:
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64"
 
 .PHONY: build-darwin-arm64
@@ -121,7 +121,7 @@ build-darwin-arm64:
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64"
 
 .PHONY: build-linux-amd64
@@ -132,7 +132,7 @@ build-linux-amd64:
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64"
 
 .PHONY: build-linux-arm64
@@ -143,7 +143,7 @@ build-linux-arm64:
 		-ldflags "$(LDFLAGS) $(VERSION_LDFLAGS)" \
 		$(GOFLAGS) \
 		-o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 \
-		./cmd/rds-csi-plugin
+		./cmd/nvmet-csi-plugin
 	@echo "Binary created: $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64"
 
 .PHONY: build-all
@@ -314,7 +314,7 @@ fmt:
 		echo "Installing goimports..."; \
 		go install golang.org/x/tools/cmd/goimports@latest; \
 	fi
-	goimports -w -local git.srvlab.io/whiskey/rds-csi-driver .
+	goimports -w -local git.srvlab.io/whiskey/nvmet-csi .
 
 .PHONY: vet
 vet:
@@ -324,21 +324,21 @@ vet:
 .PHONY: verify-helm
 verify-helm:
 	@echo "Verifying Helm chart rendering..."
-	helm lint deploy/helm/rds-csi-driver
-	helm template rds-csi deploy/helm/rds-csi-driver --namespace rds-csi > /tmp/rds-csi-helm-default.yaml
-	@if grep -q -- "-node-orphan-cleanup" /tmp/rds-csi-helm-default.yaml; then \
+	helm lint deploy/helm/nvmet-csi
+	helm template nvmet-csi deploy/helm/nvmet-csi --namespace nvmet-csi > /tmp/nvmet-csi-helm-default.yaml
+	@if grep -q -- "-node-orphan-cleanup" /tmp/nvmet-csi-helm-default.yaml; then \
 		echo "ERROR: node orphan cleanup rendered in default Helm values"; \
 		exit 1; \
 	fi
-	helm template rds-csi deploy/helm/rds-csi-driver --namespace rds-csi \
+	helm template nvmet-csi deploy/helm/nvmet-csi --namespace nvmet-csi \
 		--set node.orphanCleanup.enabled=true \
 		--set node.orphanCleanup.dryRun=false \
-		--set node.orphanCleanup.maxDisconnects=2 > /tmp/rds-csi-helm-node-orphan-cleanup.yaml
-	grep -q -- "-node-orphan-cleanup" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
-	grep -q -- "-node-orphan-cleanup-dry-run=false" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
-	grep -q -- "-node-orphan-cleanup-max-disconnects=2" /tmp/rds-csi-helm-node-orphan-cleanup.yaml
-	helm template nvmet-zol deploy/helm/rds-csi-driver --namespace nvmet-csi \
-		-f deploy/helm/rds-csi-driver/ci/nvmet-zol-values.yaml > /tmp/nvmet-zol-helm.yaml
+		--set node.orphanCleanup.maxDisconnects=2 > /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup-dry-run=false" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
+	grep -q -- "-node-orphan-cleanup-max-disconnects=2" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
+	helm template nvmet-zol deploy/helm/nvmet-csi --namespace nvmet-csi \
+		-f deploy/helm/nvmet-csi/ci/nvmet-zol-values.yaml > /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "provisioner: nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-driver-name=nvmet.csi.whiskey.works" /tmp/nvmet-zol-helm.yaml
@@ -398,8 +398,8 @@ deploy:
 .PHONY: deploy-helm
 deploy-helm:
 	@echo "Installing via Helm..."
-	helm upgrade --install rds-csi \
-		deploy/helm/rds-csi-driver \
+	helm upgrade --install nvmet-csi \
+		deploy/helm/nvmet-csi \
 		--namespace kube-system \
 		--create-namespace
 
@@ -410,11 +410,11 @@ undeploy:
 
 .PHONY: logs-controller
 logs-controller:
-	kubectl logs -n kube-system -l app=rds-csi-controller -c rds-csi-plugin -f
+	kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin -f
 
 .PHONY: logs-node
 logs-node:
-	kubectl logs -n kube-system -l app=rds-csi-node -c rds-csi-plugin -f
+	kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin -f
 
 # Version info
 .PHONY: version

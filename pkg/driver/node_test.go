@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/circuitbreaker"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/circuitbreaker"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
 )
 
 // mockMounter implements mount.Mounter for testing
@@ -102,7 +102,7 @@ type staleCheckBehavior struct {
 // createNodeServerWithStaleBehavior creates a NodeServer with controlled stale check behavior
 func createNodeServerWithStaleBehavior(mounter mount.Mounter, behavior staleCheckBehavior) *NodeServer {
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -185,7 +185,7 @@ func createNodeServerWithStaleBehavior(mounter mount.Mounter, behavior staleChec
 // createNodeServerNoStaleChecker creates a NodeServer without stale checker
 func createNodeServerNoStaleChecker(mounter mount.Mounter) *NodeServer {
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -299,7 +299,7 @@ func TestNodeGetVolumeStats_AlwaysReturnsVolumeCondition(t *testing.T) {
 			// Create request
 			req := &csi.NodeGetVolumeStatsRequest{
 				VolumeId:   tt.volumeID,
-				VolumePath: "/var/lib/kubelet/pods/test-pod/volumes/rds.csi.srvlab.io/test-volume",
+				VolumePath: "/var/lib/kubelet/pods/test-pod/volumes/nvmet.csi.whiskey.works/test-volume",
 			}
 
 			// Execute
@@ -519,7 +519,7 @@ func TestNodeGetVolumeStats_MetricsRecorded(t *testing.T) {
 // TestNodeGetCapabilities tests the node capabilities response
 func TestNodeGetCapabilities(t *testing.T) {
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		nscaps: []*csi.NodeServiceCapability{
 			{
@@ -712,7 +712,7 @@ func TestNodeStageVolume_BlockVolume(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -778,7 +778,7 @@ func TestNodeStageVolume_FilesystemVolume_Unchanged(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -854,7 +854,7 @@ func TestNodePublishVolume_BlockVolume(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -914,7 +914,7 @@ func TestNodePublishVolume_BlockVolume_MissingDevice(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -972,7 +972,7 @@ func TestNodeUnpublishVolume_BlockVolume(t *testing.T) {
 	mounter := &mockMounter{}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1026,7 +1026,7 @@ func TestNodeUnstageVolume_BlockVolume(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1088,7 +1088,7 @@ func TestNodeUnstageVolume_FilesystemVolume_Unchanged(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1146,7 +1146,7 @@ func TestNodePublishVolume_FilesystemVolume(t *testing.T) {
 		isLikelyMounted: true, // Simulate staging path is mounted
 	}
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1194,7 +1194,7 @@ func TestNodeUnpublishVolume_FilesystemVolume(t *testing.T) {
 
 	mounter := &mockMounter{}
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1242,7 +1242,7 @@ func TestNodeGetVolumeStats_VolumeConditionNeverNil(t *testing.T) {
 			volumeID: "pvc-12345678-1234-1234-1234-123456789012",
 			setup: func() *NodeServer {
 				driver := &Driver{
-					name:    "rds.csi.srvlab.io",
+					name:    "nvmet.csi.whiskey.works",
 					version: "test",
 					metrics: observability.NewMetrics(),
 				}
@@ -1451,7 +1451,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 
 			// Create node server
 			driver := &Driver{
-				name:    "rds.csi.srvlab.io",
+				name:    "nvmet.csi.whiskey.works",
 				version: "test",
 				metrics: observability.NewMetrics(),
 			}
@@ -1512,7 +1512,7 @@ func TestNodeStageVolume_IsFormattedRetry(t *testing.T) {
 	}
 
 	driver := &Driver{
-		name:    "rds.csi.srvlab.io",
+		name:    "nvmet.csi.whiskey.works",
 		version: "test",
 		metrics: observability.NewMetrics(),
 	}
@@ -1650,7 +1650,7 @@ func TestNodeUnstageVolume_ErrorScenarios(t *testing.T) {
 
 			// Create node server
 			driver := &Driver{
-				name:    "rds.csi.srvlab.io",
+				name:    "nvmet.csi.whiskey.works",
 				version: "test",
 				metrics: observability.NewMetrics(),
 			}
@@ -2039,7 +2039,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 
 			// Create node server
 			driver := &Driver{
-				name:    "rds.csi.srvlab.io",
+				name:    "nvmet.csi.whiskey.works",
 				version: "test",
 				metrics: observability.NewMetrics(),
 			}

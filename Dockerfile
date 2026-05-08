@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for RDS CSI Driver
+# Multi-stage Dockerfile for nvmet-csi driver
 # Creates a minimal container image with the CSI plugin binary
 
 # Stage 1: Build the Go binary
@@ -30,11 +30,11 @@ ARG BUILD_DATE=unknown
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-s -w \
-      -X git.srvlab.io/whiskey/rds-csi-driver/pkg/driver.version=${GIT_TAG} \
-      -X git.srvlab.io/whiskey/rds-csi-driver/pkg/driver.gitCommit=${GIT_COMMIT} \
-      -X git.srvlab.io/whiskey/rds-csi-driver/pkg/driver.buildDate=${BUILD_DATE}" \
-    -o /rds-csi-plugin \
-    ./cmd/rds-csi-plugin
+      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.version=${GIT_TAG} \
+      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.gitCommit=${GIT_COMMIT} \
+      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.buildDate=${BUILD_DATE}" \
+    -o /nvmet-csi-plugin \
+    ./cmd/nvmet-csi-plugin
 
 # Stage 2: Create minimal runtime image
 FROM alpine:3.21
@@ -51,17 +51,17 @@ RUN apk add --no-cache \
     util-linux
 
 # Copy binary from builder
-COPY --from=builder /rds-csi-plugin /usr/local/bin/rds-csi-plugin
+COPY --from=builder /nvmet-csi-plugin /usr/local/bin/nvmet-csi-plugin
 
 # Create directories for CSI socket and staging
-RUN mkdir -p /var/lib/kubelet/plugins/rds.csi.srvlab.io \
+RUN mkdir -p /var/lib/kubelet/plugins/nvmet.csi.whiskey.works \
              /var/lib/kubelet/pods \
              /csi
 
 # Add labels
-LABEL org.opencontainers.image.source="https://git.srvlab.io/whiskey/rds-csi-driver"
-LABEL org.opencontainers.image.description="CSI driver for MikroTik ROSE Data Server (RDS) NVMe/TCP storage"
+LABEL org.opencontainers.image.source="https://git.srvlab.io/whiskey/nvmet-csi"
+LABEL org.opencontainers.image.description="CSI driver for NVMe/TCP targets backed by Linux nvmet or RouterOS/RDS"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Entrypoint
-ENTRYPOINT ["/usr/local/bin/rds-csi-plugin"]
+ENTRYPOINT ["/usr/local/bin/nvmet-csi-plugin"]

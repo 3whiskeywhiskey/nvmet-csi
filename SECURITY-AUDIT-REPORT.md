@@ -1,5 +1,5 @@
 # Security Audit Report
-## RDS CSI Driver - Comprehensive Security Review
+## nvmet-csi driver - Comprehensive Security Review
 
 **Audit Date:** 2025-11-06
 **Auditor:** Claude (Anthropic AI)
@@ -628,7 +628,7 @@ For production use or compliance-sensitive environments, consider:
 
 ## Conclusion
 
-The RDS CSI driver is suitable for homelab and internal network use cases in its current state, but requires significant security hardening before production deployment or use in untrusted environments.
+The nvmet-csi driver is suitable for homelab and internal network use cases in its current state, but requires significant security hardening before production deployment or use in untrusted environments.
 
 The most critical issues (SSH MITM vulnerability and command injection) should be addressed immediately. The privileged container configuration, while necessary for CSI functionality, represents a significant risk surface that should be minimized through careful capability management and security policies.
 

@@ -6,7 +6,7 @@
 
 ## Overview
 
-The RDS CSI driver exposes comprehensive monitoring metrics from MikroTik RouterOS via Prometheus
+The nvmet-csi driver exposes comprehensive monitoring metrics from MikroTik RouterOS via Prometheus
 using a dual-approach strategy:
 
 - **SSH Polling**: Disk performance metrics (IOPS, throughput, latency, queue depth) from `/disk monitor-traffic`
@@ -125,7 +125,7 @@ rds_hardware_disk_pool_used_bytes 1.6e+12
 # Zero I/O when volumes are attached (potential RDS hang)
 - alert: RDSNoIOActivity
   expr: rds_disk_write_ops_per_second{slot="storage-pool"} == 0
-    and rds_csi_nvme_connections_active > 0
+    and nvmet_csi_nvme_connections_active > 0
   for: 15m
   labels:
     severity: warning
@@ -228,7 +228,7 @@ snmp := &gosnmp.GoSNMP{
 
 ## Related
 
-- Phase 28.1: Fixed `rds_csi_nvme_connections_active` metric accuracy (GaugeFunc pattern established)
+- Phase 28.1: Fixed `nvmet_csi_nvme_connections_active` metric accuracy (GaugeFunc pattern established)
 - Phase 28.2-01: SSH client GetDiskMetrics and SNMP client GetHardwareHealth implementation
 - Phase 28: Helm chart will expose monitoring configuration as chart values
 - Research: `.planning/phases/28.2-rds-health-performance-monitoring-research/28.2-RESEARCH.md`

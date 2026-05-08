@@ -1,4 +1,4 @@
-// Package observability provides Prometheus metrics for the RDS CSI driver.
+// Package observability provides Prometheus metrics for the nvmet-csi driver.
 package observability
 
 import (
@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	// namespace is the Prometheus metric namespace prefix for all RDS CSI metrics.
-	namespace = "rds_csi"
+	// namespace is the Prometheus metric namespace prefix for all nvmet-csi metrics.
+	namespace = "nvmet_csi"
 )
 
 // DiskHealthSnapshot holds a point-in-time disk performance snapshot.
@@ -58,7 +58,7 @@ type RDSAuditEvent struct {
 	Duration  time.Duration
 }
 
-// Metrics holds all Prometheus metrics for the RDS CSI driver.
+// Metrics holds all Prometheus metrics for the nvmet-csi driver.
 type Metrics struct {
 	registry *prometheus.Registry
 

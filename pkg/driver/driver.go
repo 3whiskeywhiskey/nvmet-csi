@@ -11,21 +11,21 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/attachment"
-	storagebackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
-	linuxzolbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/linuxzol"
-	routerosbackend "git.srvlab.io/whiskey/rds-csi-driver/pkg/backend/routeros"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/mount"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/nvme"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/observability"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/rds"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/reconciler"
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/utils"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
+	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	linuxzolbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/linuxzol"
+	routerosbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/routeros"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
 )
 
 const (
 	// DriverName is the official name of this CSI driver
-	DriverName = "rds.csi.srvlab.io"
+	DriverName = "nvmet.csi.whiskey.works"
 
 	// DriverVersion is the version of the driver
 	// These will be set via ldflags during build
@@ -176,7 +176,7 @@ type DriverConfig struct {
 	EnableNode       bool
 }
 
-// NewDriver creates a new RDS CSI driver
+// NewDriver creates a new nvmet-csi driver
 func NewDriver(config DriverConfig) (*Driver, error) {
 	if config.DriverName == "" {
 		config.DriverName = DriverName
@@ -545,7 +545,7 @@ func (d *Driver) addNodeServiceCapabilities() {
 
 // Run starts the CSI driver gRPC server
 func (d *Driver) Run(endpoint string) error {
-	klog.Infof("Starting RDS CSI driver at endpoint %s", endpoint)
+	klog.Infof("Starting nvmet-csi driver at endpoint %s", endpoint)
 
 	// Initialize identity service (always available)
 	d.ids = NewIdentityServer(d)
@@ -666,7 +666,7 @@ func (d *Driver) Run(endpoint string) error {
 
 // Stop stops the driver and cleans up resources
 func (d *Driver) Stop() {
-	klog.Info("Stopping RDS CSI driver")
+	klog.Info("Stopping nvmet-csi driver")
 
 	// Stop attachment reconciler if running
 	if d.attachmentReconciler != nil {

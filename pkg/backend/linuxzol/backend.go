@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"git.srvlab.io/whiskey/rds-csi-driver/pkg/backend"
+	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
 )
 
 type Backend struct {

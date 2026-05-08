@@ -2,12 +2,12 @@
 REPLACE THIS FILE WITH YOUR ACTUAL RDS SSH PRIVATE KEY
 
 To generate a new key pair:
-  ssh-keygen -t ed25519 -f rds-csi-key -C "rds-csi-driver"
+  ssh-keygen -t ed25519 -f nvmet-csi-key -C "nvmet-csi"
 
 Then copy this file:
-  cp rds-csi-key deploy/kubernetes/rds-private-key
+  cp nvmet-csi-key deploy/kubernetes/rds-private-key
 
 And add the public key to your RDS:
   # On RouterOS:
-  /user ssh-keys import public-key-file=rds-csi-key.pub user=metal-csi
+  /user ssh-keys import public-key-file=nvmet-csi-key.pub user=metal-csi
 -----END OPENSSH PRIVATE KEY-----

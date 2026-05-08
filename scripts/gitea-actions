@@ -8,7 +8,7 @@ set -euo pipefail
 GITEA_HOST="${GITEA_HOST:-https://gitea.whiskey.works}"
 GITEA_TOKEN="${GITEA_TOKEN:-}"
 REPO_OWNER="${GITEA_REPO_OWNER:-whiskey}"
-REPO_NAME="${GITEA_REPO_NAME:-rds-csi}"
+REPO_NAME="${GITEA_REPO_NAME:-nvmet-csi}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -236,7 +236,7 @@ ${YELLOW}ENVIRONMENT:${NC}
     GITEA_HOST         Gitea instance URL (default: https://git.whiskey.works)
     GITEA_TOKEN        Authentication token (required for private repos)
     GITEA_REPO_OWNER   Repository owner (default: whiskey)
-    GITEA_REPO_NAME    Repository name (default: rds-csi)
+    GITEA_REPO_NAME    Repository name (default: nvmet-csi)
 
 ${YELLOW}EXAMPLES:${NC}
     # List recent runs
