@@ -44,6 +44,67 @@ func TestBuildEnsureVolumePlanCreateAndApply(t *testing.T) {
 	}
 }
 
+func TestApplyCreatePlanRepairsOwnedPartialStateAfterCreateFailure(t *testing.T) {
+	host := &partialCreateHost{
+		memoryHost: newMemoryHost(),
+		createErr:  errors.New("namespace enable failed"),
+	}
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionCreate {
+		t.Fatalf("expected create plan, got %s", plan.Action)
+	}
+
+	result, err := storageBackend.ApplyVolumePlan(context.Background(), plan, backend.VolumeApplyOptions{})
+	if err != nil {
+		t.Fatalf("ApplyVolumePlan() should repair owned partial create state, got %v", err)
+	}
+	if !result.Applied {
+		t.Fatal("expected repaired create plan to be applied")
+	}
+
+	volume, err := storageBackend.GetVolume(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("GetVolume() error = %v", err)
+	}
+	if !volume.NVMETCPExport || volume.Status != "ready" {
+		t.Fatalf("expected partial create to be repaired, got %+v", volume)
+	}
+}
+
+func TestApplyCreatePlanRefusesUnsafePartialStateAfterCreateFailure(t *testing.T) {
+	host := &partialCreateHost{
+		memoryHost: newMemoryHost(),
+		createErr:  errors.New("namespace enable failed"),
+		mut: func(state *VolumeState) {
+			state.OwnerVolumeID = "other-volume"
+		},
+	}
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+
+	_, err = storageBackend.ApplyVolumePlan(context.Background(), plan, backend.VolumeApplyOptions{})
+	if err == nil {
+		t.Fatal("expected unsafe partial create state to fail")
+	}
+	if !strings.Contains(err.Error(), "namespace enable failed") {
+		t.Fatalf("expected original create error in failure, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unsafe to repair") {
+		t.Fatalf("expected unsafe repair error, got %v", err)
+	}
+}
+
 func TestBuildEnsureVolumePlanNoopResizeAndConflict(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -1022,6 +1083,12 @@ type memoryHost struct {
 	volumes map[string]VolumeState
 }
 
+type partialCreateHost struct {
+	*memoryHost
+	createErr error
+	mut       func(*VolumeState)
+}
+
 type planningMemoryHost struct {
 	*memoryHost
 }
@@ -1071,6 +1138,31 @@ func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
 func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 	h.volumes[spec.ID] = readyVolumeState(spec)
 	return nil
+}
+
+func (h *partialCreateHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
+	state := VolumeState{
+		ID:             spec.ID,
+		OwnerVolumeID:  spec.ID,
+		Dataset:        spec.Dataset,
+		DevicePath:     spec.DevicePath,
+		SizeBytes:      spec.SizeBytes,
+		NQN:            spec.NQN,
+		Port:           spec.Port,
+		PortAddress:    "10.42.0.10",
+		PortServiceID:  "4420",
+		PortTransport:  "tcp",
+		PortAddressFam: "ipv4",
+		Status:         "partial",
+	}
+	if h.mut != nil {
+		h.mut(&state)
+	}
+	h.volumes[spec.ID] = state
+	if h.createErr != nil {
+		return h.createErr
+	}
+	return errors.New("create failed after partial state")
 }
 
 func (h *memoryHost) RepairVolume(_ context.Context, spec VolumeSpec) error {
