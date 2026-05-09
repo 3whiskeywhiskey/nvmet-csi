@@ -72,6 +72,8 @@ spec:
             - "-v={{ .Values.controller.logLevel }}"
             {{- if .Values.monitoring.enabled }}
             - "-metrics-address=:{{ .Values.monitoring.port }}"
+            {{- else }}
+            - "-metrics-address="
             {{- end }}
             {{- if .Values.rds.insecureSkipVerify }}
             - "-rds-insecure-skip-verify=true"
