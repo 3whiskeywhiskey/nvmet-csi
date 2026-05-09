@@ -19,7 +19,8 @@ import (
 func TestControllerBackendForParamsDefaultsRouterOS(t *testing.T) {
 	mockRDS := rds.NewMockClient()
 	mockRDS.SetAddress("10.42.68.1")
-	driver := &Driver{rdsClient: mockRDS}
+	driver := &Driver{}
+	driver.SetRDSClient(mockRDS)
 
 	got, selection, err := driver.controllerBackendForParams(map[string]string{})
 	if err != nil {
@@ -30,6 +31,20 @@ func TestControllerBackendForParamsDefaultsRouterOS(t *testing.T) {
 	}
 	if selection.Type != storagebackend.TypeRouterOSRDS || selection.Executor != storagebackend.ExecutorSSH {
 		t.Fatalf("unexpected default selection: %+v", selection)
+	}
+}
+
+func TestControllerBackendForParamsDoesNotLazyWrapRDSClient(t *testing.T) {
+	mockRDS := rds.NewMockClient()
+	mockRDS.SetAddress("10.42.68.1")
+	driver := &Driver{rdsClient: mockRDS}
+
+	_, _, err := driver.controllerBackendForParams(map[string]string{})
+	if err == nil {
+		t.Fatal("expected default RouterOS resolution to require an explicit backend")
+	}
+	if !strings.Contains(err.Error(), "RouterOS/RDS backend is not initialized") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
