@@ -79,6 +79,26 @@ func TestBuildEnsureVolumePlanNoopResizeAndConflict(t *testing.T) {
 	}
 }
 
+func TestBuildEnsureVolumePlanAcceptsRelativeConfigFSPortLink(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = readyVolumeState(spec)
+	state := host.volumes[desired.ID]
+	state.PortLinkTarget = "../../../../nvmet/subsystems/" + spec.NQN
+	host.volumes[desired.ID] = state
+
+	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
+	if err != nil {
+		t.Fatalf("BuildEnsureVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionNoop {
+		t.Fatalf("expected noop for relative configfs symlink, got %s: %s", plan.Action, plan.Reason)
+	}
+}
+
 func TestBuildEnsureVolumePlanRepairsIncompleteExport(t *testing.T) {
 	host := newMemoryHost()
 	storageBackend := newTestBackend(t, host)
@@ -581,6 +601,26 @@ func TestBuildDeleteVolumePlanAllowsPartialExpectedExport(t *testing.T) {
 	}
 }
 
+func TestBuildDeleteVolumePlanAcceptsRelativeConfigFSPortLink(t *testing.T) {
+	host := newMemoryHost()
+	storageBackend := newTestBackend(t, host)
+	desired := testCreateRequest("pvc-test-volume", 10<<30)
+	spec := storageBackend.specFromRequest(desired)
+
+	host.volumes[desired.ID] = readyVolumeState(spec)
+	state := host.volumes[desired.ID]
+	state.PortLinkTarget = "../../../../nvmet/subsystems/" + spec.NQN
+	host.volumes[desired.ID] = state
+
+	plan, err := storageBackend.BuildDeleteVolumePlan(context.Background(), desired.ID)
+	if err != nil {
+		t.Fatalf("BuildDeleteVolumePlan() error = %v", err)
+	}
+	if plan.Action != backend.VolumeActionDelete {
+		t.Fatalf("expected delete for relative configfs symlink, got %s: %s", plan.Action, plan.Reason)
+	}
+}
+
 func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	recorder := &recordingExecutor{outputs: map[string]string{}}
 	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
@@ -717,6 +757,26 @@ func TestCommandHostValidateDeleteStateRequiresExpectedOwnerAndPaths(t *testing.
 				t.Fatalf("expected error containing %q, got %v", tt.want, err)
 			}
 		})
+	}
+}
+
+func TestCommandHostValidateDeleteStateAcceptsRelativeConfigFSPortLink(t *testing.T) {
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+	state := readyVolumeState(VolumeSpec{
+		ID:         "pvc-test-volume",
+		Dataset:    "tank/nvmet/pvc-test-volume",
+		DevicePath: "/dev/zvol/tank/nvmet/pvc-test-volume",
+		SizeBytes:  10 << 30,
+		NQN:        "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+		Port:       4420,
+	})
+	state.PortLinkTarget = "../../../../nvmet/subsystems/" + state.NQN
+
+	if err := host.validateDeleteState(state); err != nil {
+		t.Fatalf("validateDeleteState() should accept relative configfs symlink target: %v", err)
 	}
 }
 
@@ -926,24 +986,8 @@ func newMemoryHost() *memoryHost {
 	return &memoryHost{volumes: map[string]VolumeState{}}
 }
 
-func (h *memoryHost) GetVolume(_ context.Context, volumeID string) (*VolumeState, error) {
-	volume, ok := h.volumes[volumeID]
-	if !ok {
-		return nil, &backend.VolumeNotFoundError{ID: volumeID}
-	}
-	return &volume, nil
-}
-
-func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
-	out := make([]VolumeState, 0, len(h.volumes))
-	for _, volume := range h.volumes {
-		out = append(out, volume)
-	}
-	return out, nil
-}
-
-func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
-	h.volumes[spec.ID] = VolumeState{
+func readyVolumeState(spec VolumeSpec) VolumeState {
+	return VolumeState{
 		ID:              spec.ID,
 		OwnerVolumeID:   spec.ID,
 		Dataset:         spec.Dataset,
@@ -962,6 +1006,26 @@ func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
 		PortAddressFam:  "ipv4",
 		Status:          "ready",
 	}
+}
+
+func (h *memoryHost) GetVolume(_ context.Context, volumeID string) (*VolumeState, error) {
+	volume, ok := h.volumes[volumeID]
+	if !ok {
+		return nil, &backend.VolumeNotFoundError{ID: volumeID}
+	}
+	return &volume, nil
+}
+
+func (h *memoryHost) ListVolumes(context.Context) ([]VolumeState, error) {
+	out := make([]VolumeState, 0, len(h.volumes))
+	for _, volume := range h.volumes {
+		out = append(out, volume)
+	}
+	return out, nil
+}
+
+func (h *memoryHost) CreateVolume(_ context.Context, spec VolumeSpec) error {
+	h.volumes[spec.ID] = readyVolumeState(spec)
 	return nil
 }
 

@@ -74,6 +74,23 @@ func (c Config) portSubsystemPath(port int, nqn string) string {
 	return filepath.Join(c.portPath(port), "subsystems", linkNameForNQN(nqn))
 }
 
+func (c Config) portLinkTargetMatches(port int, nqn string, target string) bool {
+	if port <= 0 || nqn == "" || target == "" {
+		return false
+	}
+
+	expected := filepath.Clean(c.subsystemPath(nqn))
+	if filepath.Clean(target) == expected {
+		return true
+	}
+	if filepath.IsAbs(target) {
+		return false
+	}
+
+	linkDir := filepath.Dir(c.portSubsystemPath(port, nqn))
+	return filepath.Clean(filepath.Join(linkDir, target)) == expected
+}
+
 func (c Config) portServiceID(port int) string {
 	return strconv.Itoa(port)
 }

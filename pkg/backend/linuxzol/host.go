@@ -67,7 +67,8 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 	portAddressFam := h.portAttribute(ctx, port, "addr_adrfam")
 	namespaceReady := h.namespaceEnabled(ctx, nqn)
 	portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
-	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkTarget == h.cfg.subsystemPath(nqn) && portReady
+	portLinkReady := h.cfg.portLinkTargetMatches(port, nqn, portLinkTarget)
+	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkReady && portReady
 
 	return &VolumeState{
 		ID:              volumeID,
@@ -133,7 +134,8 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		devicePath := h.cfg.devicePathFor(id)
 		namespaceReady := h.namespaceEnabled(ctx, nqn)
 		portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
-		exported := namespaceReady && exportDevice == devicePath && portLinkTarget == h.cfg.subsystemPath(nqn) && portReady
+		portLinkReady := h.cfg.portLinkTargetMatches(port, nqn, portLinkTarget)
+		exported := namespaceReady && exportDevice == devicePath && portLinkReady && portReady
 		volumes = append(volumes, VolumeState{
 			ID:              id,
 			OwnerVolumeID:   ownerVolumeID,
@@ -263,7 +265,7 @@ func (h *CommandHost) validateDeleteState(state VolumeState) error {
 		return fmt.Errorf("refusing to delete %s: nvmet namespace device path %q differs from expected %q", state.ID, state.ExportDevice, state.DevicePath)
 	}
 	expectedSubsystem := h.cfg.subsystemPath(state.NQN)
-	if state.PortLinkTarget != "" && state.PortLinkTarget != expectedSubsystem {
+	if state.PortLinkTarget != "" && !h.cfg.portLinkTargetMatches(state.Port, state.NQN, state.PortLinkTarget) {
 		return fmt.Errorf("refusing to delete %s: nvmet port link target %q differs from expected %q", state.ID, state.PortLinkTarget, expectedSubsystem)
 	}
 	if state.PortEntryExists && state.PortLinkTarget == "" {
@@ -442,7 +444,9 @@ func linkIfAbsentOrEqualCommand(target string, link string) Command {
 			"-c",
 			"if [ -L " + shellQuote(link) + " ]; then " +
 				"current=$(readlink " + shellQuote(link) + "); " +
-				"if [ \"$current\" = " + shellQuote(target) + " ]; then exit 0; fi; " +
+				"current_abs=$(readlink -f " + shellQuote(link) + " 2>/dev/null || true); " +
+				"target_abs=$(readlink -f " + shellQuote(target) + " 2>/dev/null || printf '%s\\n' " + shellQuote(target) + "); " +
+				"if [ \"$current\" = " + shellQuote(target) + " ] || [ \"$current_abs\" = \"$target_abs\" ]; then exit 0; fi; " +
 				"printf '%s\\n' " + shellQuote("refusing to rewrite nvmet port symlink "+link) + " >&2; exit 1; " +
 				"elif [ -e " + shellQuote(link) + " ]; then " +
 				"printf '%s\\n' " + shellQuote("refusing to replace non-symlink nvmet port entry "+link) + " >&2; exit 1; " +
