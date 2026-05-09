@@ -52,7 +52,7 @@ The pool tracks comprehensive metrics:
 ### Pool Configuration
 
 ```go
-import "git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+import "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 
 poolConfig := rds.PoolConfig{
     // Required: Factory function to create new clients

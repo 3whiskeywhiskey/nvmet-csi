@@ -9,10 +9,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
-	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/test/mock"
 )
 
 // TestControllerIntegrationWithMockRDS tests the full controller flow with a mock RDS server

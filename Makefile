@@ -30,7 +30,7 @@ GOFLAGS ?= -v
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-VERSION_PKG = git.srvlab.io/whiskey/nvmet-csi/pkg/driver
+VERSION_PKG = gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver
 
 VERSION_LDFLAGS := -X $(VERSION_PKG).version=$(GIT_TAG) \
                     -X $(VERSION_PKG).gitCommit=$(GIT_COMMIT) \
@@ -334,7 +334,7 @@ fmt:
 		echo "Installing goimports..."; \
 		go install golang.org/x/tools/cmd/goimports@latest; \
 	fi
-	goimports -w -local git.srvlab.io/whiskey/nvmet-csi .
+	goimports -w -local gitea.whiskey.works/whiskey-works/nvmet-csi .
 
 .PHONY: vet
 vet:

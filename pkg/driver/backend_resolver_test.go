@@ -12,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
 func TestControllerBackendForParamsDefaultsRouterOS(t *testing.T) {

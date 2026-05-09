@@ -8,7 +8,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	. "github.com/onsi/gomega"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // Constants for test configuration

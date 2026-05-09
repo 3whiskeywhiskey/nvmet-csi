@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 const (

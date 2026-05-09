@@ -16,12 +16,12 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	linuxzolbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/linuxzol"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	linuxzolbackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend/linuxzol"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 const (

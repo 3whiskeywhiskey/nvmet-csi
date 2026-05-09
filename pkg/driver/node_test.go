@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/circuitbreaker"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/circuitbreaker"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/mount"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 // mockMounter implements mount.Mounter for testing

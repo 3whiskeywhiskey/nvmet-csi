@@ -16,7 +16,7 @@ import (
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 // EventPoster is an interface for posting Kubernetes events for attachment lifecycle.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
 func TestBuildEnsureVolumePlan(t *testing.T) {

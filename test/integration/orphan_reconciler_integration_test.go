@@ -9,10 +9,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
-	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/reconciler"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/test/mock"
 )
 
 // TestOrphanReconciler_WithMockRDS tests the orphan reconciler with the mock RDS server

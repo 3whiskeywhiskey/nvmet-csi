@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
 func TestBuildEnsureVolumePlanCreateAndApply(t *testing.T) {

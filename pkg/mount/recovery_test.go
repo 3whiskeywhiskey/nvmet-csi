@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
 )
 
 // mockMounter implements Mounter interface for testing

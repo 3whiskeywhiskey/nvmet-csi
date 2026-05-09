@@ -32,9 +32,9 @@
         ldflags = [
           "-s"
           "-w"
-          "-X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.version=0.10.0"
-          "-X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.gitCommit=nix"
-          "-X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.buildDate=nix"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.version=0.10.0"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.gitCommit=nix"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.buildDate=nix"
         ];
       };
 

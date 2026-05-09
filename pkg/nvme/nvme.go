@@ -12,8 +12,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // Connector handles NVMe/TCP connections

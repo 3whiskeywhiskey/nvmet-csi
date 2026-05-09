@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 // Event reasons - use consistent naming for filtering

@@ -5,8 +5,8 @@ import (
 
 	"k8s.io/client-go/kubernetes/fake"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/attachment"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 // TestAttachmentManager_SetMetricsMethod verifies the SetMetrics method exists and works.

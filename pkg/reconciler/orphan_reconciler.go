@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
 const (

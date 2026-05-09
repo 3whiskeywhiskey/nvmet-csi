@@ -98,7 +98,7 @@ approved maintenance window.
 
 Operator-approved breaking renames are expected:
 
-- Go module path: `git.srvlab.io/whiskey/nvmet-csi`;
+- Go module path: `gitea.whiskey.works/whiskey-works/nvmet-csi`;
 - binary: `nvmet-csi-plugin`;
 - image registry path: moved under the `whiskey-works/nvmet-csi` registry
   namespace;

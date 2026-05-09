@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
 )
 
 // MockConnector implements the Connector interface for testing

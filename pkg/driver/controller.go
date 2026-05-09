@@ -16,11 +16,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/security"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/attachment"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/reconciler"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/security"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 const (

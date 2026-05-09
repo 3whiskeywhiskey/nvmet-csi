@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // setupStressTestBasePaths configures allowed base paths for stress tests

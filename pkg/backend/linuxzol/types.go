@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
 )
 
 const (

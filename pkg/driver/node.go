@@ -17,11 +17,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/circuitbreaker"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/security"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/circuitbreaker"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/mount"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/security"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 const (

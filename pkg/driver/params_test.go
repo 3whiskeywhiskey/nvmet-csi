@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
 )
 
 func TestParseBackendSelection(t *testing.T) {

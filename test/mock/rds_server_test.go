@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 type recordedMutationDecision struct {

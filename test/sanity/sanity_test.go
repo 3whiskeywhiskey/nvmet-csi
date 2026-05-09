@@ -10,8 +10,8 @@ import (
 	"github.com/kubernetes-csi/csi-test/v5/pkg/sanity"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
-	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/test/mock"
 )
 
 const (

@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/driver"
-	"git.srvlab.io/whiskey/nvmet-csi/test/mock"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/test/mock"
 )
 
 // Suite-level variables

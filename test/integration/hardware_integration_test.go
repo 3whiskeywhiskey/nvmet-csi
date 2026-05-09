@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // TestHardwareIntegration tests against a real RDS server
