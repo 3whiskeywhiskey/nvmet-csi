@@ -52,7 +52,7 @@ func GetMounts() ([]MountInfo, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		klog.V(5).Infof("Parsing mountinfo line: %s", line)
+		klog.V(6).Infof("Parsing mountinfo line: %s", line)
 
 		mountInfo, err := parseMountInfoLine(line)
 		if err != nil {
@@ -67,7 +67,7 @@ func GetMounts() ([]MountInfo, error) {
 		return nil, fmt.Errorf("error reading /proc/self/mountinfo: %w", err)
 	}
 
-	klog.V(5).Infof("Parsed %d mount points from /proc/self/mountinfo", len(mounts))
+	klog.V(6).Infof("Parsed %d mount points from /proc/self/mountinfo", len(mounts))
 	return mounts, nil
 }
 

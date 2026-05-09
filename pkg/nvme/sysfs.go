@@ -42,7 +42,7 @@ func (s *SysfsScanner) ScanControllers() ([]string, error) {
 		return nil, fmt.Errorf("failed to scan nvme controllers at %s: %w", pattern, err)
 	}
 
-	klog.V(5).Infof("ScanControllers: found %d controllers at %s", len(controllers), pattern)
+	klog.V(6).Infof("ScanControllers: found %d controllers at %s", len(controllers), pattern)
 	return controllers, nil
 }
 
@@ -59,7 +59,7 @@ func (s *SysfsScanner) ReadSubsysNQN(controllerPath string) (string, error) {
 		return "", fmt.Errorf("empty subsysnqn at %s", nqnPath)
 	}
 
-	klog.V(5).Infof("ReadSubsysNQN: %s -> %s", controllerPath, nqn)
+	klog.V(6).Infof("ReadSubsysNQN: %s -> %s", controllerPath, nqn)
 	return nqn, nil
 }
 
@@ -73,7 +73,7 @@ func (s *SysfsScanner) FindBlockDevice(controllerPath string) (string, error) {
 	namespacePattern := filepath.Join(controllerPath, "nvme*n*")
 	namespaces, err := filepath.Glob(namespacePattern)
 	if err != nil {
-		klog.V(5).Infof("FindBlockDevice: failed to scan namespaces under %s: %v", controllerPath, err)
+		klog.V(6).Infof("FindBlockDevice: failed to scan namespaces under %s: %v", controllerPath, err)
 	}
 
 	for _, ns := range namespaces {
@@ -176,7 +176,7 @@ func (s *SysfsScanner) FindDeviceByNQN(nqn string) (string, error) {
 	for _, controller := range controllers {
 		controllerNQN, err := s.ReadSubsysNQN(controller)
 		if err != nil {
-			klog.V(5).Infof("FindDeviceByNQN: skipping controller %s: %v", controller, err)
+			klog.V(6).Infof("FindDeviceByNQN: skipping controller %s: %v", controller, err)
 			continue
 		}
 
