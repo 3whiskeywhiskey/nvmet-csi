@@ -89,7 +89,7 @@ func (b *Backend) BuildEnsureVolumePlan(ctx context.Context, desired backend.Cre
 	if actual.ExportDevice != "" && actual.ExportDevice != spec.DevicePath {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "nvmet namespace device path differs")), nil
 	}
-	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(spec.NQN) {
+	if actual.PortLinkTarget != "" && !b.cfg.portLinkTargetMatches(spec.Port, spec.NQN, actual.PortLinkTarget) {
 		return b.withPlanMetadata(conflictPlan(spec, actual, "nvmet port link target differs")), nil
 	}
 	if reason := b.conflictingPortReason(actual, spec.Port); reason != "" {
@@ -175,7 +175,7 @@ func (b *Backend) BuildDeleteVolumePlan(ctx context.Context, volumeID string) (*
 	if actual.ExportDevice != "" && actual.ExportDevice != actual.DevicePath {
 		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "nvmet namespace device path differs")), nil
 	}
-	if actual.PortLinkTarget != "" && actual.PortLinkTarget != b.cfg.subsystemPath(actual.NQN) {
+	if actual.PortLinkTarget != "" && !b.cfg.portLinkTargetMatches(actual.Port, actual.NQN, actual.PortLinkTarget) {
 		return b.withPlanMetadata(conflictPlanFromState(volumeID, actual, "nvmet port link target differs")), nil
 	}
 	if actual.PortEntryExists && actual.PortLinkTarget == "" {
