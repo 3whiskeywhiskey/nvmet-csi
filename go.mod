@@ -1,4 +1,4 @@
-module git.srvlab.io/whiskey/nvmet-csi
+module gitea.whiskey.works/whiskey-works/nvmet-csi
 
 go 1.24
 

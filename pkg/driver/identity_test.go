@@ -6,7 +6,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
 func TestGetPluginInfo(t *testing.T) {

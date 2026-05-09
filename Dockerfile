@@ -30,9 +30,9 @@ ARG BUILD_DATE=unknown
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-s -w \
-      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.version=${GIT_TAG} \
-      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.gitCommit=${GIT_COMMIT} \
-      -X git.srvlab.io/whiskey/nvmet-csi/pkg/driver.buildDate=${BUILD_DATE}" \
+      -X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.version=${GIT_TAG} \
+      -X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.gitCommit=${GIT_COMMIT} \
+      -X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.buildDate=${BUILD_DATE}" \
     -o /nvmet-csi-plugin \
     ./cmd/nvmet-csi-plugin
 

@@ -111,7 +111,7 @@ make logs-node
 
 ### Gitea Integration
 
-Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The repository is hosted at `git.srvlab.io/whiskey/nvmet-csi`.
+Use the Gitea MCP tools to interact with this repository's issues, PRs, etc. The repository is hosted at `gitea.whiskey.works/whiskey-works/nvmet-csi`.
 
 ## Architecture
 

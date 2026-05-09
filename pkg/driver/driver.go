@@ -11,16 +11,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/attachment"
-	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	linuxzolbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/linuxzol"
-	routerosbackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend/routeros"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/observability"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/reconciler"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/attachment"
+	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	linuxzolbackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend/linuxzol"
+	routerosbackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend/routeros"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/mount"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/reconciler"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 const (

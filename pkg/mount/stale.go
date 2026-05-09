@@ -7,7 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
 )
 
 // StaleReason describes why a mount is considered stale

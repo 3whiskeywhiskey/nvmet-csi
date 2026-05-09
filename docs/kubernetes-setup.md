@@ -62,7 +62,7 @@ For a quick deployment using default settings:
 
 ```bash
 # Clone the repository
-git clone https://git.srvlab.io/whiskey/nvmet-csi.git
+git clone https://gitea.whiskey.works/whiskey-works/nvmet-csi.git
 cd nvmet-csi
 
 # Edit RDS credentials and address
@@ -593,4 +593,4 @@ SSH to RDS and remove orphaned volumes:
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://git.srvlab.io/whiskey/nvmet-csi/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://gitea.whiskey.works/whiskey-works/nvmet-csi/issues).

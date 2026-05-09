@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
 )
 
 func TestBuildEnsureVolumePlanCreateAndApply(t *testing.T) {

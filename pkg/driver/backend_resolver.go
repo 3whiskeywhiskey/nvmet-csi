@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
+	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
 )
 
 type resolvedControllerBackend struct {

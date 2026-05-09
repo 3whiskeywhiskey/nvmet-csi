@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/mount"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/mount"
 )
 
 // MockMounter is a mock implementation of mount.Mounter for testing

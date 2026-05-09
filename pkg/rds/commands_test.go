@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // setupTestBasePaths configures allowed base paths for testing

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	storagebackend "git.srvlab.io/whiskey/nvmet-csi/pkg/backend"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 func TestResolveLinuxZOLPlanNQN(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/rds"
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/utils"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
 // VolumeAction is the mutation needed to bring an RDS volume to the desired state.

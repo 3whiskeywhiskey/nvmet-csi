@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.srvlab.io/whiskey/nvmet-csi/pkg/nvme"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
 )
 
 // createMockResolver creates a mock DeviceResolver for testing
