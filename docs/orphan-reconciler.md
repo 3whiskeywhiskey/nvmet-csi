@@ -2,7 +2,7 @@
 
 ## Overview
 
-The nvmet-csi driver includes an optional **Orphan Reconciler** that periodically detects and cleans up orphaned volumes - volumes that exist on the RDS storage server but have no corresponding PersistentVolume (PV) in Kubernetes.
+The nvmet-csi driver includes an optional **Orphan Reconciler** that periodically detects and cleans up orphaned volumes - volumes that exist on the RouterOS/RDS storage server but have no corresponding PersistentVolume (PV) in Kubernetes. This reconciler is RouterOS/RDS-specific; Linux ZoL/nvmet deployments should leave it disabled.
 
 ## Why Orphan Volumes Occur
 
@@ -49,7 +49,9 @@ during controller restarts, cluster recovery, or node churn. Use
 
 ## Configuration
 
-The orphan reconciler is **disabled by default** and must be explicitly enabled. Configuration options:
+The orphan reconciler is **disabled by default** and must be explicitly enabled. In the Helm chart it requires `rds.enabled=true`; active delete mode also requires `controller.orphanReconciler.confirmDelete=true`.
+
+Configuration options:
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -79,6 +81,8 @@ args:
   - "-orphan-min-confirmations=2"
   - "-orphan-dry-run=false"  # Set to false to actually delete orphans
 ```
+
+For Helm deployments, set `controller.orphanReconciler.confirmDelete=true` in the same change that sets `controller.orphanReconciler.dryRun=false`. The chart intentionally refuses to render active cleanup without that explicit acknowledgement.
 
 ### Option 2: Using kubectl patch
 
@@ -119,7 +123,7 @@ kubectl -n kube-system patch deployment nvmet-csi-controller --type='json' -p='[
 
 Once you've validated the orphan detection:
 
-1. **Enable active cleanup**: Set `-orphan-dry-run=false`
+1. **Enable active cleanup**: Set `-orphan-dry-run=false` and, when using Helm, `controller.orphanReconciler.confirmDelete=true`
 2. **Monitor closely**: Watch logs during the first few reconciliation cycles
 3. **Adjust intervals**: Tune `orphan-check-interval`, `orphan-grace-period`, and `orphan-min-confirmations` based on your workload
 

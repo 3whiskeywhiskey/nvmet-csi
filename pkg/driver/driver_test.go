@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/client-go/kubernetes/fake"
@@ -89,6 +90,45 @@ func TestNewDriver_ControllerModeWithoutRDSStillEnablesControllerService(t *test
 	}
 	if driver.cs == nil {
 		t.Fatal("controller service should be registered even when no default backend is configured")
+	}
+}
+
+func TestNewDriver_OrphanReconcilerRequiresRDSBackend(t *testing.T) {
+	config := DriverConfig{
+		DriverName:             "nvmet.csi.whiskey.works",
+		EnableController:       true,
+		K8sClient:              fake.NewSimpleClientset(),
+		EnableOrphanReconciler: true,
+		OrphanDryRun:           true,
+		OrphanMinConfirmations: 2,
+	}
+
+	_, err := NewDriver(config)
+	if err == nil {
+		t.Fatal("expected NewDriver to reject orphan reconciler without RDS backend")
+	}
+	if !strings.Contains(err.Error(), "requires RouterOS/RDS backend configuration") {
+		t.Fatalf("expected RDS backend error, got %v", err)
+	}
+}
+
+func TestNewDriver_ActiveOrphanCleanupRequiresConfirmations(t *testing.T) {
+	config := DriverConfig{
+		DriverName:             "nvmet.csi.whiskey.works",
+		EnableController:       true,
+		K8sClient:              fake.NewSimpleClientset(),
+		EnableOrphanReconciler: true,
+		RDSAddress:             "10.0.0.1",
+		OrphanDryRun:           false,
+		OrphanMinConfirmations: 1,
+	}
+
+	_, err := NewDriver(config)
+	if err == nil {
+		t.Fatal("expected NewDriver to reject active orphan cleanup with too few confirmations")
+	}
+	if !strings.Contains(err.Error(), "requires orphan min confirmations >= 2") {
+		t.Fatalf("expected min confirmations error, got %v", err)
 	}
 }
 

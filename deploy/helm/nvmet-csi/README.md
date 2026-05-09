@@ -146,11 +146,13 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `controller.orphanReconciler.runOnStart` | Run orphan inventory immediately on controller startup | `false` |
 | `controller.orphanReconciler.minConfirmations` | Consecutive inventories required before cleanup | `2` |
 | `controller.orphanReconciler.dryRun` | Dry-run mode (no actual cleanup) | `true` |
+| `controller.orphanReconciler.confirmDelete` | Required explicit confirmation when `dryRun=false` | `false` |
 | `controller.attachmentGracePeriod` | Attachment grace period for live migration | `30s` |
 | `controller.attachmentReconcileInterval` | Attachment reconciliation interval | `5m` |
 | `controller.staleVolumeAttachmentCleanup.enabled` | Enable guarded cleanup of stale `VolumeAttachment` objects for deleted nodes | `false` |
 | `controller.staleVolumeAttachmentCleanup.dryRun` | Log planned stale `VolumeAttachment` deletes without deleting | `true` |
 | `controller.staleVolumeAttachmentCleanup.minConfirmations` | Consecutive reconciliation passes required before deletion | `2` |
+| `controller.staleVolumeAttachmentCleanup.confirmDelete` | Required explicit confirmation when `dryRun=false` | `false` |
 | `controller.vmiSerialization.enabled` | Enable VMI serialization (KubeVirt) | `false` |
 | `controller.vmiSerialization.cacheTTL` | VMI cache TTL | `60s` |
 
@@ -183,6 +185,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `node.orphanCleanup.enabled` | Run startup cleanup for managed orphaned NVMe sessions | `false` |
 | `node.orphanCleanup.dryRun` | Log managed orphaned NVMe sessions without disconnecting them | `true` |
 | `node.orphanCleanup.maxDisconnects` | Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass | `4` |
+| `node.orphanCleanup.confirmDisconnect` | Required explicit confirmation when `dryRun=false` | `false` |
 | `node.resources.requests.cpu` | CPU request | `10m` |
 | `node.resources.requests.memory` | Memory request | `128Mi` |
 | `node.resources.limits.cpu` | CPU limit | `200m` |

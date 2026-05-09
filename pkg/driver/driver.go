@@ -211,6 +211,21 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		klog.Infof("Driver managing volumes with NQN prefix: %s", config.ManagedNQNPrefix)
 	}
 
+	if config.EnableOrphanReconciler {
+		if !config.EnableController {
+			return nil, fmt.Errorf("orphan reconciler requires controller mode")
+		}
+		if config.K8sClient == nil {
+			return nil, fmt.Errorf("orphan reconciler requires Kubernetes client")
+		}
+		if config.RDSAddress == "" {
+			return nil, fmt.Errorf("orphan reconciler requires RouterOS/RDS backend configuration; set RDS address or disable orphan reconciler")
+		}
+		if !config.OrphanDryRun && config.OrphanMinConfirmations < 2 {
+			return nil, fmt.Errorf("active orphan cleanup requires orphan min confirmations >= 2")
+		}
+	}
+
 	driver := &Driver{
 		name:                      config.DriverName,
 		version:                   config.Version,

@@ -126,6 +126,7 @@ controller:
     runOnStart: false
     minConfirmations: 2
     dryRun: true  # Set to false to enable actual cleanup
+    confirmDelete: false  # Required with dryRun=false
 
   # Attachment grace period for live migration handoff
   attachmentGracePeriod: 30s
@@ -139,6 +140,7 @@ controller:
     enabled: false
     dryRun: true
     minConfirmations: 2
+    confirmDelete: false  # Required with dryRun=false
 
   # VMI serialization (KubeVirt concurrent operation mitigation)
   vmiSerialization:
@@ -203,6 +205,7 @@ node:
     enabled: false
     dryRun: true
     maxDisconnects: 4
+    confirmDisconnect: false  # Required with dryRun=false
 
   # Resource requests and limits
   resources:

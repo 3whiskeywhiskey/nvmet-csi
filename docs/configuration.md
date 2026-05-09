@@ -101,6 +101,10 @@ for the first pass to audit what would be disconnected, then set
 max-disconnects flag to `0` only for a reviewed one-time remediation where
 disconnecting every detected managed orphan in one pass is acceptable.
 
+For Helm deployments, active disconnect mode also requires
+`node.orphanCleanup.confirmDisconnect=true`. The chart refuses to render
+`node.orphanCleanup.dryRun=false` without that explicit acknowledgement.
+
 ### Circuit Breaker
 
 The driver uses per-volume circuit breakers to prevent retry storms on repeatedly
@@ -139,7 +143,7 @@ This prevents runaway mount storms that can corrupt filesystems or exhaust syste
 
 ## Orphan Reconciler Settings
 
-Enable orphan volume detection and cleanup in the controller:
+Enable RouterOS/RDS orphan volume detection and cleanup in the controller:
 
 ```yaml
 args:
@@ -156,6 +160,10 @@ args:
 - **orphan-run-on-start:** Run an inventory immediately when the controller starts (default: false)
 - **orphan-min-confirmations:** Consecutive inventories required before cleanup is planned (default: 2)
 - **orphan-dry-run:** Log orphans without deleting (default: true, set false to enable cleanup)
+
+The Helm chart refuses to render this reconciler unless `rds.enabled=true`.
+Active cleanup also requires `controller.orphanReconciler.confirmDelete=true`
+alongside `controller.orphanReconciler.dryRun=false`.
 
 File orphan cleanup only plans deletes for `pvc-*.img` files with known
 timestamps older than the grace period. Manual `.img` files and unknown-age
