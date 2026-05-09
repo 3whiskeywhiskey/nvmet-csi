@@ -350,8 +350,8 @@ func TestCommandHostPlansReportCommands(t *testing.T) {
 	if plan.Action != backend.VolumeActionCreate {
 		t.Fatalf("expected create plan, got %s", plan.Action)
 	}
-	if len(plan.Commands) != 11 {
-		t.Fatalf("expected 11 create commands, got %d: %v", len(plan.Commands), plan.Commands)
+	if len(plan.Commands) != 15 {
+		t.Fatalf("expected 15 create commands, got %d: %v", len(plan.Commands), plan.Commands)
 	}
 	if plan.Commands[0] != "mkdir -p /config/nvmet/ports/4420/subsystems" {
 		t.Fatalf("unexpected first command: %q", plan.Commands[0])
@@ -645,17 +645,61 @@ func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	want := expectedPortCommands("/config/nvmet", 4420, "10.42.0.10")
 	want = append(want,
 		"zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume",
+		waitForPathCommand("/dev/zvol/tank/nvmet/pvc-test-volume", "zvol device").String(),
 		"mkdir -p /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1",
+		waitForPathCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path", "nvmet namespace device_path").String(),
+		waitForPathCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable", "nvmet namespace enable").String(),
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/attr_allow_any_host",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path",
 		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable",
+		verifyFileEqualsCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable", "1", "nvmet namespace enable").String(),
 		expectedLinkCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume", "/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume"),
 	)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected commands:\nwant=%v\n got=%v", want, got)
 	}
-	if recorder.commands[7].Stdin != "1\n" || recorder.commands[8].Stdin != spec.DevicePath+"\n" || recorder.commands[9].Stdin != "1\n" {
+	if recorder.commands[10].Stdin != "1\n" || recorder.commands[11].Stdin != spec.DevicePath+"\n" || recorder.commands[12].Stdin != "1\n" {
 		t.Fatalf("unexpected tee stdin: %+v", recorder.commands)
+	}
+}
+
+func TestCommandHostCreateVolumeRollsBackOwnedPartialState(t *testing.T) {
+	spec := VolumeSpec{
+		ID:         "pvc-test-volume",
+		Dataset:    "tank/nvmet/pvc-test-volume",
+		DevicePath: "/dev/zvol/tank/nvmet/pvc-test-volume",
+		SizeBytes:  10 << 30,
+		NQN:        "nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume",
+		Port:       4420,
+	}
+	recorder := &recordingExecutor{outputs: map[string]string{}}
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+	createCommands := host.CreateVolumeCommands(spec)
+	recorder.errs = map[string]error{
+		createCommands[12].String(): errors.New("enable disappeared"),
+	}
+
+	err = host.CreateVolume(context.Background(), spec)
+	if err == nil {
+		t.Fatal("CreateVolume() should fail when namespace enable write fails")
+	}
+	if !strings.Contains(err.Error(), "enable disappeared") {
+		t.Fatalf("expected original create error, got %v", err)
+	}
+
+	got := commandStrings(recorder.commands)
+	if len(got) != 18 {
+		t.Fatalf("expected create through failing enable plus 5 rollback commands, got %d: %v", len(got), got)
+	}
+	wantRollback := commandStrings(host.RollbackPartialCreateCommands(spec))
+	if !reflect.DeepEqual(got[len(got)-len(wantRollback):], wantRollback) {
+		t.Fatalf("unexpected rollback commands:\nwant=%v\n got=%v", wantRollback, got[len(got)-len(wantRollback):])
+	}
+	if !strings.Contains(got[len(got)-1], "refusing to rollback unowned zvol tank/nvmet/pvc-test-volume") {
+		t.Fatalf("rollback destroy command should guard ownership, got %q", got[len(got)-1])
 	}
 }
 

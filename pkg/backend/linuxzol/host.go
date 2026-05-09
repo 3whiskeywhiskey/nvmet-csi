@@ -160,7 +160,13 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 }
 
 func (h *CommandHost) CreateVolume(ctx context.Context, spec VolumeSpec) error {
-	return h.runAll(ctx, h.CreateVolumeCommands(spec))
+	if err := h.runAll(ctx, h.CreateVolumeCommands(spec)); err != nil {
+		if rollbackErr := h.runAll(ctx, h.RollbackPartialCreateCommands(spec)); rollbackErr != nil {
+			return fmt.Errorf("create volume %s failed: %w; rollback failed: %w", spec.ID, err, rollbackErr)
+		}
+		return err
+	}
+	return nil
 }
 
 func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
@@ -178,13 +184,27 @@ func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
 				spec.Dataset,
 			},
 		},
+		waitForPathCommand(spec.DevicePath, "zvol device"),
 		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
+		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", "nvmet namespace device_path"),
+		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "nvmet namespace enable"),
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
+		verifyFileEqualsCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1", "nvmet namespace enable"),
 		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
 	return commands
+}
+
+func (h *CommandHost) RollbackPartialCreateCommands(spec VolumeSpec) []Command {
+	return []Command{
+		disableIfPresentCommand(h.cfg.namespacePath(spec.NQN) + "/enable"),
+		removeSymlinkIfPresentCommand(h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
+		rmdirIfPresentCommand(h.cfg.namespacePath(spec.NQN)),
+		rmdirIfPresentCommand(h.cfg.subsystemPath(spec.NQN)),
+		destroyDatasetIfOwnedCommand(spec.Dataset, spec.ID, spec.NQN),
+	}
 }
 
 func (h *CommandHost) RepairVolume(ctx context.Context, spec VolumeSpec) error {
@@ -196,9 +216,12 @@ func (h *CommandHost) RepairVolumeCommands(spec VolumeSpec) []Command {
 	commands = append(commands, h.EnsurePortCommands(spec.Port)...)
 	commands = append(commands,
 		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
+		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", "nvmet namespace device_path"),
+		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "nvmet namespace enable"),
 		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
 		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
+		verifyFileEqualsCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1", "nvmet namespace enable"),
 		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
 	return commands
@@ -424,6 +447,32 @@ func writeCommand(path string, value string) Command {
 	}
 }
 
+func waitForPathCommand(path string, description string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"for i in $(seq 1 50); do " +
+				"if [ -e " + shellQuote(path) + " ]; then exit 0; fi; " +
+				"sleep 0.1; " +
+				"done; " +
+				"printf '%s\\n' " + shellQuote("timed out waiting for "+description+" "+path) + " >&2; exit 1",
+		},
+	}
+}
+
+func verifyFileEqualsCommand(path string, expected string, description string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"current=$(cat " + shellQuote(path) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ \"$current\" = " + shellQuote(expected) + " ]; then exit 0; fi; " +
+				"printf '%s\\n' " + shellQuote("unexpected "+description+" value at "+path) + " >&2; exit 1",
+		},
+	}
+}
+
 func writeIfEmptyOrEqualCommand(path string, value string) Command {
 	return Command{
 		Name: "sh",
@@ -481,6 +530,21 @@ func rmdirIfPresentCommand(path string) Command {
 		Args: []string{
 			"-c",
 			"if [ -d " + shellQuote(path) + " ]; then rmdir " + shellQuote(path) + "; fi",
+		},
+	}
+}
+
+func destroyDatasetIfOwnedCommand(dataset string, volumeID string, nqn string) Command {
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"if ! zfs list -H " + shellQuote(dataset) + " >/dev/null 2>&1; then exit 0; fi; " +
+				"owner=$(zfs get -H -o value " + shellQuote(zfsPropVolumeID) + " " + shellQuote(dataset) + " 2>/dev/null | tr -d '\\n' || true); " +
+				"actual_nqn=$(zfs get -H -o value " + shellQuote(zfsPropNQN) + " " + shellQuote(dataset) + " 2>/dev/null | tr -d '\\n' || true); " +
+				"if [ \"$owner\" = " + shellQuote(volumeID) + " ] && [ \"$actual_nqn\" = " + shellQuote(nqn) + " ]; then " +
+				"zfs destroy " + shellQuote(dataset) + "; " +
+				"else printf '%s\\n' " + shellQuote("refusing to rollback unowned zvol "+dataset) + " >&2; exit 1; fi",
 		},
 	}
 }
