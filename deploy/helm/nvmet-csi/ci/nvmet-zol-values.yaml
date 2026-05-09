@@ -16,7 +16,7 @@ linuxZOLPreflight:
   enabled: true
   executor: host-namespace
   zfsPool: tank/nvmet
-  targetAddress: "10.42.0.10"
+  targetAddress: "10.42.68.4"
   nvmePort: "4420"
 
 linuxZOLPlan:
@@ -24,7 +24,7 @@ linuxZOLPlan:
   action: ensure
   executor: host-namespace
   zfsPool: tank/nvmet
-  targetAddress: "10.42.0.10"
+  targetAddress: "10.42.68.4"
   nvmePort: "4420"
   volumeID: pvc-11111111-1111-1111-1111-111111111111
   sizeBytes: 1073741824
@@ -36,8 +36,8 @@ storageClasses:
     backend: linux-zol-nvmet
     executor: host-namespace
     zfsPool: tank/nvmet
-    targetAddress: "10.42.0.10"
-    nvmeAddress: "10.42.0.10"
+    targetAddress: "10.42.68.4"
+    nvmeAddress: "10.42.68.4"
     fsType: ext4
     nvmePort: "4420"
     volumeBindingMode: WaitForFirstConsumer
