@@ -389,6 +389,7 @@ verify-helm:
 	grep -q -- "-linux-zol-preflight-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-target-address=10.42.68.4" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight-min-mtu=9000" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "app.kubernetes.io/component: linux-zol-plan" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-action=ensure" /tmp/nvmet-zol-helm.yaml

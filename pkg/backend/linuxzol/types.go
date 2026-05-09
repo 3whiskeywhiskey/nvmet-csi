@@ -28,6 +28,7 @@ type Config struct {
 	Address      string
 	DeviceRoot   string
 	ConfigFSRoot string
+	MinMTU       int
 }
 
 func (c Config) withDefaults() Config {

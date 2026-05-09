@@ -55,6 +55,9 @@ spec:
             - "-linux-zol-preflight-zfs-pool={{ required "linuxZOLPreflight.zfsPool is required when linuxZOLPreflight.enabled=true" .Values.linuxZOLPreflight.zfsPool }}"
             - "-linux-zol-preflight-target-address={{ required "linuxZOLPreflight.targetAddress is required when linuxZOLPreflight.enabled=true" .Values.linuxZOLPreflight.targetAddress }}"
             - "-linux-zol-preflight-nvme-port={{ .Values.linuxZOLPreflight.nvmePort }}"
+            {{- if gt (int .Values.linuxZOLPreflight.minMTU) 0 }}
+            - "-linux-zol-preflight-min-mtu={{ .Values.linuxZOLPreflight.minMTU }}"
+            {{- end }}
             {{- if .Values.linuxZOLPreflight.sshTarget }}
             - "-linux-zol-preflight-ssh-target={{ .Values.linuxZOLPreflight.sshTarget }}"
             {{- end }}

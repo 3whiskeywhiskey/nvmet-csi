@@ -165,6 +165,7 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `linuxZOLPreflight.zfsPool` | ZFS pool or dataset to validate | `""` |
 | `linuxZOLPreflight.targetAddress` | NVMe/TCP target address to validate; must be assigned on the target host | `""` |
 | `linuxZOLPreflight.nvmePort` | NVMe/TCP port to validate | `4420` |
+| `linuxZOLPreflight.minMTU` | Optional minimum MTU required on the target-address interface | `0` |
 | `linuxZOLPreflight.sshTarget` | SSH target for `executor=ssh` | `""` |
 | `linuxZOLPlan.enabled` | Render a read-only ZoL/nvmet dry-run plan Job | `false` |
 | `linuxZOLPlan.action` | Plan action: `ensure` or `delete` | `ensure` |

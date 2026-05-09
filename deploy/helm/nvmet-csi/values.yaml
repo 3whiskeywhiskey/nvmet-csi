@@ -157,6 +157,9 @@ linuxZOLPreflight:
   zfsPool: ""
   targetAddress: ""
   nvmePort: "4420"
+  # Optional minimum MTU for the interface that owns targetAddress. Set this
+  # to 9000 for jumbo-frame storage VLANs.
+  minMTU: 0
   sshTarget: ""
   deviceRoot: ""
   configFSRoot: ""
