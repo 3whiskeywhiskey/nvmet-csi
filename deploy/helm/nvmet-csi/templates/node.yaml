@@ -1,3 +1,6 @@
+{{- if and .Values.node.orphanCleanup.enabled (not .Values.node.orphanCleanup.dryRun) (not .Values.node.orphanCleanup.confirmDisconnect) -}}
+{{- fail "node.orphanCleanup.confirmDisconnect must be true when active node orphan cleanup is enabled with dryRun=false" -}}
+{{- end -}}
 ---
 # Node DaemonSet - runs on all worker nodes
 apiVersion: apps/v1

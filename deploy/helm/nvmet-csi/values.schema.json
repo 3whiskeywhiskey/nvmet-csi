@@ -135,6 +135,41 @@
             }
           }
         },
+        "orphanReconciler": {
+          "type": "object",
+          "description": "RouterOS/RDS-specific orphaned volume inventory and cleanup",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable RouterOS/RDS orphaned volume detection and cleanup"
+            },
+            "checkInterval": {
+              "type": "string",
+              "description": "Interval between orphan inventory passes"
+            },
+            "gracePeriod": {
+              "type": "string",
+              "description": "Minimum orphan age before it can be cleaned up"
+            },
+            "runOnStart": {
+              "type": "boolean",
+              "description": "Run orphan inventory immediately on controller startup"
+            },
+            "minConfirmations": {
+              "type": "integer",
+              "description": "Consecutive inventories required before cleanup",
+              "minimum": 1
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Log orphan cleanup actions without deleting"
+            },
+            "confirmDelete": {
+              "type": "boolean",
+              "description": "Explicit confirmation required by the chart when dryRun=false"
+            }
+          }
+        },
         "staleVolumeAttachmentCleanup": {
           "type": "object",
           "description": "Guarded cleanup of stale Kubernetes VolumeAttachment objects for deleted nodes",
@@ -151,6 +186,10 @@
               "type": "integer",
               "description": "Consecutive reconciliation passes required before deleting a stale VolumeAttachment",
               "minimum": 1
+            },
+            "confirmDelete": {
+              "type": "boolean",
+              "description": "Explicit confirmation required by the chart when dryRun=false"
             }
           }
         }
@@ -325,6 +364,29 @@
         "priorityClassName": {
           "type": "string",
           "description": "Priority class for node plugin pods"
+        },
+        "orphanCleanup": {
+          "type": "object",
+          "description": "Startup cleanup for managed orphaned NVMe sessions",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable node startup orphan NVMe session cleanup"
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Log managed orphaned NVMe sessions without disconnecting them"
+            },
+            "maxDisconnects": {
+              "type": "integer",
+              "description": "Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass",
+              "minimum": 1
+            },
+            "confirmDisconnect": {
+              "type": "boolean",
+              "description": "Explicit confirmation required by the chart when dryRun=false"
+            }
+          }
         },
         "affinity": {
           "type": "object",

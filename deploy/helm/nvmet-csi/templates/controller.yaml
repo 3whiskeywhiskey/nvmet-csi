@@ -1,3 +1,12 @@
+{{- if and .Values.controller.orphanReconciler.enabled (not .Values.rds.enabled) -}}
+{{- fail "controller.orphanReconciler requires rds.enabled=true because it is RouterOS/RDS-specific" -}}
+{{- end -}}
+{{- if and .Values.controller.orphanReconciler.enabled (not .Values.controller.orphanReconciler.dryRun) (not .Values.controller.orphanReconciler.confirmDelete) -}}
+{{- fail "controller.orphanReconciler.confirmDelete must be true when active orphan cleanup is enabled with dryRun=false" -}}
+{{- end -}}
+{{- if and .Values.controller.staleVolumeAttachmentCleanup.enabled (not .Values.controller.staleVolumeAttachmentCleanup.dryRun) (not .Values.controller.staleVolumeAttachmentCleanup.confirmDelete) -}}
+{{- fail "controller.staleVolumeAttachmentCleanup.confirmDelete must be true when active stale VolumeAttachment cleanup is enabled with dryRun=false" -}}
+{{- end -}}
 ---
 # Controller Deployment
 apiVersion: apps/v1

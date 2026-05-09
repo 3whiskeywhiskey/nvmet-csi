@@ -353,6 +353,7 @@ verify-helm:
 	helm template nvmet-csi deploy/helm/nvmet-csi --namespace nvmet-csi \
 		--set node.orphanCleanup.enabled=true \
 		--set node.orphanCleanup.dryRun=false \
+		--set node.orphanCleanup.confirmDisconnect=true \
 		--set node.orphanCleanup.maxDisconnects=2 > /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
 	grep -q -- "-node-orphan-cleanup" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
 	grep -q -- "-node-orphan-cleanup-dry-run=false" /tmp/nvmet-csi-helm-node-orphan-cleanup.yaml
