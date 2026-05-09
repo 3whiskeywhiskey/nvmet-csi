@@ -19,6 +19,8 @@ type hostCommandPlanner interface {
 	ResizeVolumeCommands(volumeID string, sizeBytes int64) []Command
 }
 
+const createFailureRepairLimit = 4
+
 func New(cfg Config, host Host) (*Backend, error) {
 	cfg = cfg.withDefaults()
 	if err := cfg.validate(); err != nil {
@@ -221,7 +223,9 @@ func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan,
 			return result, nil
 		}
 		if err := b.host.CreateVolume(ctx, spec); err != nil {
-			return nil, err
+			if repairErr := b.repairCreateFailure(ctx, spec, plan, err); repairErr != nil {
+				return nil, repairErr
+			}
 		}
 	case backend.VolumeActionResize:
 		spec, err := b.specFromPlan(plan)
@@ -258,6 +262,51 @@ func (b *Backend) ApplyVolumePlan(ctx context.Context, plan *backend.VolumePlan,
 
 	result.Applied = true
 	return result, nil
+}
+
+func (b *Backend) repairCreateFailure(ctx context.Context, spec VolumeSpec, originalPlan *backend.VolumePlan, createErr error) error {
+	params := map[string]string(nil)
+	if originalPlan != nil && originalPlan.Desired != nil {
+		params = originalPlan.Desired.Parameters
+	}
+	desired := requestFromSpec(spec, params)
+
+	var lastPlan *backend.VolumePlan
+	for attempt := 0; attempt < createFailureRepairLimit; attempt++ {
+		if err := ctxErr(ctx); err != nil {
+			return err
+		}
+
+		plan, err := b.BuildEnsureVolumePlan(ctx, desired)
+		if err != nil {
+			return fmt.Errorf("create volume %s failed: %w; failed to observe partial state for repair: %w", spec.ID, createErr, err)
+		}
+		lastPlan = plan
+
+		switch plan.Action {
+		case backend.VolumeActionNoop:
+			return nil
+		case backend.VolumeActionCreate:
+			return createErr
+		case backend.VolumeActionRepair:
+			if err := b.host.RepairVolume(ctx, spec); err != nil {
+				return fmt.Errorf("create volume %s failed: %w; repair after partial create failed: %w", spec.ID, createErr, err)
+			}
+		case backend.VolumeActionResize:
+			if err := b.host.ResizeVolume(ctx, spec.ID, spec.SizeBytes); err != nil {
+				return fmt.Errorf("create volume %s failed: %w; resize while repairing partial create failed: %w", spec.ID, createErr, err)
+			}
+		case backend.VolumeActionConflict:
+			return fmt.Errorf("create volume %s failed: %w; partial state is unsafe to repair: %s", spec.ID, createErr, plan.Reason)
+		default:
+			return fmt.Errorf("create volume %s failed: %w; unexpected repair plan action %q", spec.ID, createErr, plan.Action)
+		}
+	}
+
+	if lastPlan == nil {
+		return createErr
+	}
+	return fmt.Errorf("create volume %s failed: %w; repair did not converge after %d attempts (last action=%s reason=%q)", spec.ID, createErr, createFailureRepairLimit, lastPlan.Action, lastPlan.Reason)
 }
 
 func (b *Backend) GetVolume(ctx context.Context, volumeID string) (*backend.Volume, error) {
