@@ -17,6 +17,13 @@
 
     sourceRepository = "https://gitea.whiskey.works/whiskey-works/nvmet-csi";
     goModuleVendorHash = "sha256-G0oe2n5AJav/uvuqsEe/BCWmXhB25IS91uYEzLk/8Ic=";
+    driverVersion = "0.10.0";
+    gitCommit = self.rev or self.dirtyRev or self.shortRev or self.dirtyShortRev or "unknown";
+    rawBuildDate = self.lastModifiedDate or "unknown";
+    buildDate =
+      if builtins.stringLength rawBuildDate >= 14
+      then "${builtins.substring 0 4 rawBuildDate}-${builtins.substring 4 2 rawBuildDate}-${builtins.substring 6 2 rawBuildDate}T${builtins.substring 8 2 rawBuildDate}:${builtins.substring 10 2 rawBuildDate}:${builtins.substring 12 2 rawBuildDate}Z"
+      else rawBuildDate;
 
     mkPkgs = system: import nixpkgs {inherit system;};
   in {
@@ -25,16 +32,16 @@
 
       nvmetCSI = pkgs.buildGoModule {
         pname = "nvmet-csi";
-        version = "0.10.0";
+        version = driverVersion;
         src = self;
         subPackages = ["cmd/nvmet-csi-plugin"];
         vendorHash = goModuleVendorHash;
         ldflags = [
           "-s"
           "-w"
-          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.version=0.10.0"
-          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.gitCommit=nix"
-          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.buildDate=nix"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.version=${driverVersion}"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.gitCommit=${gitCommit}"
+          "-X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.buildDate=${buildDate}"
         ];
       };
 
@@ -70,6 +77,9 @@
             "org.opencontainers.image.source" = sourceRepository;
             "org.opencontainers.image.description" = "CSI driver for NVMe/TCP targets backed by Linux nvmet or RouterOS/RDS";
             "org.opencontainers.image.licenses" = "Apache-2.0";
+            "org.opencontainers.image.version" = driverVersion;
+            "org.opencontainers.image.revision" = gitCommit;
+            "org.opencontainers.image.created" = buildDate;
           };
         };
       };
