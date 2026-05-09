@@ -985,6 +985,7 @@ func TestCommandHostPreflightAllowsAbsentPort(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
+			"ip -j addr show":                `[{"ifname":"v68","addr_info":[{"local":"10.42.0.10"}]}]`,
 		},
 		errs: map[string]error{
 			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
@@ -1008,6 +1009,7 @@ func TestCommandHostPreflightFailsMismatchedPortAttribute(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet":                       "tank/nvmet\n",
+			"ip -j addr show":                                      `[{"ifname":"v68","addr_info":[{"local":"10.42.0.10"}]}]`,
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_trtype":  "tcp\n",
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_adrfam":  "ipv4\n",
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_traddr":  "10.42.0.99\n",
@@ -1034,6 +1036,39 @@ func TestCommandHostPreflightFailsMismatchedPortAttribute(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("missing addr_traddr check: %+v", checks)
+	}
+}
+
+func TestCommandHostPreflightFailsMissingTargetAddress(t *testing.T) {
+	recorder := &recordingExecutor{
+		outputs: map[string]string{
+			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
+			"ip -j addr show":                `[{"ifname":"v67","addr_info":[{"local":"10.42.67.4"}]}]`,
+		},
+		errs: map[string]error{
+			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
+		},
+	}
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.68.4"}, recorder)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+
+	checks := host.Preflight(context.Background(), 4420)
+	if PreflightChecksOK(checks) {
+		t.Fatalf("expected preflight to fail, got %+v", checks)
+	}
+	found := false
+	for _, check := range checks {
+		if check.Name == "target address" {
+			found = true
+			if check.OK || !strings.Contains(check.Detail, "10.42.68.4 is not assigned") {
+				t.Fatalf("unexpected target address check: %+v", check)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("missing target address check: %+v", checks)
 	}
 }
 

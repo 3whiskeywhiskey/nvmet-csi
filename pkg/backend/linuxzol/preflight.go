@@ -2,7 +2,9 @@ package linuxzol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -29,6 +31,7 @@ func (h *CommandHost) Preflight(ctx context.Context, port int) []PreflightCheck 
 		}),
 		h.checkCommand(ctx, "nvmet configfs", Command{Name: "test", Args: []string{"-d", h.cfg.ConfigFSRoot}}, nil),
 		h.checkCommand(ctx, "zvol device root", Command{Name: "test", Args: []string{"-d", h.cfg.DeviceRoot}}, nil),
+		h.checkCommand(ctx, "target address", Command{Name: "ip", Args: []string{"-j", "addr", "show"}}, targetAddressPresent(h.cfg.Address)),
 	}
 
 	checks = append(checks, h.preflightPortChecks(ctx, port)...)
@@ -100,4 +103,32 @@ func PreflightChecksOK(checks []PreflightCheck) bool {
 		}
 	}
 	return true
+}
+
+func targetAddressPresent(address string) func(string) (bool, string) {
+	return func(out string) (bool, string) {
+		want := net.ParseIP(strings.TrimSpace(address))
+		if want == nil {
+			return false, fmt.Sprintf("target address %q is not a valid IP address", address)
+		}
+
+		var links []struct {
+			IfName   string `json:"ifname"`
+			AddrInfo []struct {
+				Local string `json:"local"`
+			} `json:"addr_info"`
+		}
+		if err := json.Unmarshal([]byte(out), &links); err != nil {
+			return false, fmt.Sprintf("failed to parse ip address inventory: %v", err)
+		}
+
+		for _, link := range links {
+			for _, addr := range link.AddrInfo {
+				if got := net.ParseIP(addr.Local); got != nil && got.Equal(want) {
+					return true, fmt.Sprintf("target address %s exists on interface %s", address, link.IfName)
+				}
+			}
+		}
+		return false, fmt.Sprintf("target address %s is not assigned on this host", address)
+	}
 }
