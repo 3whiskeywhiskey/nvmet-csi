@@ -279,7 +279,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		}
 
 		driver.rdsClient = rdsClient
-		driver.backend = routerosbackend.New(rdsClient)
+		driver.setDefaultControllerBackend(routerosbackend.New(rdsClient))
 		klog.Infof("Connected to RDS at %s:%d", config.RDSAddress, config.RDSPort)
 	} else if config.EnableController {
 		klog.Info("RouterOS/RDS backend not initialized (no RDS address configured)")
@@ -742,9 +742,9 @@ func (d *Driver) ShutdownWithContext(ctx context.Context) error {
 func (d *Driver) SetRDSClient(client rds.RDSClient) {
 	d.rdsClient = client
 	if client != nil {
-		d.backend = routerosbackend.New(client)
+		d.setDefaultControllerBackend(routerosbackend.New(client))
 	} else {
-		d.backend = nil
+		d.setDefaultControllerBackend(nil)
 	}
 }
 
@@ -752,14 +752,26 @@ func (d *Driver) controllerBackend() storagebackend.Backend {
 	if d == nil {
 		return nil
 	}
-	if d.backend != nil {
-		return d.backend
+	return d.backend
+}
+
+func (d *Driver) setDefaultControllerBackend(backend storagebackend.Backend) {
+	if d == nil {
+		return
 	}
-	if d.rdsClient != nil {
-		d.backend = routerosbackend.New(d.rdsClient)
-		return d.backend
+	d.backend = backend
+	key := DefaultBackendSelection().cacheKey()
+
+	d.backendsMu.Lock()
+	defer d.backendsMu.Unlock()
+	if d.backends == nil {
+		d.backends = map[string]storagebackend.Backend{}
 	}
-	return nil
+	if backend == nil {
+		delete(d.backends, key)
+		return
+	}
+	d.backends[key] = backend
 }
 
 func (d *Driver) newBackendForSelection(selection BackendSelection) (storagebackend.Backend, error) {
