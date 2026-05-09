@@ -149,7 +149,8 @@ controller:
 
 # Optional read-only Linux ZoL/nvmet host preflight. This renders a Job that
 # runs before PVC validation to confirm the target ZFS pool, configfs path,
-# zvol device root, and nvmet port attributes without creating volumes.
+# zvol device root, advertised target address, and nvmet port attributes
+# without creating volumes.
 linuxZOLPreflight:
   enabled: false
   executor: host-namespace
