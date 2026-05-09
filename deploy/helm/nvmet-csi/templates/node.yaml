@@ -70,6 +70,8 @@ spec:
             {{- end }}
             {{- if .Values.monitoring.enabled }}
             - "-metrics-address=:{{ .Values.monitoring.port }}"
+            {{- else }}
+            - "-metrics-address="
             {{- end }}
           env:
             - name: CSI_ENDPOINT
