@@ -93,6 +93,7 @@ var (
 	linuxZOLPreflightZFSPool      = flag.String("linux-zol-preflight-zfs-pool", "", "ZFS pool/dataset for Linux ZoL preflight")
 	linuxZOLPreflightTarget       = flag.String("linux-zol-preflight-target-address", "", "NVMe/TCP target address for Linux ZoL preflight")
 	linuxZOLPreflightPort         = flag.Int("linux-zol-preflight-nvme-port", 4420, "NVMe/TCP port for Linux ZoL preflight")
+	linuxZOLPreflightMinMTU       = flag.Int("linux-zol-preflight-min-mtu", 0, "Minimum MTU required on the target-address interface for Linux ZoL preflight (0 disables)")
 	linuxZOLPreflightSSHTarget    = flag.String("linux-zol-preflight-ssh-target", "", "SSH target for Linux ZoL preflight when executor=ssh")
 	linuxZOLPreflightDeviceRoot   = flag.String("linux-zol-preflight-device-root", "", "Device root for Linux ZoL preflight")
 	linuxZOLPreflightConfigFSRoot = flag.String("linux-zol-preflight-configfs-root", "", "ConfigFS root for Linux ZoL preflight")
@@ -325,6 +326,9 @@ func runLinuxZOLPreflight(ctx context.Context) error {
 	if *linuxZOLPreflightPort <= 0 {
 		return fmt.Errorf("--linux-zol-preflight-nvme-port must be positive")
 	}
+	if *linuxZOLPreflightMinMTU < 0 {
+		return fmt.Errorf("--linux-zol-preflight-min-mtu must be non-negative")
+	}
 
 	host, err := linuxzolbackend.NewCommandHostFromOptions(linuxzolbackend.CommandBackendOptions{
 		Config: linuxzolbackend.Config{
@@ -332,6 +336,7 @@ func runLinuxZOLPreflight(ctx context.Context) error {
 			Address:      *linuxZOLPreflightTarget,
 			DeviceRoot:   *linuxZOLPreflightDeviceRoot,
 			ConfigFSRoot: *linuxZOLPreflightConfigFSRoot,
+			MinMTU:       *linuxZOLPreflightMinMTU,
 		},
 		Executor:  *linuxZOLPreflightExecutor,
 		SSHTarget: *linuxZOLPreflightSSHTarget,

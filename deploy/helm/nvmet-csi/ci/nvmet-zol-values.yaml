@@ -18,6 +18,7 @@ linuxZOLPreflight:
   zfsPool: tank/nvmet
   targetAddress: "10.42.68.4"
   nvmePort: "4420"
+  minMTU: 9000
 
 linuxZOLPlan:
   enabled: true

@@ -220,6 +220,11 @@
           "type": "string",
           "description": "NVMe/TCP port to validate"
         },
+        "minMTU": {
+          "type": "integer",
+          "description": "Optional minimum MTU required on the interface that owns targetAddress",
+          "minimum": 0
+        },
         "sshTarget": {
           "type": "string",
           "description": "SSH target for executor=ssh"
