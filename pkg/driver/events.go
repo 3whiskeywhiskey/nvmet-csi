@@ -338,6 +338,10 @@ func (ep *EventPoster) PostVolumeDetached(ctx context.Context, pvcNamespace, pvc
 		klog.Warningf("Failed to get PVC %s/%s for volume detached event: %v", pvcNamespace, pvcName, err)
 		return nil
 	}
+	if pvc.DeletionTimestamp != nil {
+		klog.V(4).Infof("Skipping volume detached event for deleting PVC %s/%s", pvcNamespace, pvcName)
+		return nil
+	}
 
 	eventMessage := fmt.Sprintf("[%s]: Detached from node %s", volumeID, nodeID)
 	ep.recorder.Event(pvc, corev1.EventTypeNormal, EventReasonVolumeDetached, eventMessage)
