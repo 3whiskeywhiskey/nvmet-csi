@@ -9,7 +9,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 // TestNewEventPoster_CreatesRecorder tests EventPoster creation
@@ -453,6 +455,35 @@ func TestEventSinkAdapter_DefaultNamespace(t *testing.T) {
 	}
 
 	t.Logf("Successfully defaulted to namespace: %s", created.Namespace)
+}
+
+func TestPostVolumeDetached_SkipsDeletingPVC(t *testing.T) {
+	now := metav1.Now()
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "deleting-pvc",
+			Namespace:         "test-ns",
+			UID:               "deleting-pvc-uid",
+			DeletionTimestamp: &now,
+		},
+	}
+	fakeClient := fake.NewSimpleClientset(pvc)
+
+	eventCreated := false
+	fakeClient.PrependReactor("create", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		eventCreated = true
+		return false, nil, nil
+	})
+
+	poster := NewEventPoster(fakeClient)
+	if err := poster.PostVolumeDetached(context.Background(), "test-ns", "deleting-pvc", "pvc-123", "node-1"); err != nil {
+		t.Fatalf("PostVolumeDetached failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if eventCreated {
+		t.Fatal("expected no Kubernetes Event create for deleting PVC")
+	}
 }
 
 // TestPostEvents_DifferentNamespaces tests posting events to different namespaces
