@@ -28,6 +28,39 @@ Live hardware is required for kernel/configfs behavior, kubelet mount behavior,
 NVMe/TCP sessions, Cilium/routing interactions, and RouterOS crash-correlation
 evidence.
 
+## Current Live ZoL Baseline
+
+As of 2026-05-10, the metal cluster has `nvmet-csi` deployed side-by-side with
+`rds-csi` and serving the explicit `nvmet-zol-r740xd` StorageClass.
+
+Validated live state:
+
+- deployed image:
+  `gitea.whiskey.works/whiskey-works/nvmet-csi:dev-20260510-012501-3ea331d`;
+- Flux source commit for that image: `0bcfa0d` in `~/code/flux-repo`;
+- controller and node image `pullPolicy` remains `IfNotPresent`;
+- controller is pinned to the r740xd storage host;
+- ZoL target address is `10.42.68.4` on the v68 jumbo-frame storage VLAN;
+- no RDS reboot, RouterOS mutation, or Kubernetes node mount surgery was used
+  during ZoL validation;
+- no `nvmet.csi.whiskey.works` `VolumeAttachment` objects remained after each
+  disposable test namespace was deleted.
+
+Completed live ZoL checks:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Single PVC smoke | Passed | Disposable pod mounted, wrote, read, and cleaned up. |
+| Controller restart while mounted | Passed | Attachment state rebuilt from `VolumeAttachment`; workload stayed usable. |
+| Namespace termination cleanup | Passed | Detach event skipped while namespace was terminating; no rejected Event spam. |
+| Missing PVC detach event | Passed | Detach event skipped when PVC was already gone; no warning log. |
+| Three-volume concurrent attach/delete | Passed | Three 1Gi PVCs mounted on `r640-2`, then namespace deletion removed all PVs and `VolumeAttachment` objects. |
+| Node plugin restart while mounted | Passed | Restarted the `r640-2` node DaemonSet pod; workload read old data and wrote new data afterward. |
+
+Do not treat this as RDS validation. It proves the ZoL path is behaving calmly
+under basic attach/delete and component-restart churn, and it gives a baseline
+before moving workloads.
+
 ## Side-by-Side Install Shape
 
 Install `nvmet-csi` as a distinct CSI driver from the current RDS deployment.
@@ -145,6 +178,19 @@ Run churn only against disposable ZoL-backed workloads:
 Record per-minute mutation counts, plan actions, attach/detach latency, stale
 attachment count, and nvmet session count. The expected result is a small,
 bounded number of mutations with no delete/recreate storm.
+
+Live phase-3 status:
+
+- controller restart while mounted: passed;
+- node plugin restart while mounted: passed;
+- three-volume concurrent attach/delete: passed;
+- namespace termination cleanup: passed;
+- consumer-node drain: not yet run;
+- KubeVirt VM respin or migration on ZoL: not yet run.
+
+Run consumer-node drain only after checking that the selected node has no
+unrelated critical work that would make the test noisy. This remains a
+cluster-disruptive test, even though it does not touch RDS.
 
 ### Phase 4: RDS Compatibility Preflight
 

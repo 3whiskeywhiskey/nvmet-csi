@@ -168,6 +168,42 @@ Expected result:
 - unrelated zvols, subsystems, and sessions remain untouched;
 - no RDS logs or RouterOS objects change.
 
+## Restart And Churn Smokes
+
+After the single PVC smoke passes, run these only with disposable namespaces and
+the `nvmet-zol-r740xd` StorageClass.
+
+Controller restart:
+
+1. Create a one-PVC smoke pod and verify it can read/write.
+2. Delete the `nvmet-csi-controller` pod.
+3. Wait for the Deployment rollout.
+4. Verify the workload can still read the existing file and write a new file.
+5. Delete the namespace and confirm the PV and `nvmet.csi.whiskey.works`
+   `VolumeAttachment` disappear.
+
+Expected controller logs include state rebuild from `VolumeAttachment` objects
+and `Attachment reconciliation complete: no stale attachments`.
+
+Node plugin restart:
+
+1. Create a one-PVC smoke pod and note the node where it is running.
+2. Delete only the nvmet-csi node DaemonSet pod on that node.
+3. Wait for the DaemonSet rollout.
+4. Verify the workload can still read the existing file and write a new file.
+5. Delete the namespace and confirm cleanup converges.
+
+Small concurrent attach/delete:
+
+1. Create three 1Gi PVCs and three pods in a disposable namespace.
+2. Verify all pods read back their own probe files.
+3. Confirm three `nvmet.csi.whiskey.works` `VolumeAttachment` objects exist.
+4. Delete the namespace as a unit.
+5. Confirm all three PVs and all three `VolumeAttachment` objects disappear.
+
+As of 2026-05-10, all three smokes passed in the metal cluster on image
+`dev-20260510-012501-3ea331d`.
+
 ## Stop Conditions
 
 Stop after the first failure and preserve logs if any of these occur:
