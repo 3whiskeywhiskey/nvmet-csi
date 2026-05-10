@@ -60,6 +60,11 @@ rules:
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
 
+  # Access to Namespaces (to suppress PVC events while a namespace is terminating)
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+
   # Access to Events (for logging)
   - apiGroups: [""]
     resources: ["events"]

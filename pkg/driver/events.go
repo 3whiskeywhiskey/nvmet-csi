@@ -338,8 +338,7 @@ func (ep *EventPoster) PostVolumeDetached(ctx context.Context, pvcNamespace, pvc
 		klog.Warningf("Failed to get PVC %s/%s for volume detached event: %v", pvcNamespace, pvcName, err)
 		return nil
 	}
-	if pvc.DeletionTimestamp != nil {
-		klog.V(4).Infof("Skipping volume detached event for deleting PVC %s/%s", pvcNamespace, pvcName)
+	if ep.shouldSkipPVCEvent(ctx, pvcNamespace, pvcName, EventReasonVolumeDetached, pvc) {
 		return nil
 	}
 
@@ -352,6 +351,25 @@ func (ep *EventPoster) PostVolumeDetached(ctx context.Context, pvcNamespace, pvc
 
 	klog.V(2).Infof("Posted volume detached event to PVC %s/%s: %s", pvcNamespace, pvcName, eventMessage)
 	return nil
+}
+
+func (ep *EventPoster) shouldSkipPVCEvent(ctx context.Context, pvcNamespace, pvcName, reason string, pvc *corev1.PersistentVolumeClaim) bool {
+	if pvc.DeletionTimestamp != nil {
+		klog.V(4).Infof("Skipping %s event for deleting PVC %s/%s", reason, pvcNamespace, pvcName)
+		return true
+	}
+
+	namespace, err := ep.clientset.CoreV1().Namespaces().Get(ctx, pvcNamespace, metav1.GetOptions{})
+	if err != nil {
+		klog.V(4).Infof("Could not inspect namespace %s before posting %s event for PVC %s/%s: %v", pvcNamespace, reason, pvcNamespace, pvcName, err)
+		return false
+	}
+	if namespace.Status.Phase == corev1.NamespaceTerminating {
+		klog.V(4).Infof("Skipping %s event for PVC %s/%s because namespace is terminating", reason, pvcNamespace, pvcName)
+		return true
+	}
+
+	return false
 }
 
 // PostStaleAttachmentCleared posts a Normal event when a stale attachment is cleared by reconciler.

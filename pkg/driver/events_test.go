@@ -486,6 +486,41 @@ func TestPostVolumeDetached_SkipsDeletingPVC(t *testing.T) {
 	}
 }
 
+func TestPostVolumeDetached_SkipsTerminatingNamespace(t *testing.T) {
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pvc",
+			Namespace: "terminating-ns",
+			UID:       "test-pvc-uid",
+		},
+	}
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "terminating-ns",
+		},
+		Status: corev1.NamespaceStatus{
+			Phase: corev1.NamespaceTerminating,
+		},
+	}
+	fakeClient := fake.NewSimpleClientset(namespace, pvc)
+
+	eventCreated := false
+	fakeClient.PrependReactor("create", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		eventCreated = true
+		return false, nil, nil
+	})
+
+	poster := NewEventPoster(fakeClient)
+	if err := poster.PostVolumeDetached(context.Background(), "terminating-ns", "test-pvc", "pvc-123", "node-1"); err != nil {
+		t.Fatalf("PostVolumeDetached failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if eventCreated {
+		t.Fatal("expected no Kubernetes Event create for terminating namespace")
+	}
+}
+
 // TestPostEvents_DifferentNamespaces tests posting events to different namespaces
 func TestPostEvents_DifferentNamespaces(t *testing.T) {
 	// Create PVCs in different namespaces
