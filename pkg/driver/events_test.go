@@ -521,6 +521,26 @@ func TestPostVolumeDetached_SkipsTerminatingNamespace(t *testing.T) {
 	}
 }
 
+func TestPostVolumeDetached_SkipsMissingPVC(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset()
+
+	eventCreated := false
+	fakeClient.PrependReactor("create", "events", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		eventCreated = true
+		return false, nil, nil
+	})
+
+	poster := NewEventPoster(fakeClient)
+	if err := poster.PostVolumeDetached(context.Background(), "missing-ns", "missing-pvc", "pvc-123", "node-1"); err != nil {
+		t.Fatalf("PostVolumeDetached failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if eventCreated {
+		t.Fatal("expected no Kubernetes Event create for missing PVC")
+	}
+}
+
 // TestPostEvents_DifferentNamespaces tests posting events to different namespaces
 func TestPostEvents_DifferentNamespaces(t *testing.T) {
 	// Create PVCs in different namespaces
