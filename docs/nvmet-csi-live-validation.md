@@ -28,6 +28,12 @@ Live hardware is required for kernel/configfs behavior, kubelet mount behavior,
 NVMe/TCP sessions, Cilium/routing interactions, and RouterOS crash-correlation
 evidence.
 
+For the workload migration and `rds-csi` removal sequence, see
+[`rds-csi-retirement-migration.md`](rds-csi-retirement-migration.md). The
+retirement plan intentionally moves all workloads off the legacy driver before
+any node-roll stress test, then treats RDS reintroduction through `nvmet-csi` as
+a later phase.
+
 ## Current Live ZoL Baseline
 
 As of 2026-05-10, the metal cluster has `nvmet-csi` deployed side-by-side with
