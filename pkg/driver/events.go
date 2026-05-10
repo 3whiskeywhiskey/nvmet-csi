@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -335,6 +336,10 @@ func (ep *EventPoster) PostVolumeAttached(ctx context.Context, pvcNamespace, pvc
 func (ep *EventPoster) PostVolumeDetached(ctx context.Context, pvcNamespace, pvcName, volumeID, nodeID string) error {
 	pvc, err := ep.clientset.CoreV1().PersistentVolumeClaims(pvcNamespace).Get(ctx, pvcName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(4).Infof("Skipping %s event for missing PVC %s/%s", EventReasonVolumeDetached, pvcNamespace, pvcName)
+			return nil
+		}
 		klog.Warningf("Failed to get PVC %s/%s for volume detached event: %v", pvcNamespace, pvcName, err)
 		return nil
 	}
