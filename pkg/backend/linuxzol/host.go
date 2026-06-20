@@ -479,8 +479,8 @@ func writeIfEmptyOrEqualCommand(path string, value string) Command {
 		Args: []string{
 			"-c",
 			"current=$(cat " + shellQuote(path) + " 2>/dev/null | tr -d '\\n'); " +
-				"if [ -z \"$current\" ] || [ \"$current\" = " + shellQuote(value) + " ]; then " +
-				"printf '%s\\n' " + shellQuote(value) + " > " + shellQuote(path) + "; " +
+				"if [ \"$current\" = " + shellQuote(value) + " ]; then exit 0; fi; " +
+				"if [ -z \"$current\" ]; then printf '%s\\n' " + shellQuote(value) + " > " + shellQuote(path) + "; " +
 				"else printf '%s\\n' 'refusing to rewrite nvmet port attribute " + path + "' >&2; exit 1; fi",
 		},
 	}
