@@ -67,6 +67,42 @@ Do not treat this as RDS validation. It proves the ZoL path is behaving calmly
 under basic attach/delete and component-restart churn, and it gives a baseline
 before moving workloads.
 
+## Live RDS Controller-Path Validation (opti, 2026-07-11)
+
+First live RouterOS/RDS validation under the `nvmet-csi` name, run from the
+opti cluster against the production RDS appliance (`10.42.241.3`, RouterOS
+7.23rc2 on ROSE Data Server). Opti reaches the RDS management interface but
+not the v68 storage VLAN, so this deliberately validated the controller path
+only: `Immediate`-binding StorageClass, no pod ever mounted a volume.
+
+Configuration: `deploy/helm/nvmet-csi/examples/opti-rds-controller-test-values.yaml`
+(mutation guard at defaults: 250ms min-interval, burst 1).
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| SSH connect + host key verification | Passed | Dedicated key, RSA host key pinned. |
+| Export reconciler no-op on RDS-only cluster | Passed | `targets=0, repaired=0, conflicts=0` at startup and on interval. |
+| PVC create (1Gi) | Passed | Disk object + backing `.img` + NVMe export verified on the appliance. |
+| PVC expand (1Gi to 2Gi) | Passed | RDS file-size exactly 2147483648; PV updated; `FileSystemResizePending` correctly awaits a future mount. |
+| PVC delete | Passed | Disk object and backing file both removed; zero orphans. |
+| RouterOS 7.23 `mount` parameter rename | Passed | First create logged `bad parameter mount`, fail-fast (non-retryable), single retry with `mount-filesystem=no`, capability remembered. |
+| Stdout error detection | Passed | RouterOS CLI rejection surfaced as a typed error instead of a silent success followed by a misleading not-found. |
+
+Bugs found and fixed during this validation (commits `2583b5b`, `c0f6337`):
+
+- RouterOS prints CLI errors to stdout with a zero exit status; mutations could
+  fail silently. `runCommand` now detects RouterOS error output and returns a
+  non-retryable typed error.
+- RouterOS 7.23 renamed `/disk add`'s `mount` parameter to `mount-filesystem`
+  (default yes). The client now falls back to the new spelling on first
+  rejection, preserving the no-automount guard for PVC images.
+- Create verification now polls up to 10s instead of trusting an immediate
+  read after `/disk add` (disk materialization is asynchronous).
+
+Still not validated live: RDS data path (NVMe/TCP mount) under `nvmet-csi`,
+snapshots against real RouterOS, and node-roll churn against RDS-backed
+workloads. Those need a cluster with v68 reachability (metal).
+
 ## Side-by-Side Install Shape
 
 Install `nvmet-csi` as a distinct CSI driver from the current RDS deployment.
