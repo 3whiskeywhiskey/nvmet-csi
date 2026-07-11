@@ -1,0 +1,89 @@
+# Controller-path validation profile for the opti cluster against the
+# RouterOS/RDS backend.
+#
+# Purpose: exercise nvmet-csi's routeros-rds provisioning path (create,
+# expand, delete over SSH) on a cluster that can reach the RDS management
+# interface (10.42.241.3) but NOT the v68 storage VLAN. Volumes provision
+# with Immediate binding and are verified on the RDS side; no pod ever
+# mounts them, so the missing NVMe/TCP data path is irrelevant.
+#
+# Prerequisites:
+#   kubectl create namespace nvmet-csi
+#   kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+#     --from-file=rds-private-key=<key> --from-file=rds-host-key=<hostkey.pub>
+#
+# The RDS user must have the test public key authorized. Keep the mutation
+# guard at defaults: the RDS appliance is fragile shared infrastructure.
+
+driverName: nvmet.csi.whiskey.works
+
+rds:
+  enabled: true
+  managementIP: "10.42.241.3"
+  storageIP: "10.42.68.1"
+  sshPort: 22
+  nvmePort: 4420
+  sshUser: "metal-csi"
+  basePath: "/storage-pool/metal-csi"
+  secretName: "nvmet-csi-secret"
+  insecureSkipVerify: false
+  mutationGuard:
+    minInterval: 250ms
+    burst: 1
+    timeout: 30s
+
+controller:
+  replicas: 1
+  image:
+    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
+    tag: dev-20260711-export-reconciler
+    pullPolicy: IfNotPresent
+  linuxZOLHostAccess:
+    enabled: false
+  orphanReconciler:
+    enabled: false
+    dryRun: true
+  staleVolumeAttachmentCleanup:
+    enabled: false
+    dryRun: true
+  # Export reconciler stays enabled: with no linux-zol-nvmet PVs on this
+  # cluster it must no-op every cycle, which is itself worth observing.
+  exportReconciler:
+    enabled: true
+    checkInterval: 10m
+    runOnStart: true
+    dryRun: false
+
+node:
+  image:
+    repository: ghcr.io/3whiskeywhiskey/nvmet-csi
+    tag: dev-20260711-export-reconciler
+    pullPolicy: IfNotPresent
+  orphanCleanup:
+    enabled: false
+    dryRun: true
+
+linuxZOLPreflight:
+  enabled: false
+
+linuxZOLPlan:
+  enabled: false
+
+storageClasses:
+  - name: rds-opti-test
+    enabled: true
+    isDefault: false
+    backend: routeros-rds
+    fsType: ext4
+    # Immediate: provision on PVC creation without a consumer pod, since
+    # opti nodes cannot reach the NVMe/TCP data plane.
+    volumeBindingMode: Immediate
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    mountOptions: []
+
+snapshotClass:
+  enabled: false
+
+monitoring:
+  enabled: false
