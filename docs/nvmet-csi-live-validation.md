@@ -67,6 +67,36 @@ Do not treat this as RDS validation. It proves the ZoL path is behaving calmly
 under basic attach/delete and component-restart churn, and it gives a baseline
 before moving workloads.
 
+## Live Linux-ZOL Reboot Recovery (metal, 2026-07-11)
+
+The r740xd returned after an outage with kernel `nvmet` configfs state empty.
+The existing controller could not start because its image was hosted on the
+unavailable in-cluster Gitea registry. Helm revision 123 moved the controller
+and node image to the public, digest-pinned reference:
+
+`ghcr.io/3whiskeywhiskey/nvmet-csi:dev-20260711-rds-mount-rename@sha256:9ee9166d0cebcf7a4d5cde3a2fab9099d4ab0de85bfb4fe90caa38ac6d61179e`
+
+Startup recovery results:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Controller startup repair | Passed | `targets=1, repaired=12, conflicts=0` in 28.8s. All 12 driver PVs were included, including two `Released` Retain-policy PVs. |
+| Kernel configfs inventory | Passed | Exactly 12 subsystems and 12 symlinks under port 4420 after reconciliation. |
+| Client discovery from r640-3 | Passed | `nvme discover -t tcp -a 10.42.68.4 -s 4420` returned 13 records: the discovery subsystem plus all 12 managed NQNs. |
+| Idempotent second startup | Passed | Controller restart completed with `targets=1, repaired=0, conflicts=0` in 6.4s. |
+| Attachment recovery | Passed | Seven active driver `VolumeAttachment` objects rebuilt from Kubernetes state. |
+| Existing workload | Passed | ClickHouse on `pvc-5ebfb48b-eea8-452a-ad5d-6f572cfbc920` remained running; `clickhouse-client --query 'SELECT 1'` returned `1`. |
+
+This closes the controller-side reboot-safety acceptance criterion: target
+exports were reconstructed from durable zvol metadata and Kubernetes PV state
+without manual configfs mutation, and a repeated startup performed no repairs.
+
+Environmental note: during final observation the Kubernetes API VIP
+`10.42.67.100:6443` stopped advertising. Direct DPU API endpoints initially
+worked, then one refused connections and the other reported failed `etcd`
+readiness. Storage recovery and workload checks above completed before that
+separate control-plane instability.
+
 ## Live RDS Controller-Path Validation (opti, 2026-07-11)
 
 First live RouterOS/RDS validation under the `nvmet-csi` name, run from the
