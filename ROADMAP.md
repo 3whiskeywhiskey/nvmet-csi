@@ -284,6 +284,35 @@ This document provides a high-level overview of the nvmet-csi driver development
 
 ---
 
+## Linux-ZOL nvmet Reboot Safety (2026-07)
+
+**Status**: controller-side reconciliation implemented; pending live validation
+on r740xd (cluster currently down).
+
+Kernel `nvmet` configfs state is lost on target host reboot; retained
+Linux-ZOL PVCs failed to mount until exports were rebuilt by hand. The
+controller now owns the invariant that every managed Linux-ZOL PV has a
+correct configfs export:
+
+- **Export reconciler** (`pkg/reconciler/export_reconciler.go`): runs at
+  controller startup and on an interval; repair-only (never creates, resizes,
+  or deletes volumes); PV-gated; conflicts surfaced as precise errors instead
+  of rewrites. See `docs/export-reconciler.md`.
+- **Idempotent configfs writes**: all namespace/subsystem/port mutations are
+  read-before-write (`device_path` rewrite on an enabled namespace is refused
+  explicitly instead of failing with kernel `EBUSY`).
+- **Batched observation**: volume state is gathered with one `zfs get` plus
+  one configfs probe script per volume (was ~11 executor round-trips each).
+- `linux-zol-plan` Helm job remains the dry-run/debug surface for the same
+  planner the reconciler applies.
+
+Remaining for closure (needs hardware): live smoke test on r740xd
+(reboot → `nvme discover` shows all managed NQNs with no manual configfs
+work), image build + digest-pinned rollout, and confirmation that the netboot
+config imports `nixos/modules/nvmet-target.nix`.
+
+---
+
 ## Future Considerations (Post v0.9.0)
 
 Potential areas for v1.0+ development:
@@ -318,5 +347,5 @@ Potential areas for v1.0+ development:
 
 ---
 
-*Last updated: 2026-02-06*
+*Last updated: 2026-07-11*
 *For detailed phase plans and requirements, see `.planning/ROADMAP.md`*

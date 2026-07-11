@@ -128,6 +128,17 @@ controller:
     dryRun: true  # Set to false to enable actual cleanup
     confirmDelete: false  # Required with dryRun=false
 
+  # NVMe/TCP export reconciliation for linux-zol-nvmet backends.
+  # Kernel nvmet configfs state is lost when the target host reboots; this
+  # reconciler rebuilds missing exports for PV-backed volumes at controller
+  # startup and on an interval. Repair-only: it never creates, resizes, or
+  # deletes backend volumes, and surfaces conflicts instead of rewriting them.
+  exportReconciler:
+    enabled: true
+    checkInterval: 10m
+    runOnStart: true
+    dryRun: false
+
   # Attachment grace period for live migration handoff
   attachmentGracePeriod: 30s
 

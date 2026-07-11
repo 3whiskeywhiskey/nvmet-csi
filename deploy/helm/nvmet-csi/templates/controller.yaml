@@ -101,6 +101,18 @@ spec:
             - "-stale-volumeattachment-dry-run=false"
             {{- end }}
             {{- end }}
+            {{- if .Values.controller.exportReconciler.enabled }}
+            - "-enable-export-reconciler=true"
+            - "-export-check-interval={{ .Values.controller.exportReconciler.checkInterval }}"
+            - "-export-reconcile-run-on-start={{ .Values.controller.exportReconciler.runOnStart }}"
+            {{- if .Values.controller.exportReconciler.dryRun }}
+            - "-export-reconcile-dry-run=true"
+            {{- else }}
+            - "-export-reconcile-dry-run=false"
+            {{- end }}
+            {{- else }}
+            - "-enable-export-reconciler=false"
+            {{- end }}
             {{- if .Values.controller.vmiSerialization.enabled }}
             - "-enable-vmi-serialization"
             - "-vmi-cache-ttl={{ .Values.controller.vmiSerialization.cacheTTL }}"

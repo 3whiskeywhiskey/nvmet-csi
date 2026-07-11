@@ -171,6 +171,32 @@ files are left alone.
 
 See [docs/orphan-reconciler.md](orphan-reconciler.md) for details.
 
+## Export Reconciler Settings
+
+Repair-only NVMe/TCP export reconciliation for `linux-zol-nvmet` backends.
+Kernel nvmet configfs state is lost when the target host reboots; this
+reconciler rebuilds missing exports for PV-backed volumes at controller
+startup and on an interval. Enabled by default.
+
+```yaml
+args:
+  - "-enable-export-reconciler=true"
+  - "-export-check-interval=10m"
+  - "-export-reconcile-run-on-start=true"
+  - "-export-reconcile-dry-run=false"
+```
+
+- **enable-export-reconciler:** Enable the reconciler (default: true)
+- **export-check-interval:** Interval between passes (default: 10m)
+- **export-reconcile-run-on-start:** Run a pass immediately on controller startup (default: true)
+- **export-reconcile-dry-run:** Log planned repairs without applying (default: false)
+
+The reconciler never creates, resizes, or deletes backend volumes; it only
+repairs missing exports and surfaces conflicts. RouterOS/RDS backends are
+excluded.
+
+See [docs/export-reconciler.md](export-reconciler.md) for details.
+
 ## RDS Mutation Guardrails
 
 The controller rate-limits mutating RouterOS/RDS operations before they reach the RDS client. This is intended to reduce add/remove storms during node drains, reschedules, and retry loops.

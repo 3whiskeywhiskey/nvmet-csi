@@ -170,6 +170,28 @@
             }
           }
         },
+        "exportReconciler": {
+          "type": "object",
+          "description": "Repair-only NVMe/TCP export reconciliation for linux-zol-nvmet backends (rebuilds nvmet configfs exports lost to target host reboots)",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable export reconciliation"
+            },
+            "checkInterval": {
+              "type": "string",
+              "description": "Interval between export reconciliation passes"
+            },
+            "runOnStart": {
+              "type": "boolean",
+              "description": "Run export reconciliation immediately on controller startup"
+            },
+            "dryRun": {
+              "type": "boolean",
+              "description": "Log planned export repairs without applying them"
+            }
+          }
+        },
         "staleVolumeAttachmentCleanup": {
           "type": "object",
           "description": "Guarded cleanup of stale Kubernetes VolumeAttachment objects for deleted nodes",
