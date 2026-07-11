@@ -77,29 +77,24 @@ func normalizeCreateVolumeOptions(opts CreateVolumeOptions) CreateVolumeOptions 
 	return opts
 }
 
-// runDiskAdd executes a /disk add command, transparently dropping the mount
-// parameter on RouterOS builds that no longer accept it (removed in newer
-// /disk APIs; observed on 7.23, where file-backed disks also no longer
-// auto-mount, so omitting mount=no preserves the intended behavior).
+// runDiskAdd executes a /disk add command, transparently renaming the mount
+// parameter on RouterOS builds where /disk add rejects `mount=` in favor of
+// `mount-filesystem=` (observed on 7.23). The parameter still matters there:
+// mount-filesystem defaults to yes, so a PVC image containing a client
+// filesystem could be auto-mounted by the appliance without it.
 func (c *sshClient) runDiskAdd(cmd string, mount bool) (string, error) {
-	if c.diskAddMountUnsupported.Load() {
-		if mount {
-			return "", fmt.Errorf("this RouterOS build does not support the /disk add mount parameter, cannot honor mount=yes")
-		}
-		cmd = strings.Replace(cmd, " "+routerOSMountParam(false), "", 1)
+	if c.diskAddMountRenamed.Load() {
+		cmd = strings.Replace(cmd, " "+routerOSMountParam(mount), " "+routerOSMountFilesystemParam(mount), 1)
 	}
 
 	out, err := c.runCommandWithRetry(cmd, 3)
 	if err == nil || !isMountParamError(err) {
 		return out, err
 	}
-	if mount {
-		return "", fmt.Errorf("RouterOS rejected the /disk add mount parameter but mount=yes was requested: %w", err)
-	}
 
-	c.diskAddMountUnsupported.Store(true)
-	klog.Warningf("RouterOS rejected the /disk add mount parameter (newer /disk API); retrying without it and omitting it from now on")
-	return c.runCommandWithRetry(strings.Replace(cmd, " "+routerOSMountParam(false), "", 1), 3)
+	c.diskAddMountRenamed.Store(true)
+	klog.Warningf("RouterOS rejected the /disk add mount parameter (renamed to mount-filesystem in newer /disk APIs); retrying with the new name and using it from now on")
+	return c.runCommandWithRetry(strings.Replace(cmd, " "+routerOSMountParam(mount), " "+routerOSMountFilesystemParam(mount), 1), 3)
 }
 
 // isMountParamError reports whether err is RouterOS rejecting the mount
@@ -834,6 +829,15 @@ func routerOSMountParam(mount bool) string {
 		return "mount=yes"
 	}
 	return "mount=no"
+}
+
+// routerOSMountFilesystemParam is the newer spelling of the disk mount
+// parameter (RouterOS 7.23+ /disk API).
+func routerOSMountFilesystemParam(mount bool) string {
+	if mount {
+		return "mount-filesystem=yes"
+	}
+	return "mount-filesystem=no"
 }
 
 // parseSize converts human-readable size to bytes

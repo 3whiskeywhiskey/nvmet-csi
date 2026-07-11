@@ -76,11 +76,11 @@ type sshClient struct {
 	commandObserver    CommandObserver
 	decisionObserver   MutationDecisionObserver
 
-	// diskAddMountUnsupported records that this RouterOS build rejects the
-	// /disk add mount parameter (removed in newer /disk APIs, observed on
-	// 7.23). Learned on first rejection, then omitted for the connection's
-	// lifetime.
-	diskAddMountUnsupported atomic.Bool
+	// diskAddMountRenamed records that this RouterOS build renamed the
+	// /disk add mount parameter to mount-filesystem (newer /disk APIs,
+	// observed on 7.23). Learned on first rejection, then applied for the
+	// connection's lifetime.
+	diskAddMountRenamed atomic.Bool
 }
 
 // newSSHClient creates a new SSH-based RDS client
