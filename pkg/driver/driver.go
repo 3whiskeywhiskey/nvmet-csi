@@ -89,6 +89,10 @@ type Driver struct {
 	// Orphan reconciler (optional)
 	reconciler *reconciler.OrphanReconciler
 
+	// Export reconciler keeps kernel nvmet configfs exports converged with
+	// PVs after target host reboots (linux-zol-nvmet backends only).
+	exportReconciler *reconciler.ExportReconciler
+
 	// Attachment manager (for controller only)
 	attachmentManager *attachment.AttachmentManager
 
@@ -168,6 +172,12 @@ type DriverConfig struct {
 	StaleVolumeAttachmentCleanup  bool
 	StaleVolumeAttachmentDelete   bool
 	StaleVolumeAttachmentMinConfs int
+
+	// Export reconciler settings (linux-zol-nvmet reboot recovery)
+	EnableExportReconciler    bool
+	ExportCheckInterval       time.Duration // Default: 10 minutes
+	ExportReconcileDryRun     bool
+	ExportReconcileRunOnStart bool
 
 	// VMI serialization settings (for kubevirt concurrent operation mitigation)
 	EnableVMISerialization bool          // Enable per-VMI operation locks
@@ -465,7 +475,34 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 			config.OrphanCheckInterval, config.OrphanGracePeriod, config.OrphanDryRun)
 	}
 
+	if err := driver.setupExportReconciler(config); err != nil {
+		return nil, err
+	}
+
 	return driver, nil
+}
+
+// setupExportReconciler creates the export reconciler when controller mode,
+// the feature flag, and a Kubernetes client are all present.
+func (d *Driver) setupExportReconciler(config DriverConfig) error {
+	if !config.EnableController || !config.EnableExportReconciler || config.K8sClient == nil {
+		return nil
+	}
+	exportReconciler, err := reconciler.NewExportReconciler(reconciler.ExportReconcilerConfig{
+		ListTargets:   d.listExportTargets,
+		CheckInterval: config.ExportCheckInterval,
+		RunOnStart:    config.ExportReconcileRunOnStart,
+		DryRun:        config.ExportReconcileDryRun,
+		LockVolume:    d.lockControllerVolume,
+		Enabled:       true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create export reconciler: %w", err)
+	}
+	d.exportReconciler = exportReconciler
+	klog.Infof("Export reconciler enabled (interval=%v, dry_run=%v, run_on_start=%v)",
+		config.ExportCheckInterval, config.ExportReconcileDryRun, config.ExportReconcileRunOnStart)
+	return nil
 }
 
 // addVolumeCapabilities adds supported volume access modes
@@ -674,6 +711,16 @@ func (d *Driver) Run(endpoint string) error {
 		klog.Info("Orphan reconciler started")
 	}
 
+	// Start export reconciler if configured. Runs after informers sync and
+	// attachment state is rebuilt so the startup pass sees settled state.
+	if d.exportReconciler != nil {
+		ctx := context.Background()
+		if err := d.exportReconciler.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start export reconciler: %w", err)
+		}
+		klog.Info("Export reconciler started")
+	}
+
 	// Start gRPC server
 	server := NewNonBlockingGRPCServer(endpoint)
 	if err := server.Start(d.ids, d.cs, d.ns); err != nil {
@@ -706,6 +753,12 @@ func (d *Driver) Stop() {
 	if d.reconciler != nil {
 		d.reconciler.Stop()
 		klog.Info("Orphan reconciler stopped")
+	}
+
+	// Stop export reconciler if running
+	if d.exportReconciler != nil {
+		d.exportReconciler.Stop()
+		klog.Info("Export reconciler stopped")
 	}
 
 	if d.rdsClient != nil {
@@ -745,6 +798,25 @@ func (d *Driver) SetRDSClient(client rds.RDSClient) {
 		d.setDefaultControllerBackend(routerosbackend.New(client))
 	} else {
 		d.setDefaultControllerBackend(nil)
+	}
+}
+
+// lockControllerVolume serializes controller-side operations (CSI RPCs and
+// background export reconciliation) for one volume. Returns the unlock func.
+func (d *Driver) lockControllerVolume(volumeID string) func() {
+	if d == nil || volumeID == "" {
+		return func() {}
+	}
+	d.controllerVolumeLocksMu.Lock()
+	if d.controllerVolumeLocks == nil {
+		d.controllerVolumeLocks = attachment.NewVolumeLockManager()
+	}
+	locks := d.controllerVolumeLocks
+	d.controllerVolumeLocksMu.Unlock()
+
+	locks.Lock(volumeID)
+	return func() {
+		locks.Unlock(volumeID)
 	}
 }
 

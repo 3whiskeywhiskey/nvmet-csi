@@ -73,6 +73,14 @@ var (
 	staleVADryRun               = flag.Bool("stale-volumeattachment-dry-run", true, "Dry-run mode for stale VolumeAttachment cleanup")
 	staleVAMinConfirmations     = flag.Int("stale-volumeattachment-min-confirmations", 2, "Consecutive stale VolumeAttachment reconciliation passes required before deletion")
 
+	// Export reconciler flags (linux-zol-nvmet reboot recovery). Enabled by
+	// default: kernel nvmet configfs state is lost on target reboot and the
+	// reconciler is the only path that rebuilds it. Repair-only by design.
+	enableExportReconciler    = flag.Bool("enable-export-reconciler", true, "Enable NVMe/TCP export reconciliation for linux-zol-nvmet backends (rebuilds configfs exports lost to target reboots)")
+	exportCheckInterval       = flag.Duration("export-check-interval", 10*time.Minute, "Interval between export reconciliation passes")
+	exportReconcileDryRun     = flag.Bool("export-reconcile-dry-run", false, "Dry-run mode for export reconciliation (log planned repairs, don't apply)")
+	exportReconcileRunOnStart = flag.Bool("export-reconcile-run-on-start", true, "Run export reconciliation immediately on controller startup")
+
 	// VMI serialization flags (kubevirt concurrent operation mitigation)
 	enableVMISerialization = flag.Bool("enable-vmi-serialization", false, "Enable per-VMI operation serialization to mitigate kubevirt concurrency issues")
 	vmiCacheTTL            = flag.Duration("vmi-cache-ttl", 60*time.Second, "Cache TTL for PVC-to-VMI mapping lookups")
@@ -227,6 +235,10 @@ func main() {
 		StaleVolumeAttachmentCleanup:  *staleVACleanup,
 		StaleVolumeAttachmentDelete:   !*staleVADryRun,
 		StaleVolumeAttachmentMinConfs: *staleVAMinConfirmations,
+		EnableExportReconciler:        *enableExportReconciler,
+		ExportCheckInterval:           *exportCheckInterval,
+		ExportReconcileDryRun:         *exportReconcileDryRun,
+		ExportReconcileRunOnStart:     *exportReconcileRunOnStart,
 		EnableVMISerialization:        *enableVMISerialization,
 		VMICacheTTL:                   *vmiCacheTTL,
 		ManagedNQNPrefix:              managedNQNPrefix,

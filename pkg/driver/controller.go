@@ -56,20 +56,10 @@ func NewControllerServer(driver *Driver) *ControllerServer {
 }
 
 func (cs *ControllerServer) lockControllerVolume(volumeID string) func() {
-	if cs == nil || cs.driver == nil || volumeID == "" {
+	if cs == nil {
 		return func() {}
 	}
-	cs.driver.controllerVolumeLocksMu.Lock()
-	if cs.driver.controllerVolumeLocks == nil {
-		cs.driver.controllerVolumeLocks = attachment.NewVolumeLockManager()
-	}
-	locks := cs.driver.controllerVolumeLocks
-	cs.driver.controllerVolumeLocksMu.Unlock()
-
-	locks.Lock(volumeID)
-	return func() {
-		locks.Unlock(volumeID)
-	}
+	return cs.driver.lockControllerVolume(volumeID)
 }
 
 // CreateVolume provisions a new volume on the selected storage backend.
