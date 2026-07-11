@@ -64,7 +64,7 @@ RUN mkdir -p /var/lib/kubelet/plugins/nvmet.csi.whiskey.works \
              /csi
 
 # Add labels
-LABEL org.opencontainers.image.source="https://gitea.whiskey.works/whiskey-works/nvmet-csi"
+LABEL org.opencontainers.image.source="https://github.com/3whiskeywhiskey/nvmet-csi"
 LABEL org.opencontainers.image.description="CSI driver for NVMe/TCP targets backed by Linux nvmet or RouterOS/RDS"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
