@@ -737,6 +737,7 @@ func TestSSHClientConnectFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect")
 }
+
 // ============================================================================
 // RouterOS compatibility: CommandOutputError and routerOSOutputError regression tests
 // ============================================================================
