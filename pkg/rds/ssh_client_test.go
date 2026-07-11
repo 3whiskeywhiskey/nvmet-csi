@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -735,4 +736,59 @@ func TestSSHClientConnectFailure(t *testing.T) {
 	err = client.Connect()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect")
+}
+// ============================================================================
+// RouterOS compatibility: CommandOutputError and routerOSOutputError regression tests
+// ============================================================================
+
+func TestRouterOSOutputError(t *testing.T) {
+	tests := []struct {
+		name    string
+		output  string
+		wantErr bool
+	}{
+		{"bad parameter lower", "bad parameter mount", true},
+		{"bad parameter upper", "BAD PARAMETER foo", true},
+		{"syntax error", "syntax error: unexpected", true},
+		{"failure colon", "failure: disk full", true},
+		{"expected end of command", "expected end of command", true},
+		{"input does not match", "input does not match any", true},
+		{"no such item", "no such item", true},
+		{"invalid value", "invalid value for size", true},
+		{"not enough permissions", "not enough permissions", true},
+		{"ambiguous command", "ambiguous command /disk", true},
+		{"mixed case prefix", "Bad Parameter mount=no", true},
+		{"prefix on second line", "some header\nbad parameter x", true},
+		// legitimate output
+		{"legit disk print detail with flags", " 0 slot=\"pvc-123\" type=file file-path=/x.img\nflags: D - dynamic; X - disabled; ... \n     file-size=1.0GiB", false},
+		{"empty output", "", false},
+		{"failure word mid-line not at line start", "some result containing the word failure: but not start of its line", false},
+		{"normal output", "name=foo slot=bar", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := routerOSOutputError("/disk add", tt.output)
+			if tt.wantErr {
+				require.Error(t, err)
+				var coe *CommandOutputError
+				require.True(t, errors.As(err, &coe), "expected *CommandOutputError")
+				assert.Equal(t, "/disk add", coe.Command)
+				assert.Equal(t, tt.output, coe.Output)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIsRetryableError_CommandOutputError(t *testing.T) {
+	coe := &CommandOutputError{
+		Command: "/disk add",
+		Output:  "bad parameter mount",
+	}
+	assert.False(t, isRetryableError(coe), "CommandOutputError must not be retryable")
+
+	wrapped := fmt.Errorf("outer: %w", coe)
+	assert.False(t, isRetryableError(wrapped), "wrapped CommandOutputError must not be retryable")
 }

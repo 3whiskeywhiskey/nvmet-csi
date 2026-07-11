@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
+	"golang.org/x/crypto/ssh"
 )
 
 // setupTestBasePaths configures allowed base paths for testing
@@ -1463,4 +1465,217 @@ func TestConvertRateToBytesPerSec(t *testing.T) {
 			}
 		})
 	}
+}
+// ============================================================================
+// RouterOS 7.23+ compatibility regression tests for runDiskAdd mount param rename
+// and waitForVolumeReady error semantics. These defend the live-validated behavior.
+// ============================================================================
+
+func TestRouterOSMountParamFallback_RunDiskAdd(t *testing.T) {
+	t.Run("first mount=no rejected with bad parameter triggers retry with mount-filesystem=no", func(t *testing.T) {
+		var received []string
+		srv := startMockSSHServer(t, func(channel ssh.Channel, requests <-chan *ssh.Request) {
+			defer func() { _ = channel.Close() }()
+			for req := range requests {
+				if req.Type == "exec" {
+					_ = req.Reply(true, nil)
+					cmdLen := int(req.Payload[3])
+					cmd := string(req.Payload[4 : 4+cmdLen])
+					received = append(received, cmd)
+
+					if strings.Contains(cmd, " mount=") && !strings.Contains(cmd, "mount-filesystem") {
+						// RouterOS rejects old mount param (exit 0 + error text in stdout -> CommandOutputError)
+						_, _ = channel.Write([]byte("bad parameter mount\n"))
+						_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+						return
+					}
+					// success response for /disk add
+					_, _ = channel.Write([]byte(" 0 name=added slot=test-pvc"))
+					_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+					return
+				}
+			}
+		})
+
+		client := createConnectedTestClient(t, srv)
+
+		cmd := `/disk add type=file file-path=/test.img file-size=1G slot=test-pvc mount=no nvme-tcp-export=yes nvme-tcp-server-port=4420 nvme-tcp-server-nqn=nqn.test`
+		out, err := client.runDiskAdd(cmd, false)
+		if err != nil {
+			t.Fatalf("runDiskAdd failed: %v", err)
+		}
+		if !strings.Contains(out, "name=added") {
+			t.Errorf("expected success output, got %q", out)
+		}
+
+		if len(received) != 2 {
+			t.Fatalf("expected exactly 2 commands (fail + retry), got %d: %v", len(received), received)
+		}
+		if !strings.Contains(received[0], "mount=no") || strings.Contains(received[0], "mount-filesystem") {
+			t.Errorf("first cmd should have had old mount=no, got %q", received[0])
+		}
+		if !strings.Contains(received[1], "mount-filesystem=no") || strings.Contains(received[1], " mount=no") {
+			t.Errorf("retry cmd must use mount-filesystem=no not mount=no, got %q", received[1])
+		}
+
+		if !client.diskAddMountRenamed.Load() {
+			t.Error("diskAddMountRenamed should be set after rejection")
+		}
+	})
+
+	t.Run("subsequent calls use mount-filesystem directly with no failed first attempt", func(t *testing.T) {
+		var received []string
+		srv := startMockSSHServer(t, func(channel ssh.Channel, requests <-chan *ssh.Request) {
+			defer func() { _ = channel.Close() }()
+			for req := range requests {
+				if req.Type == "exec" {
+					_ = req.Reply(true, nil)
+					cmdLen := int(req.Payload[3])
+					cmd := string(req.Payload[4 : 4+cmdLen])
+					received = append(received, cmd)
+
+					// after rename learned, no rejection even if old name in caller cmd
+					_, _ = channel.Write([]byte(" 0 name=added2"))
+					_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+					return
+				}
+			}
+		})
+
+		client := createConnectedTestClient(t, srv)
+
+		// simulate prior learning by setting the flag (as would happen in real lifetime)
+		client.diskAddMountRenamed.Store(true)
+
+		cmd := `/disk add type=file file-path=/test.img file-size=1G slot=test-pvc2 mount=yes nvme-tcp-export=yes nvme-tcp-server-port=4420 nvme-tcp-server-nqn=nqn.test2`
+		_, err := client.runDiskAdd(cmd, true)
+		if err != nil {
+			t.Fatalf("runDiskAdd with flag set should succeed: %v", err)
+		}
+		if len(received) != 1 {
+			t.Fatalf("expected 1 command (no failed attempt), got %d", len(received))
+		}
+		if !strings.Contains(received[0], "mount-filesystem=yes") || strings.Contains(received[0], " mount=yes") {
+			t.Errorf("cmd must be rewritten to mount-filesystem=yes, got %q", received[0])
+		}
+	})
+}
+
+func TestRunDiskAdd_MountYesRejectionPath(t *testing.T) {
+	var received []string
+	srv := startMockSSHServer(t, func(channel ssh.Channel, requests <-chan *ssh.Request) {
+		defer func() { _ = channel.Close() }()
+		for req := range requests {
+			if req.Type == "exec" {
+				_ = req.Reply(true, nil)
+				cmdLen := int(req.Payload[3])
+				cmd := string(req.Payload[4 : 4+cmdLen])
+				received = append(received, cmd)
+
+				if strings.Contains(cmd, " mount=") && !strings.Contains(cmd, "mount-filesystem") {
+					_, _ = channel.Write([]byte("bad parameter mount\n"))
+					_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+					return
+				}
+				_, _ = channel.Write([]byte(" 0 name=restored"))
+				_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+				return
+			}
+		}
+	})
+
+	client := createConnectedTestClient(t, srv)
+
+	cmd := `/disk add type=file copy-from=... file-path=/r.img file-size=2G slot=rest mount=yes nvme-tcp-export=yes ...`
+	out, err := client.runDiskAdd(cmd, true)
+	if err != nil {
+		t.Fatalf("expected retry success for mount=yes case, got err: %v", err)
+	}
+	if !strings.Contains(out, "name=restored") {
+		t.Errorf("expected success out, got %q", out)
+	}
+	if len(received) != 2 {
+		t.Fatalf("expected 2 cmds for fallback, got %d", len(received))
+	}
+	if !strings.Contains(received[1], "mount-filesystem=yes") {
+		t.Errorf("second must use mount-filesystem=yes, got %q", received[1])
+	}
+}
+
+func TestWaitForVolumeReady(t *testing.T) {
+	t.Run("returns nil promptly when volume becomes ready on later poll", func(t *testing.T) {
+		attempt := 0
+		srv := startMockSSHServer(t, func(channel ssh.Channel, requests <-chan *ssh.Request) {
+			defer func() { _ = channel.Close() }()
+			for req := range requests {
+				if req.Type == "exec" {
+					_ = req.Reply(true, nil)
+					cmdLen := int(req.Payload[3])
+					cmd := string(req.Payload[4 : 4+cmdLen])
+					attempt++
+
+					if strings.Contains(cmd, "/disk print detail where slot=") {
+						if attempt < 3 {
+							// simulate not visible yet -> empty output -> GetVolume returns notfound
+							_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+							return
+						}
+						// return parsable volume that will have Status=ready (assumed for file+export)
+						_, _ = channel.Write([]byte(` 0 slot=test-ready type=file nvme-tcp-export=yes file-size=1G`))
+						_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+						return
+					}
+					_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+					return
+				}
+			}
+		})
+
+		client := createConnectedTestClient(t, srv)
+		err := client.waitForVolumeReady("test-ready", 10*time.Second)
+		if err != nil {
+			t.Fatalf("waitForVolumeReady should succeed when becomes ready: %v", err)
+		}
+		if attempt < 2 {
+			t.Errorf("expected at least 2 polls, got %d", attempt)
+		}
+	})
+
+	t.Run("returns error containing slot name and no typed VolumeNotFoundError in chain on timeout", func(t *testing.T) {
+		srv := startMockSSHServer(t, func(channel ssh.Channel, requests <-chan *ssh.Request) {
+			defer func() { _ = channel.Close() }()
+			for req := range requests {
+				if req.Type == "exec" {
+					_ = req.Reply(true, nil)
+					cmdLen := int(req.Payload[3])
+					cmd := string(req.Payload[4 : 4+cmdLen])
+
+					if strings.Contains(cmd, "/disk print detail where slot=") {
+						// always not found: empty stdout + exit 0
+						_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+						return
+					}
+					_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(&struct{ Status uint32 }{0}))
+					return
+				}
+			}
+		})
+
+		client := createConnectedTestClient(t, srv)
+		err := client.waitForVolumeReady("never-appears", 1*time.Second)
+		if err == nil {
+			t.Fatal("expected timeout error")
+		}
+		if !strings.Contains(err.Error(), "never-appears") || !strings.Contains(err.Error(), "timed out") {
+			t.Errorf("error should contain slot and timeout info, got: %v", err)
+		}
+		// must be plain error, not carrying typed not-found (per contract for mutation callers)
+		if errors.Is(err, utils.ErrVolumeNotFound) {
+			t.Error("timeout error must not be Is(ErrVolumeNotFound)")
+		}
+		var volNotFound *VolumeNotFoundError
+		if errors.As(err, &volNotFound) {
+			t.Error("timeout error must not As(*VolumeNotFoundError)")
+		}
+	})
 }
