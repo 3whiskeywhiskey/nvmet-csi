@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -391,7 +392,7 @@ func TestCommandHostPlansReportCommands(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{},
 		errs: map[string]error{
-			"zfs get -H -p -o value volsize tank/nvmet/pvc-test-volume": errors.New("cannot open 'tank/nvmet/pvc-test-volume': dataset does not exist"),
+			"zfs get -H -p -o property,value " + zfsObservedProperties + " tank/nvmet/pvc-test-volume": errors.New("cannot open 'tank/nvmet/pvc-test-volume': dataset does not exist"),
 		},
 	}
 	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
@@ -710,17 +711,19 @@ func TestCommandHostCreateVolumeCommands(t *testing.T) {
 		"mkdir -p /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1",
 		waitForPathCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path", "nvmet namespace device_path").String(),
 		waitForPathCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable", "nvmet namespace enable").String(),
-		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/attr_allow_any_host",
-		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/device_path",
-		"tee /config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable",
+		writeIfDifferentCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/attr_allow_any_host", "1").String(),
+		setNamespaceDevicePathCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1", "/dev/zvol/tank/nvmet/pvc-test-volume").String(),
+		enableNamespaceCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1").String(),
 		verifyFileEqualsCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume/namespaces/1/enable", "1", "nvmet namespace enable").String(),
 		expectedLinkCommand("/config/nvmet/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume", "/config/nvmet/ports/4420/subsystems/nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume"),
 	)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected commands:\nwant=%v\n got=%v", want, got)
 	}
-	if recorder.commands[10].Stdin != "1\n" || recorder.commands[11].Stdin != spec.DevicePath+"\n" || recorder.commands[12].Stdin != "1\n" {
-		t.Fatalf("unexpected tee stdin: %+v", recorder.commands)
+	for _, cmd := range recorder.commands {
+		if cmd.Stdin != "" {
+			t.Fatalf("expected no stdin-backed commands after conditional-write refactor, got %+v", cmd)
+		}
 	}
 }
 
@@ -888,7 +891,7 @@ func TestCommandHostValidateDeleteStateAcceptsRelativeConfigFSPortLink(t *testin
 func TestCommandHostGetVolumeMapsNotFound(t *testing.T) {
 	recorder := &recordingExecutor{
 		errs: map[string]error{
-			"zfs get -H -p -o value volsize tank/nvmet/pvc-missing": errors.New("cannot open 'tank/nvmet/pvc-missing': dataset does not exist"),
+			"zfs get -H -p -o property,value " + zfsObservedProperties + " tank/nvmet/pvc-missing": errors.New("cannot open 'tank/nvmet/pvc-missing': dataset does not exist"),
 		},
 	}
 	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
@@ -924,7 +927,11 @@ func TestRemoteCommandStringQuotesArgumentsForSSH(t *testing.T) {
 }
 
 func TestRemoteCommandStringPreservesStdinCommandShape(t *testing.T) {
-	got := remoteCommandString(writeCommand("/sys/kernel/config/nvmet/subsystems/nqn.test/attr_allow_any_host", "1\n"))
+	got := remoteCommandString(Command{
+		Name:  "tee",
+		Args:  []string{"/sys/kernel/config/nvmet/subsystems/nqn.test/attr_allow_any_host"},
+		Stdin: "1\n",
+	})
 	want := "'tee' '/sys/kernel/config/nvmet/subsystems/nqn.test/attr_allow_any_host'"
 	if got != want {
 		t.Fatalf("unexpected remote tee command: %q", got)
@@ -1377,4 +1384,231 @@ func stateToSpec(state VolumeState) VolumeSpec {
 func ExampleCommand_String() {
 	fmt.Println(Command{Name: "zfs", Args: []string{"list", "tank/nvmet"}}.String())
 	// Output: zfs list tank/nvmet
+}
+func TestSetNamespaceDevicePathCommand_SemanticsInShell(t *testing.T) {
+	ns := "/config/nvmet/subsystems/nqn.test/namespaces/1"
+	dev := "/dev/zvol/tank/nvmet/testvol"
+
+	// equal: exits 0 before write
+	eq := setNamespaceDevicePathCommand(ns, dev)
+	eqStr := eq.String()
+	if !strings.Contains(eqStr, "current=$(cat") {
+		t.Fatalf("equal case missing current check: %s", eqStr)
+	}
+	if strings.Contains(eqStr, "printf") && strings.Index(eqStr, "printf '%s\\n' '"+dev+"'") < strings.Index(eqStr, "current=") {
+		t.Fatal("write appears before current check on equal")
+	}
+	// must have the exit 0 path for match
+	if !strings.Contains(eqStr, "if [ \"$current\" = '"+dev+"' ]; then exit 0; fi;") {
+		t.Fatalf("equal should early exit 0: %s", eqStr)
+	}
+
+	// enabled + differ: error mentioning ns path, no write executed
+	differ := setNamespaceDevicePathCommand(ns, "/dev/other")
+	dStr := differ.String()
+	if !strings.Contains(dStr, "refusing to rewrite device_path of enabled nvmet namespace "+ns) {
+		t.Fatalf("enabled-differ must emit specific refusal mentioning namespace: %s", dStr)
+	}
+	// ordering: current check precedes enable check precedes write
+	curIdx := strings.Index(dStr, "current=$(cat")
+	enIdx := strings.Index(dStr, "enabled=$(cat")
+	wrIdx := strings.Index(dStr, "printf '%s\\n' '/dev/other'")
+	if curIdx == -1 || enIdx == -1 || wrIdx == -1 {
+		t.Fatalf("missing check parts: %s", dStr)
+	}
+	if curIdx >= enIdx || enIdx >= wrIdx {
+		t.Fatalf("checks not in order current < enable < write: cur=%d en=%d wr=%d\n%s", curIdx, enIdx, wrIdx, dStr)
+	}
+
+	// disabled (implicit): will reach write (no early exit on enabled)
+	if !strings.Contains(dStr, "if [ \"$enabled\" = '1' ]; then") {
+		t.Fatal("must check enabled before deciding to write or error")
+	}
+}
+
+func TestEnableNamespaceCommand_Idempotent(t *testing.T) {
+	ns := "/config/nvmet/subsystems/nqn.foo/namespaces/1"
+	cmd := enableNamespaceCommand(ns)
+	s := cmd.String()
+	if !strings.Contains(s, "current=$(cat") || !strings.Contains(s, "if [ \"$current\" = '1' ]; then exit 0; fi;") {
+		t.Fatalf("enable must no-op check for '1': %s", s)
+	}
+	if !strings.Contains(s, "printf '%s\\n' 1 > '"+ns+"/enable'") {
+		t.Fatalf("enable must write 1 when not set: %s", s)
+	}
+}
+
+func TestProbeExportStateCommand_ParseExportProbe_RoundTrip(t *testing.T) {
+	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	_, err := NewCommandHost(cfg, &recordingExecutor{})
+	if err != nil {
+		t.Fatalf("NewCommandHost error: %v", err)
+	}
+
+	// (a) fully exported state a real script would emit
+	full := "ns_enable=1\n" +
+		"ns_device_path=/dev/zvol/tank/nvmet/vol1\n" +
+		"addr_traddr=10.42.0.10\n" +
+		"addr_trsvcid=4420\n" +
+		"addr_trtype=tcp\n" +
+		"addr_adrfam=ipv4\n" +
+		"port_entry=1\n" +
+		"port_link=/config/nvmet/subsystems/nqn.test:vol1\n" +
+		"exit 0"
+	p := parseExportProbe(full)
+	if p.nsEnable != "1" || p.nsDevicePath != "/dev/zvol/tank/nvmet/vol1" || !p.portEntry || p.portLink != "/config/nvmet/subsystems/nqn.test:vol1" {
+		t.Fatalf("parse full mismatch: %+v", p)
+	}
+	if !p.namespaceReady() {
+		t.Fatal("namespaceReady must be true")
+	}
+
+	// (b) post-reboot empty configfs
+	empty := "ns_enable=\nns_device_path=\naddr_traddr=\naddr_trsvcid=\naddr_trtype=\naddr_adrfam=\nport_entry=0\nport_link=\n"
+	p2 := parseExportProbe(empty)
+	if p2.nsEnable != "" || p2.nsDevicePath != "" || p2.portEntry || p2.portLink != "" {
+		t.Fatalf("parse empty mismatch: %+v", p2)
+	}
+
+	// empty nqn + port<=0 returns zero probe, no command executed
+	rec := &recordingExecutor{}
+	h2, _ := NewCommandHost(cfg, rec)
+	pr, err := h2.probeExportState(context.Background(), "", 0)
+	if err != nil {
+		t.Fatalf("probe empty should not err: %v", err)
+	}
+	if pr != (exportProbe{}) {
+		t.Fatalf("expected zero probe, got %+v", pr)
+	}
+	if len(rec.commands) != 0 {
+		t.Fatalf("no executor calls expected for empty nqn/port, got %d: %v", len(rec.commands), rec.commands)
+	}
+}
+
+func TestCommandHostGetVolume_AssemblesVolumeStateFromBatched(t *testing.T) {
+	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	cfg = cfg.withDefaults()
+	rec := &recordingExecutor{}
+	host, err := NewCommandHost(cfg, rec)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+
+	volID := "vol1"
+	nqn := "nqn.test:vol1"
+	port := 4420
+	dataset := cfg.datasetFor(volID)
+	devPath := cfg.devicePathFor(volID)
+
+	zfsOut := "volsize\t10737418240\n" +
+		"org.nvmet-csi:volume-id\tvol1\n" +
+		"org.nvmet-csi:nqn\t" + nqn + "\n" +
+		"org.nvmet-csi:port\t" + strconv.Itoa(port) + "\n"
+
+	zfsKey := "zfs get -H -p -o property,value " + zfsObservedProperties + " " + dataset
+
+	// probe output for matching fully exported
+	probeOutMatch := "ns_enable=1\n" +
+		"ns_device_path=" + devPath + "\n" +
+		"addr_traddr=10.42.0.10\n" +
+		"addr_trsvcid=4420\n" +
+		"addr_trtype=tcp\n" +
+		"addr_adrfam=ipv4\n" +
+		"port_entry=1\n" +
+		"port_link=/config/nvmet/subsystems/" + linkNameForNQN(nqn) + "\n"
+
+	probeCmd := host.probeExportStateCommand(nqn, port)
+	probeKey := probeCmd.String()
+
+	rec.outputs = map[string]string{
+		zfsKey:   zfsOut,
+		probeKey: probeOutMatch,
+	}
+
+	state, err := host.GetVolume(context.Background(), volID)
+	if err != nil {
+		t.Fatalf("GetVolume error: %v", err)
+	}
+	if !state.Exported {
+		t.Fatalf("expected Exported=true for matching probe, got %+v", state)
+	}
+	if state.NQN != nqn || state.Port != port || state.ExportDevice != devPath {
+		t.Fatalf("bad assembled state: %+v", state)
+	}
+	if len(rec.commands) != 2 {
+		t.Fatalf("expected exactly 2 executor commands (zfs+probe), got %d", len(rec.commands))
+	}
+
+	// now differ on device_path -> Exported=false
+	rec2 := &recordingExecutor{}
+	host2, _ := NewCommandHost(cfg, rec2)
+	probeOutDiffer := strings.Replace(probeOutMatch, devPath, "/dev/wrong", 1)
+	probeCmd2 := host2.probeExportStateCommand(nqn, port)
+	rec2.outputs = map[string]string{
+		zfsKey:             zfsOut,
+		probeCmd2.String(): probeOutDiffer,
+	}
+	state2, err := host2.GetVolume(context.Background(), volID)
+	if err != nil {
+		t.Fatalf("GetVolume differ error: %v", err)
+	}
+	if state2.Exported {
+		t.Fatalf("expected Exported=false when device_path differs, got %+v", state2)
+	}
+	if len(rec2.commands) != 2 {
+		t.Fatalf("expected 2 cmds on differ case, got %d", len(rec2.commands))
+	}
+}
+
+func TestCommandHostListVolumes_ParsesMultiDatasetAndIssuesProbes(t *testing.T) {
+	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	rec := &recordingExecutor{}
+	host, err := NewCommandHost(cfg, rec)
+	if err != nil {
+		t.Fatalf("NewCommandHost() error = %v", err)
+	}
+
+	// multi dataset zfs get -r output: name\tprop\tvalue
+	zfsListOut := "" +
+		"tank/nvmet/vol1\tvolsize\t10737418240\n" +
+		"tank/nvmet/vol1\torg.nvmet-csi:volume-id\tvol1\n" +
+		"tank/nvmet/vol1\torg.nvmet-csi:nqn\tnqn.test:vol1\n" +
+		"tank/nvmet/vol1\torg.nvmet-csi:port\t4420\n" +
+		"tank/nvmet/vol2\tvolsize\t21474836480\n" +
+		"tank/nvmet/vol2\torg.nvmet-csi:volume-id\tvol2\n" +
+		"tank/nvmet/vol2\torg.nvmet-csi:nqn\tnqn.test:vol2\n" +
+		"tank/nvmet/vol2\torg.nvmet-csi:port\t4421\n"
+
+	zfsListKey := "zfs get -H -p -o name,property,value -t volume -r " + zfsObservedProperties + " tank/nvmet"
+
+	// precompute probes that List will issue
+	probe1 := host.probeExportStateCommand("nqn.test:vol1", 4420)
+	probe2 := host.probeExportStateCommand("nqn.test:vol2", 4421)
+
+	// minimal matching probes so no err
+	probeOut := "ns_enable=1\nns_device_path=/dev/zvol/tank/nvmet/volX\naddr_traddr=10.42.0.10\naddr_trsvcid=4420\naddr_trtype=tcp\naddr_adrfam=ipv4\nport_entry=1\nport_link=/config/nvmet/subsystems/nqn.test:volX\n"
+	// adjust per vol not critical for count/parse
+	rec.outputs = map[string]string{
+		zfsListKey:      zfsListOut,
+		probe1.String(): strings.ReplaceAll(probeOut, "volX", "vol1"),
+		probe2.String(): strings.ReplaceAll(probeOut, "volX", "vol2"),
+	}
+
+	vols, err := host.ListVolumes(context.Background())
+	if err != nil {
+		t.Fatalf("ListVolumes error: %v", err)
+	}
+	if len(vols) != 2 {
+		t.Fatalf("expected 2 volumes, got %d", len(vols))
+	}
+	if vols[0].ID != "vol1" || vols[1].ID != "vol2" {
+		t.Fatalf("IDs not stripped of pool prefix: %+v", vols)
+	}
+	if vols[0].SizeBytes == 0 || vols[1].SizeBytes == 0 {
+		t.Fatal("sizes not parsed")
+	}
+	// 1 zfs + 2 probes
+	if len(rec.commands) != 3 {
+		t.Fatalf("expected 1 + 2 = 3 executor commands, got %d", len(rec.commands))
+	}
 }

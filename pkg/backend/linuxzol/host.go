@@ -35,11 +35,22 @@ func NewCommandHost(cfg Config, executor Executor) (*CommandHost, error) {
 	return &CommandHost{cfg: cfg, exec: executor}, nil
 }
 
+// zfsDatasetProps carries the durable per-zvol export intent stored as ZFS
+// properties, plus the observed volume size.
+type zfsDatasetProps struct {
+	sizeBytes     int64
+	ownerVolumeID string
+	nqn           string
+	port          int
+}
+
+var zfsObservedProperties = "volsize," + zfsPropVolumeID + "," + zfsPropNQN + "," + zfsPropPort
+
 func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeState, error) {
 	dataset := h.cfg.datasetFor(volumeID)
-	sizeOut, err := h.run(ctx, Command{
+	out, err := h.run(ctx, Command{
 		Name: "zfs",
-		Args: []string{"get", "-H", "-p", "-o", "value", "volsize", dataset},
+		Args: []string{"get", "-H", "-p", "-o", "property,value", zfsObservedProperties, dataset},
 	})
 	if err != nil {
 		if isZFSNotFound(err) {
@@ -47,54 +58,22 @@ func (h *CommandHost) GetVolume(ctx context.Context, volumeID string) (*VolumeSt
 		}
 		return nil, err
 	}
-	sizeBytes, err := strconv.ParseInt(strings.TrimSpace(sizeOut), 10, 64)
+	props, err := parseZFSDatasetProps(volumeID, out)
 	if err != nil {
-		return nil, fmt.Errorf("parse zvol size for %s: %w", volumeID, err)
+		return nil, err
 	}
-
-	nqn, _ := h.getZFSProperty(ctx, dataset, zfsPropNQN)
-	ownerVolumeID, _ := h.getZFSProperty(ctx, dataset, zfsPropVolumeID)
-	portValue, _ := h.getZFSProperty(ctx, dataset, zfsPropPort)
-	port, _ := strconv.Atoi(strings.TrimSpace(portValue))
-	nqn = strings.TrimSpace(nqn)
-	ownerVolumeID = strings.TrimSpace(ownerVolumeID)
-	exportDevice := h.namespaceDevicePath(ctx, nqn)
-	portEntryExists := h.portEntryExists(ctx, port, nqn)
-	portLinkTarget := h.portLinkTarget(ctx, port, nqn)
-	portAddress := h.portAttribute(ctx, port, "addr_traddr")
-	portServiceID := h.portAttribute(ctx, port, "addr_trsvcid")
-	portTransport := h.portAttribute(ctx, port, "addr_trtype")
-	portAddressFam := h.portAttribute(ctx, port, "addr_adrfam")
-	namespaceReady := h.namespaceEnabled(ctx, nqn)
-	portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
-	portLinkReady := h.cfg.portLinkTargetMatches(port, nqn, portLinkTarget)
-	exported := namespaceReady && exportDevice == h.cfg.devicePathFor(volumeID) && portLinkReady && portReady
-
-	return &VolumeState{
-		ID:              volumeID,
-		OwnerVolumeID:   ownerVolumeID,
-		Dataset:         dataset,
-		DevicePath:      h.cfg.devicePathFor(volumeID),
-		SizeBytes:       sizeBytes,
-		NQN:             nqn,
-		Port:            port,
-		Exported:        exported,
-		NamespaceReady:  namespaceReady,
-		ExportDevice:    exportDevice,
-		PortEntryExists: portEntryExists,
-		PortLinkTarget:  portLinkTarget,
-		PortAddress:     portAddress,
-		PortServiceID:   portServiceID,
-		PortTransport:   portTransport,
-		PortAddressFam:  portAddressFam,
-		Status:          statusFromExport(exported),
-	}, nil
+	probe, err := h.probeExportState(ctx, props.nqn, props.port)
+	if err != nil {
+		return nil, err
+	}
+	state := h.volumeState(volumeID, dataset, props, probe)
+	return &state, nil
 }
 
 func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 	out, err := h.run(ctx, Command{
 		Name: "zfs",
-		Args: []string{"list", "-H", "-p", "-o", "name,volsize", "-t", "volume", "-r", h.cfg.Pool},
+		Args: []string{"get", "-H", "-p", "-o", "name,property,value", "-t", "volume", "-r", zfsObservedProperties, h.cfg.Pool},
 	})
 	if err != nil {
 		if isZFSNotFound(err) {
@@ -103,60 +82,102 @@ func (h *CommandHost) ListVolumes(ctx context.Context) ([]VolumeState, error) {
 		return nil, err
 	}
 
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	volumes := make([]VolumeState, 0, len(lines))
-	for _, line := range lines {
+	rowsByDataset := map[string]string{}
+	datasets := []string{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			return nil, fmt.Errorf("unexpected zfs list row %q", line)
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) < 3 {
+			return nil, fmt.Errorf("unexpected zfs get row %q", line)
 		}
-		id := strings.TrimPrefix(fields[0], h.cfg.Pool+"/")
-		sizeBytes, err := strconv.ParseInt(fields[1], 10, 64)
+		dataset := fields[0]
+		if _, seen := rowsByDataset[dataset]; !seen {
+			datasets = append(datasets, dataset)
+		}
+		rowsByDataset[dataset] += fields[1] + "\t" + fields[2] + "\n"
+	}
+
+	volumes := make([]VolumeState, 0, len(datasets))
+	for _, dataset := range datasets {
+		id := strings.TrimPrefix(dataset, h.cfg.Pool+"/")
+		props, err := parseZFSDatasetProps(id, rowsByDataset[dataset])
 		if err != nil {
-			return nil, fmt.Errorf("parse zvol size for %s: %w", id, err)
+			return nil, err
 		}
-		nqn, _ := h.getZFSProperty(ctx, fields[0], zfsPropNQN)
-		ownerVolumeID, _ := h.getZFSProperty(ctx, fields[0], zfsPropVolumeID)
-		portValue, _ := h.getZFSProperty(ctx, fields[0], zfsPropPort)
-		port, _ := strconv.Atoi(strings.TrimSpace(portValue))
-		nqn = strings.TrimSpace(nqn)
-		ownerVolumeID = strings.TrimSpace(ownerVolumeID)
-		exportDevice := h.namespaceDevicePath(ctx, nqn)
-		portEntryExists := h.portEntryExists(ctx, port, nqn)
-		portLinkTarget := h.portLinkTarget(ctx, port, nqn)
-		portAddress := h.portAttribute(ctx, port, "addr_traddr")
-		portServiceID := h.portAttribute(ctx, port, "addr_trsvcid")
-		portTransport := h.portAttribute(ctx, port, "addr_trtype")
-		portAddressFam := h.portAttribute(ctx, port, "addr_adrfam")
-		devicePath := h.cfg.devicePathFor(id)
-		namespaceReady := h.namespaceEnabled(ctx, nqn)
-		portReady := h.portReady(portAddress, portServiceID, portTransport, portAddressFam, port)
-		portLinkReady := h.cfg.portLinkTargetMatches(port, nqn, portLinkTarget)
-		exported := namespaceReady && exportDevice == devicePath && portLinkReady && portReady
-		volumes = append(volumes, VolumeState{
-			ID:              id,
-			OwnerVolumeID:   ownerVolumeID,
-			Dataset:         fields[0],
-			DevicePath:      devicePath,
-			SizeBytes:       sizeBytes,
-			NQN:             nqn,
-			Port:            port,
-			Exported:        exported,
-			NamespaceReady:  namespaceReady,
-			ExportDevice:    exportDevice,
-			PortEntryExists: portEntryExists,
-			PortLinkTarget:  portLinkTarget,
-			PortAddress:     portAddress,
-			PortServiceID:   portServiceID,
-			PortTransport:   portTransport,
-			PortAddressFam:  portAddressFam,
-			Status:          statusFromExport(exported),
-		})
+		probe, err := h.probeExportState(ctx, props.nqn, props.port)
+		if err != nil {
+			return nil, err
+		}
+		volumes = append(volumes, h.volumeState(id, dataset, props, probe))
 	}
 	return volumes, nil
+}
+
+func parseZFSDatasetProps(volumeID string, out string) (zfsDatasetProps, error) {
+	props := zfsDatasetProps{}
+	sizeSeen := false
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields := strings.SplitN(line, "\t", 2)
+		if len(fields) < 2 {
+			return props, fmt.Errorf("unexpected zfs property row for %s: %q", volumeID, line)
+		}
+		property := strings.TrimSpace(fields[0])
+		value := strings.TrimSpace(fields[1])
+		if value == "-" {
+			value = ""
+		}
+		switch property {
+		case "volsize":
+			sizeBytes, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return props, fmt.Errorf("parse zvol size for %s: %w", volumeID, err)
+			}
+			props.sizeBytes = sizeBytes
+			sizeSeen = true
+		case zfsPropVolumeID:
+			props.ownerVolumeID = value
+		case zfsPropNQN:
+			props.nqn = value
+		case zfsPropPort:
+			props.port, _ = strconv.Atoi(value)
+		}
+	}
+	if !sizeSeen {
+		return props, fmt.Errorf("zfs did not report volsize for %s", volumeID)
+	}
+	return props, nil
+}
+
+func (h *CommandHost) volumeState(volumeID string, dataset string, props zfsDatasetProps, probe exportProbe) VolumeState {
+	devicePath := h.cfg.devicePathFor(volumeID)
+	portReady := h.portReady(probe.portAddress, probe.portServiceID, probe.portTransport, probe.portAddressFam, props.port)
+	portLinkReady := h.cfg.portLinkTargetMatches(props.port, props.nqn, probe.portLink)
+	exported := probe.namespaceReady() && probe.nsDevicePath == devicePath && portLinkReady && portReady
+
+	return VolumeState{
+		ID:              volumeID,
+		OwnerVolumeID:   props.ownerVolumeID,
+		Dataset:         dataset,
+		DevicePath:      devicePath,
+		SizeBytes:       props.sizeBytes,
+		NQN:             props.nqn,
+		Port:            props.port,
+		Exported:        exported,
+		NamespaceReady:  probe.namespaceReady(),
+		ExportDevice:    probe.nsDevicePath,
+		PortEntryExists: probe.portEntry,
+		PortLinkTarget:  probe.portLink,
+		PortAddress:     probe.portAddress,
+		PortServiceID:   probe.portServiceID,
+		PortTransport:   probe.portTransport,
+		PortAddressFam:  probe.portAddressFam,
+		Status:          statusFromExport(exported),
+	}
 }
 
 func (h *CommandHost) CreateVolume(ctx context.Context, spec VolumeSpec) error {
@@ -188,9 +209,9 @@ func (h *CommandHost) CreateVolumeCommands(spec VolumeSpec) []Command {
 		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
 		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", "nvmet namespace device_path"),
 		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "nvmet namespace enable"),
-		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
-		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
-		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
+		writeIfDifferentCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1"),
+		setNamespaceDevicePathCommand(h.cfg.namespacePath(spec.NQN), spec.DevicePath),
+		enableNamespaceCommand(h.cfg.namespacePath(spec.NQN)),
 		verifyFileEqualsCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1", "nvmet namespace enable"),
 		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
@@ -218,9 +239,9 @@ func (h *CommandHost) RepairVolumeCommands(spec VolumeSpec) []Command {
 		Command{Name: "mkdir", Args: []string{"-p", h.cfg.namespacePath(spec.NQN)}},
 		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", "nvmet namespace device_path"),
 		waitForPathCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "nvmet namespace enable"),
-		writeCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1\n"),
-		writeCommand(h.cfg.namespacePath(spec.NQN)+"/device_path", spec.DevicePath+"\n"),
-		writeCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1\n"),
+		writeIfDifferentCommand(h.cfg.subsystemPath(spec.NQN)+"/attr_allow_any_host", "1"),
+		setNamespaceDevicePathCommand(h.cfg.namespacePath(spec.NQN), spec.DevicePath),
+		enableNamespaceCommand(h.cfg.namespacePath(spec.NQN)),
 		verifyFileEqualsCommand(h.cfg.namespacePath(spec.NQN)+"/enable", "1", "nvmet namespace enable"),
 		linkIfAbsentOrEqualCommand(h.cfg.subsystemPath(spec.NQN), h.cfg.portSubsystemPath(spec.Port, spec.NQN)),
 	)
@@ -337,76 +358,91 @@ func (h *CommandHost) GetCapacity(ctx context.Context) (*backend.Capacity, error
 	}, nil
 }
 
-func (h *CommandHost) getZFSProperty(ctx context.Context, dataset string, property string) (string, error) {
-	return h.run(ctx, Command{
-		Name: "zfs",
-		Args: []string{"get", "-H", "-p", "-o", "value", property, dataset},
-	})
+// exportProbe is the observed nvmet configfs state for one volume, gathered
+// by a single remote script so observation cost stays at two executor
+// round-trips per volume instead of one per attribute.
+type exportProbe struct {
+	nsEnable       string
+	nsDevicePath   string
+	portEntry      bool
+	portLink       string
+	portAddress    string
+	portServiceID  string
+	portTransport  string
+	portAddressFam string
 }
 
-func (h *CommandHost) namespaceEnabled(ctx context.Context, nqn string) bool {
-	if nqn == "" {
-		return false
-	}
-	out, err := h.run(ctx, Command{
-		Name: "cat",
-		Args: []string{h.cfg.namespacePath(nqn) + "/enable"},
-	})
-	return err == nil && strings.TrimSpace(out) == "1"
+func (p exportProbe) namespaceReady() bool {
+	return p.nsEnable == "1"
 }
 
-func (h *CommandHost) namespaceDevicePath(ctx context.Context, nqn string) string {
-	if nqn == "" {
-		return ""
+func (h *CommandHost) probeExportState(ctx context.Context, nqn string, port int) (exportProbe, error) {
+	if nqn == "" && port <= 0 {
+		return exportProbe{}, nil
 	}
-	out, err := h.run(ctx, Command{
-		Name: "cat",
-		Args: []string{h.cfg.namespacePath(nqn) + "/device_path"},
-	})
+	out, err := h.run(ctx, h.probeExportStateCommand(nqn, port))
 	if err != nil {
-		return ""
+		return exportProbe{}, fmt.Errorf("probe nvmet export state for %s: %w", nqn, err)
 	}
-	return strings.TrimSpace(out)
+	return parseExportProbe(out), nil
 }
 
-func (h *CommandHost) portLinkTarget(ctx context.Context, port int, nqn string) string {
-	if port <= 0 || nqn == "" {
-		return ""
+// probeExportStateCommand emits one `key=value` line per observed attribute.
+// Every read tolerates absence (empty value) so the script never fails on a
+// fresh or partially-built configfs tree.
+func (h *CommandHost) probeExportStateCommand(nqn string, port int) Command {
+	var script strings.Builder
+	probeFile := func(key string, path string) {
+		script.WriteString("printf '" + key + "=%s\\n' \"$(cat " + shellQuote(path) + " 2>/dev/null | tr -d '\\n')\"; ")
 	}
-	out, err := h.run(ctx, Command{
-		Name: "readlink",
-		Args: []string{h.cfg.portSubsystemPath(port, nqn)},
-	})
-	if err != nil {
-		return ""
+	if nqn != "" {
+		namespacePath := h.cfg.namespacePath(nqn)
+		probeFile("ns_enable", namespacePath+"/enable")
+		probeFile("ns_device_path", namespacePath+"/device_path")
 	}
-	return strings.TrimSpace(out)
+	if port > 0 {
+		portPath := h.cfg.portPath(port)
+		probeFile("addr_traddr", portPath+"/addr_traddr")
+		probeFile("addr_trsvcid", portPath+"/addr_trsvcid")
+		probeFile("addr_trtype", portPath+"/addr_trtype")
+		probeFile("addr_adrfam", portPath+"/addr_adrfam")
+		if nqn != "" {
+			link := h.cfg.portSubsystemPath(port, nqn)
+			script.WriteString("if [ -e " + shellQuote(link) + " ] || [ -L " + shellQuote(link) + " ]; then printf 'port_entry=1\\n'; else printf 'port_entry=0\\n'; fi; ")
+			script.WriteString("printf 'port_link=%s\\n' \"$(readlink " + shellQuote(link) + " 2>/dev/null | tr -d '\\n')\"; ")
+		}
+	}
+	script.WriteString("exit 0")
+	return Command{Name: "sh", Args: []string{"-c", script.String()}}
 }
 
-func (h *CommandHost) portEntryExists(ctx context.Context, port int, nqn string) bool {
-	if port <= 0 || nqn == "" {
-		return false
+func parseExportProbe(out string) exportProbe {
+	probe := exportProbe{}
+	for _, line := range strings.Split(out, "\n") {
+		key, value, found := strings.Cut(strings.TrimRight(line, "\r"), "=")
+		if !found {
+			continue
+		}
+		switch key {
+		case "ns_enable":
+			probe.nsEnable = value
+		case "ns_device_path":
+			probe.nsDevicePath = value
+		case "port_entry":
+			probe.portEntry = value == "1"
+		case "port_link":
+			probe.portLink = value
+		case "addr_traddr":
+			probe.portAddress = value
+		case "addr_trsvcid":
+			probe.portServiceID = value
+		case "addr_trtype":
+			probe.portTransport = value
+		case "addr_adrfam":
+			probe.portAddressFam = value
+		}
 	}
-	path := h.cfg.portSubsystemPath(port, nqn)
-	if _, err := h.run(ctx, Command{Name: "test", Args: []string{"-e", path}}); err == nil {
-		return true
-	}
-	_, err := h.run(ctx, Command{Name: "test", Args: []string{"-L", path}})
-	return err == nil
-}
-
-func (h *CommandHost) portAttribute(ctx context.Context, port int, name string) string {
-	if port <= 0 {
-		return ""
-	}
-	out, err := h.run(ctx, Command{
-		Name: "cat",
-		Args: []string{h.cfg.portPath(port) + "/" + name},
-	})
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(out)
+	return probe
 }
 
 func (h *CommandHost) portReady(address, serviceID, transport, addressFamily string, port int) bool {
@@ -439,11 +475,57 @@ func (h *CommandHost) runAll(ctx context.Context, commands []Command) error {
 	return nil
 }
 
-func writeCommand(path string, value string) Command {
+// writeIfDifferentCommand writes value only when the current content differs.
+// Safe for mutable nvmet attributes (e.g. attr_allow_any_host) where a
+// matching value must not be rewritten pointlessly and a differing value is
+// legal to change.
+func writeIfDifferentCommand(path string, value string) Command {
 	return Command{
-		Name:  "tee",
-		Args:  []string{path},
-		Stdin: value,
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"current=$(cat " + shellQuote(path) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ \"$current\" = " + shellQuote(value) + " ]; then exit 0; fi; " +
+				"printf '%s\\n' " + shellQuote(value) + " > " + shellQuote(path),
+		},
+	}
+}
+
+// setNamespaceDevicePathCommand writes the namespace device_path with
+// read-before-write semantics. nvmet rejects device_path writes while the
+// namespace is enabled (-EBUSY), so a matching value is a no-op, a differing
+// value on a disabled namespace is written, and a differing value on an
+// enabled namespace is surfaced as an explicit repair-required error instead
+// of a confusing kernel write failure.
+func setNamespaceDevicePathCommand(namespacePath string, devicePath string) Command {
+	target := namespacePath + "/device_path"
+	enable := namespacePath + "/enable"
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"current=$(cat " + shellQuote(target) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ \"$current\" = " + shellQuote(devicePath) + " ]; then exit 0; fi; " +
+				"enabled=$(cat " + shellQuote(enable) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ \"$enabled\" = '1' ]; then printf '%s\\n' " + shellQuote("refusing to rewrite device_path of enabled nvmet namespace "+namespacePath) + " >&2; exit 1; fi; " +
+				"printf '%s\\n' " + shellQuote(devicePath) + " > " + shellQuote(target),
+		},
+	}
+}
+
+// enableNamespaceCommand enables the namespace only when it is not already
+// enabled, so repeated create/repair passes stay idempotent on kernels that
+// reject re-enabling an enabled namespace.
+func enableNamespaceCommand(namespacePath string) Command {
+	enable := namespacePath + "/enable"
+	return Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"current=$(cat " + shellQuote(enable) + " 2>/dev/null | tr -d '\\n'); " +
+				"if [ \"$current\" = '1' ]; then exit 0; fi; " +
+				"printf '%s\\n' 1 > " + shellQuote(enable),
+		},
 	}
 }
 
