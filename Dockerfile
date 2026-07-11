@@ -1,8 +1,9 @@
 # Multi-stage Dockerfile for nvmet-csi driver
 # Creates a minimal container image with the CSI plugin binary
 
-# Stage 1: Build the Go binary
-FROM golang:1.24-alpine AS builder
+# Stage 1: Build the Go binary (cross-compiles on the build platform;
+# CGO is disabled so only the Go toolchain's native cross support is needed)
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -27,8 +28,12 @@ ARG GIT_COMMIT=unknown
 ARG GIT_TAG=unknown
 ARG BUILD_DATE=unknown
 
+# Target platform provided by buildx (defaults preserve plain docker build)
+ARG TARGETOS
+ARG TARGETARCH
+
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-} go build \
     -ldflags "-s -w \
       -X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.version=${GIT_TAG} \
       -X gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver.gitCommit=${GIT_COMMIT} \
