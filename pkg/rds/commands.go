@@ -55,14 +55,14 @@ func (c *sshClient) CreateVolume(opts CreateVolumeOptions) error {
 
 	// Execute command with retry
 	c.recordMutationDecision("create_volume", opts.Slot, "mutate", "missing")
-	_, err = c.runCommandWithRetry(cmd, 3)
-	if err != nil {
+	if _, err = c.runDiskAdd(cmd, opts.Mount); err != nil {
 		return fmt.Errorf("failed to create volume: %w", err)
 	}
 
-	// Verify volume was created
-	if err := c.VerifyVolumeExists(opts.Slot); err != nil {
-		return fmt.Errorf("volume creation verification failed: %w", err)
+	// Verify volume was created. RouterOS materializes file-backed disks
+	// asynchronously, so poll briefly instead of trusting an immediate read.
+	if err := c.waitForVolumeReady(opts.Slot, 10*time.Second); err != nil {
+		return fmt.Errorf("volume creation verification failed for %s: %w", opts.Slot, err)
 	}
 
 	klog.V(2).Infof("Created volume %s", opts.Slot)
@@ -75,6 +75,63 @@ func normalizeCreateVolumeOptions(opts CreateVolumeOptions) CreateVolumeOptions 
 		opts.NVMETCPPort = 4420
 	}
 	return opts
+}
+
+// runDiskAdd executes a /disk add command, transparently dropping the mount
+// parameter on RouterOS builds that no longer accept it (removed in newer
+// /disk APIs; observed on 7.23, where file-backed disks also no longer
+// auto-mount, so omitting mount=no preserves the intended behavior).
+func (c *sshClient) runDiskAdd(cmd string, mount bool) (string, error) {
+	if c.diskAddMountUnsupported.Load() {
+		if mount {
+			return "", fmt.Errorf("this RouterOS build does not support the /disk add mount parameter, cannot honor mount=yes")
+		}
+		cmd = strings.Replace(cmd, " "+routerOSMountParam(false), "", 1)
+	}
+
+	out, err := c.runCommandWithRetry(cmd, 3)
+	if err == nil || !isMountParamError(err) {
+		return out, err
+	}
+	if mount {
+		return "", fmt.Errorf("RouterOS rejected the /disk add mount parameter but mount=yes was requested: %w", err)
+	}
+
+	c.diskAddMountUnsupported.Store(true)
+	klog.Warningf("RouterOS rejected the /disk add mount parameter (newer /disk API); retrying without it and omitting it from now on")
+	return c.runCommandWithRetry(strings.Replace(cmd, " "+routerOSMountParam(false), "", 1), 3)
+}
+
+// isMountParamError reports whether err is RouterOS rejecting the mount
+// parameter of /disk add.
+func isMountParamError(err error) bool {
+	var outputErr *CommandOutputError
+	return errors.As(err, &outputErr) && strings.Contains(strings.ToLower(outputErr.Output), "bad parameter mount")
+}
+
+// waitForVolumeReady polls until the volume is visible and ready. It returns
+// a plain error (never a typed not-found) so callers' mutation failures are
+// not mistaken for benign missing-volume conditions.
+func (c *sshClient) waitForVolumeReady(slot string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		volume, err := c.GetVolume(slot)
+		if err == nil {
+			if volume.Status == "ready" {
+				return nil
+			}
+			lastErr = fmt.Errorf("volume %s is not ready (status: %s)", slot, volume.Status)
+		} else if !isVolumeNotFound(err) {
+			return err
+		} else {
+			lastErr = fmt.Errorf("volume %s is not visible yet", slot)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %v: %w", timeout, lastErr)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (c *sshClient) observeVolumeForCreate(slot string) (*VolumeInfo, bool, error) {
@@ -936,7 +993,7 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	// - Omit file-size: copy-from determines size from source automatically.
 	// - NO nvme-tcp-export, nvme-tcp-server-port, nvme-tcp-server-nqn (snapshots not NVMe-exported).
 	cmd := fmt.Sprintf(
-		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s mount=no`,
+		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s `+routerOSMountParam(false),
 		opts.SourceVolume,
 		snapFilePath,
 		opts.Name,
@@ -944,7 +1001,7 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 
 	// Execute command with retry
 	c.recordMutationDecision("create_snapshot", opts.Name, "mutate", "missing")
-	_, err = c.runCommandWithRetry(cmd, 3)
+	_, err = c.runDiskAdd(cmd, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snapshot: %w", err)
 	}
@@ -1187,7 +1244,7 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 	)
 
 	c.recordMutationDecision("restore_snapshot", newVolumeOpts.Slot, "mutate", "missing")
-	_, err = c.runCommandWithRetry(cmd, 3)
+	_, err = c.runDiskAdd(cmd, newVolumeOpts.Mount)
 	if err != nil {
 		return fmt.Errorf("failed to restore snapshot to new volume: %w", err)
 	}

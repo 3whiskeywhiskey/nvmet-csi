@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -16,6 +17,48 @@ import (
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/security"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
+
+// CommandOutputError reports a RouterOS CLI failure. RouterOS prints command
+// errors (e.g. "bad parameter mount") to stdout and still exits zero, so exit
+// status alone cannot be trusted for mutations.
+type CommandOutputError struct {
+	Command string
+	Output  string
+}
+
+func (e *CommandOutputError) Error() string {
+	return fmt.Sprintf("RouterOS rejected command: %s (command: %s)", strings.TrimSpace(e.Output), e.Command)
+}
+
+// routerOSOutputErrorPrefixes are line prefixes RouterOS uses for CLI errors.
+// Inputs are strictly validated (slot names, sanitized paths), so legitimate
+// command output cannot start a line with these phrases.
+var routerOSOutputErrorPrefixes = []string{
+	"bad parameter",
+	"syntax error",
+	"failure:",
+	"expected end of command",
+	"input does not match",
+	"no such item",
+	"invalid value",
+	"not enough permissions",
+	"ambiguous command",
+}
+
+func routerOSOutputError(command, output string) error {
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.ToLower(strings.TrimSpace(line))
+		if trimmed == "" {
+			continue
+		}
+		for _, prefix := range routerOSOutputErrorPrefixes {
+			if strings.HasPrefix(trimmed, prefix) {
+				return &CommandOutputError{Command: command, Output: output}
+			}
+		}
+	}
+	return nil
+}
 
 // sshClient implements RDSClient using SSH protocol to connect to RouterOS
 type sshClient struct {
@@ -32,6 +75,12 @@ type sshClient struct {
 	volumeLocks        *targetLockManager
 	commandObserver    CommandObserver
 	decisionObserver   MutationDecisionObserver
+
+	// diskAddMountUnsupported records that this RouterOS build rejects the
+	// /disk add mount parameter (removed in newer /disk APIs, observed on
+	// 7.23). Learned on first rejection, then omitted for the connection's
+	// lifetime.
+	diskAddMountUnsupported atomic.Bool
 }
 
 // newSSHClient creates a new SSH-based RDS client
@@ -236,6 +285,9 @@ func (c *sshClient) runCommand(command string) (string, error) {
 
 	output := stdout.String()
 	klog.V(5).Infof("Command output: %s", output)
+	if err = routerOSOutputError(command, output); err != nil {
+		return output, err
+	}
 	return output, nil
 }
 
@@ -293,6 +345,13 @@ func (c *sshClient) runCommandWithRetry(command string, maxRetries int) (string,
 // isRetryableError determines if an error is worth retrying
 func isRetryableError(err error) bool {
 	if err == nil {
+		return false
+	}
+
+	// RouterOS CLI rejections are deterministic; retrying repeats a doomed
+	// mutation against fragile shared infrastructure.
+	var outputErr *CommandOutputError
+	if errors.As(err, &outputErr) {
 		return false
 	}
 
