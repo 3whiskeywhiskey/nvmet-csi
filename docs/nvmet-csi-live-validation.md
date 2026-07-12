@@ -459,3 +459,19 @@ snapshot content, PVs, PVCs, `VolumeAttachment` objects, RouterOS disks and
 backing files, isolated Helm release, and namespace were removed. Exact RDS
 inventory returned to the pre-test baseline of 78 disks and 73 files matching
 `pvc-` or `snap-`.
+
+The capability cutover was deployed from source commit `0bfc93e` as
+`ghcr.io/3whiskeywhiskey/nvmet-csi:dev-20260712-snapshot-capability-cutover`
+pinned to OCI index digest
+`sha256:32f74689537014d0843939756511c622c39c64742f0c47c18b687ee1a189e927`.
+Flux applied chart revision `1.0.0+eacbf5c7c094`. The controller became `5/5`
+Ready with no snapshotter sidecar, startup rebuilt seven configured-driver
+attachments, and export reconciliation completed with `targets=1`,
+`repaired=0`, and `conflicts=0`. Client discovery on `r640-3` returned the
+discovery subsystem plus all ten managed Linux-ZOL NQNs; configfs contained ten
+subsystems and ten port links. The three currently Ready node-plugin hosts
+(`r740xd`, `r640-2`, and `r640-3`) were rolled sequentially to the digest.
+`r640-1` and `c4140` remain offline with terminating historical pods and will
+receive the DaemonSet template when they return. The only remaining
+`VolumeSnapshotClass` belongs to the separate legacy `rds.csi.srvlab.io`
+driver; `nvmet-csi` has none.
