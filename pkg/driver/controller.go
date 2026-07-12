@@ -1148,6 +1148,16 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return nil, status.Errorf(codes.Internal, "failed to get source volume: %v", err)
 	}
 
+	// RouterOS /disk add copy-from disrupts an active source disk's NVMe/TCP
+	// controller. Require an offline source rather than turning a nominally
+	// read-only snapshot request into an I/O outage for the mounted workload.
+	if selection.Type == backend.TypeRouterOSRDS && cs.driver.attachmentManager != nil {
+		if attachmentState, attached := cs.driver.attachmentManager.GetAttachment(sourceVolumeID); attached && len(attachmentState.Nodes) > 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"source volume %s must be detached before creating a RouterOS snapshot", sourceVolumeID)
+		}
+	}
+
 	// 5. Determine base path for snapshot file storage
 	// Snapshots are stored in the same base directory as volumes (paramVolumePath).
 	volumeBasePath := defaultVolumeBasePath
