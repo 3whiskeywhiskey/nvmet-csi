@@ -344,6 +344,14 @@ func persistentVolumeMatchesDriver(pv *corev1.PersistentVolume, driverName strin
 }
 
 func (s BackendSelection) cacheKey() string {
+	// Every RouterOS selection resolves to the driver's one configured RDS
+	// client. Volume attributes such as targetAddress describe the data path,
+	// not another control-plane backend; treating them as backend identity makes
+	// snapshot lookup report the same appliance as multiple backends after a
+	// controller restart.
+	if s.Type == storagebackend.TypeRouterOSRDS {
+		return s.Type
+	}
 	return strings.Join([]string{
 		s.Type,
 		s.Executor,
