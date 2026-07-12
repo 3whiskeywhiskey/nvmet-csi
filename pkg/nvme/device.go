@@ -33,6 +33,26 @@ type DeviceUsageResult struct {
 	FilteredSelfPIDs int
 }
 
+// parseLsofLine extracts process identity from either BusyBox/Alpine lsof
+// output (PID COMMAND ...) or traditional lsof output (COMMAND PID ...).
+// Header and malformed lines are ignored.
+func parseLsofLine(line string) (pid int, command string, ok bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return 0, "", false
+	}
+
+	if pid, err := strconv.Atoi(fields[0]); err == nil {
+		return pid, fields[1], true
+	}
+
+	pid, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return 0, "", false
+	}
+	return pid, fields[0], true
+}
+
 // CheckDeviceInUse checks if a device has open file descriptors using lsof.
 // Returns InUse=true if processes are holding the device open.
 // Returns TimedOut=true if lsof didn't respond within DeviceCheckTimeout (device may be unresponsive).
@@ -84,40 +104,31 @@ func CheckDeviceInUse(ctx context.Context, devicePath string) DeviceUsageResult 
 		klog.Infof("CheckDeviceInUse: lsof output for %s (%d lines):\n%s", devicePath, len(lines), string(out))
 	}
 
-	if len(lines) <= 1 {
-		// Only header line or empty - no processes
-		return DeviceUsageResult{InUse: false}
-	}
-
-	// Extract process info from output (skip header line)
+	// Extract process info from both traditional lsof output (which includes a
+	// header) and BusyBox output (which is headerless and puts the PID first).
 	// Filter out the driver's own PID to avoid false positives from:
 	// - Temporary FDs during /proc scans in IsMountInUse()
 	// - Sysfs reads during device path resolution
 	// - The lsof check operation itself
-	processes := make([]string, 0, len(lines)-1)
+	processes := make([]string, 0, len(lines))
 	filteredCount := 0
 
-	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			// Parse PID from lsof output
-			pid, err := strconv.Atoi(fields[1])
-			if err != nil {
-				klog.Warningf("Failed to parse PID from lsof line '%s': %v", line, err)
-				continue
-			}
-
-			// Filter out driver's own PID
-			if pid == ownPID {
-				filteredCount++
-				klog.V(4).Infof("CheckDeviceInUse: filtered out driver's own PID %d from device-in-use check (command: %s)",
-					pid, fields[0])
-				continue
-			}
-
-			// Format as "command[PID]" for readable error messages
-			processes = append(processes, fmt.Sprintf("%s[PID:%s]", fields[0], fields[1]))
+	for _, line := range lines {
+		pid, command, ok := parseLsofLine(line)
+		if !ok {
+			continue
 		}
+
+		// Filter out driver's own PID.
+		if pid == ownPID {
+			filteredCount++
+			klog.V(4).Infof("CheckDeviceInUse: filtered out driver's own PID %d from device-in-use check (command: %s)",
+				pid, command)
+			continue
+		}
+
+		// Format as "command[PID]" for readable error messages.
+		processes = append(processes, fmt.Sprintf("%s[PID:%d]", command, pid))
 	}
 
 	if filteredCount > 0 {

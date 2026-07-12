@@ -87,6 +87,14 @@ Startup recovery results:
 | Attachment recovery | Passed | Seven active driver `VolumeAttachment` objects rebuilt from Kubernetes state. |
 | Existing workload | Passed | ClickHouse on `pvc-5ebfb48b-eea8-452a-ad5d-6f572cfbc920` remained running; `clickhouse-client --query 'SELECT 1'` returned `1`. |
 
+Post-reboot worker lifecycle validation on `r640-3` also passed:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Provision and mount | Passed | Disposable 1Gi `nvmet-zol-r740xd` PVC mounted as ext4 on `/dev/nvme1n1`. ZFS/configfs inventories increased from 24/12/12 to 25/13/13. |
+| Write/read and remount | Passed | Marker survived deletion and recreation of the consumer pod on `r640-3`. |
+| Delete cleanup | Passed | PVC/PV, `VolumeAttachment`, zvol, subsystem, and port link were all absent; inventories returned to 24/12/12. |
+
 This closes the controller-side reboot-safety acceptance criterion: target
 exports were reconstructed from durable zvol metadata and Kubernetes PV state
 without manual configfs mutation, and a repeated startup performed no repairs.
@@ -96,6 +104,23 @@ Environmental note: during final observation the Kubernetes API VIP
 worked, then one refused connections and the other reported failed `etcd`
 readiness. Storage recovery and workload checks above completed before that
 separate control-plane instability.
+
+### Released Retain-policy PV review
+
+The two `Released` Linux-ZOL PVs restored by the reconciler were reviewed
+without mounting, rebinding, or deleting either volume:
+
+- `pvc-13da04a0-0aa5-4d81-ba09-cec735a71616` (500Gi) was the former
+  `comfyui/audio-vidgen-workspace`. It has no filesystem signature and only
+  6KiB logical use. A replacement RDS PVC with the same claim name and size
+  was created nine minutes later. This is a strong deletion candidate, but
+  requires explicit owner approval.
+- `pvc-56cd7dc8-f6fc-4b63-93cf-91ae533dcb47` (20Gi) was
+  `infra-vms/prime-bdad263a-cf4e-4e1e-91f0-6bfdeae3684b-scratch`. It contains
+  a clean ext4 filesystem last mounted once at `/scratch`, with about 5.7GiB
+  lifetime writes. No current PVC, DataVolume, VM reference,
+  `VolumeAttachment`, or NVMe connection was found. Preserve it pending owner
+  confirmation; it is not an obviously empty volume.
 
 ## Live RDS Controller-Path Validation (opti, 2026-07-11)
 
@@ -129,9 +154,35 @@ Bugs found and fixed during this validation (commits `2583b5b`, `c0f6337`):
 - Create verification now polls up to 10s instead of trusting an immediate
   read after `/disk add` (disk materialization is asynchronous).
 
-Still not validated live: RDS data path (NVMe/TCP mount) under `nvmet-csi`,
-snapshots against real RouterOS, and node-roll churn against RDS-backed
-workloads. Those need a cluster with v68 reachability (metal).
+### Live RDS data-path validation (metal, 2026-07-12)
+
+The missing RDS data-path coverage was completed with an isolated temporary
+driver (`nvmet-rds-test.csi.whiskey.works`), dedicated namespace and key,
+controller on r740xd, node plugin only on `r640-3`, and one non-default
+WaitForFirstConsumer/Delete StorageClass. The legacy RDS driver and production
+Linux-ZOL driver were not modified. Mutation guard defaults remained active
+(250ms minimum interval, burst 1); orphan cleanup and snapshots were disabled.
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| RDS health and reachability | Passed | RouterOS 7.23rc2, pinned host key, 0% CPU at start, 53 discoverable exports from `r640-3`. |
+| Provision and mount | Passed | 1Gi RDS file-backed export created in 858ms and mounted as ext4 on `/dev/nvme1n1`. `mount-filesystem=no` was verified on the appliance. |
+| Write/read and remount | Passed | Marker survived consumer pod deletion and recreation on `r640-3`. |
+| Online expansion | Passed | 1Gi to 2Gi completed while mounted; RDS disk/file size was exactly 2147483648 bytes, PV/PVC reached 2Gi, ext4 grew to 2028392 1K blocks, marker remained intact. |
+| Delete cleanup | Passed | RDS disk and backing file counts for the volume were both zero; PV, `VolumeAttachment`, NVMe connection, and discovery record were absent. Appliance disk count returned to its baseline of 78. |
+| Appliance health | Passed | No restart; uptime continued, CPU remained 0%, memory and management storage remained stable. |
+| Test isolation cleanup | Passed | Temporary Helm release, namespace, Secret, StorageClass, node plugin, controller, and `CSIDriver` were removed. |
+
+Log review found one independent node-side defect: Alpine/BusyBox `lsof`
+emits headerless `PID COMMAND ...` rows, while `CheckDeviceInUse` assumed
+traditional `COMMAND PID ...` output. This produced parse warnings during
+teardown and could weaken device-in-use detection. The parser now supports
+both formats with captured-format regression coverage in `pkg/nvme`; that
+source fix was tested under `go test -race` but was not part of the image used
+for this live lifecycle.
+
+Still not validated live: snapshots against real RouterOS and node-roll churn
+against RDS-backed workloads.
 
 ## Side-by-Side Install Shape
 
