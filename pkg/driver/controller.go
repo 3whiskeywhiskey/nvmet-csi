@@ -345,6 +345,16 @@ func (cs *ControllerServer) createVolumeFromSnapshot(
 		return nil, status.Errorf(codes.Internal, "failed to restore snapshot: %v", err)
 	}
 
+	restoredVolume, err := storageBackend.GetVolume(ctx, volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to verify restored volume: %v", err)
+	}
+	if restoredVolume.SizeBytes < requiredBytes {
+		if err := storageBackend.ResizeVolume(ctx, volumeID, requiredBytes); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to expand restored volume: %v", err)
+		}
+	}
+
 	klog.V(2).Infof("Restored volume %s from snapshot %s", volumeID, snapshotID)
 	cs.driver.rememberVolumeBackendSelection(volumeID, selection)
 

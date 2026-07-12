@@ -1250,15 +1250,14 @@ func (c *sshClient) RestoreSnapshot(snapshotID string, newVolumeOpts CreateVolum
 
 	klog.V(4).Infof("Restoring snapshot %s to new volume %s", snapshotID, newVolumeOpts.Slot)
 
-	// Create new NVMe-exported volume using /disk add copy-from.
-	// This is essentially CreateVolume but with copy-from to populate data from the snapshot.
-	// file-size is included to allow larger-than-snapshot restores (per CSI spec).
-	sizeStr := formatBytes(newVolumeOpts.FileSizeBytes)
+	// Create the new exported volume from the snapshot. Do not pass file-size:
+	// RouterOS copy-from derives it from the source; supplying file-size creates
+	// a fresh blank backing file instead of preserving the copied filesystem.
+	// A larger CSI request is expanded after the copy by the normal resize path.
 	cmd := fmt.Sprintf(
-		`/disk add type=file copy-from=[find slot=%s] file-path=%s file-size=%s slot=%s %s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
+		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s %s nvme-tcp-export=yes nvme-tcp-server-port=%d nvme-tcp-server-nqn=%s`,
 		snapshotID,
 		newVolumeOpts.FilePath,
-		sizeStr,
 		newVolumeOpts.Slot,
 		routerOSMountParam(newVolumeOpts.Mount),
 		newVolumeOpts.NVMETCPPort,
