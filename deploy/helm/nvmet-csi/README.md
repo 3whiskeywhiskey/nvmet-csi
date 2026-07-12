@@ -249,11 +249,13 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `snapshotClass.enabled` | Enable VolumeSnapshotClass creation | `true` |
-| `snapshotClass.name` | VolumeSnapshotClass name | `nvmet-csi-snapclass` |
-| `snapshotClass.deletionPolicy` | Deletion policy (Delete or Retain) | `Delete` |
+| `snapshotClass.enabled` | Enable VolumeSnapshotClass creation | `false` |
+| `snapshotClass.name` | Reserved VolumeSnapshotClass name | `nvmet-csi-snapclass` |
+| `snapshotClass.deletionPolicy` | Reserved deletion policy | `Delete` |
 
-**Important:** Snapshot functionality requires VolumeSnapshot CRDs and snapshot-controller to be installed separately. See installation instructions in NOTES.txt.
+**Unsupported:** Do not enable snapshot or scheduled-snapshot resources. Neither
+backend currently exposes a data-preserving snapshot primitive, and the driver
+does not advertise CSI snapshot capabilities.
 
 ## Secret Structure
 

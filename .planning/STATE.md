@@ -10,16 +10,16 @@ RDS-focused development history.
 RouterOS/RDS compatibility backend
 **Core value:** volumes remain accessible and recoverable through NVMe/TCP
 reconnections, controller restarts, and target-host reboot
-**Current focus:** RouterOS snapshot TC-08, then scheduled snapshots and
-non-destructive resilience validation
+**Current focus:** non-destructive RouterOS resilience validation and remaining
+Linux-ZOL consumer-node/KubeVirt churn
 
 ## Current Position
 
 The predecessor plans through v0.11.0 are archived. Post-fork backend
 abstraction, Linux-ZOL lifecycle/reboot recovery, and isolated RouterOS
-ordinary lifecycle are implemented and live-validated. RouterOS snapshots are
-implemented and automated-tested but await TC-08 live execution. Linux-ZOL
-snapshots are unsupported.
+ordinary lifecycle are implemented and live-validated. Snapshot create,
+restore, and list are unsupported on both backends after RouterOS TC-08 failed
+live data-integrity validation.
 
 ## Performance Metrics
 
@@ -47,9 +47,9 @@ None.
 
 ### Blockers/Concerns
 
-- RouterOS snapshot TC-08 and resilience TC-09-TC-11 were documented but not live-executed in the archived milestone.
-- Scheduled snapshot CronJob execution remains live-unverified.
-- Linux-ZOL snapshot operations are unsupported.
+- RouterOS TC-08 proved `/disk add copy-from` does not preserve backing data and can disconnect an attached source; snapshots are disabled.
+- RouterOS resilience TC-09-TC-11 remains pending live execution.
+- A future snapshot design needs a proven data-copy primitive and new live validation.
 - Current observed evidence is recorded in `docs/nvmet-csi-live-validation.md`.
 
 ### Quick Tasks Completed
@@ -66,6 +66,6 @@ None.
 ## Session Continuity
 
 Last current activity: 2026-07-12
-Current work: isolated RouterOS TC-08 snapshot validation
+Current work: reconcile failed RouterOS TC-08 and disable snapshot advertisement
 Deferred tonight: returning-node DaemonSet rollout on `r640-1` and `c4140`
-Next after TC-08: scheduled snapshot execution, then TC-09/TC-11
+Next: non-destructive TC-09/TC-11 and Linux-ZOL churn validation

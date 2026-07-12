@@ -217,15 +217,13 @@ but not live-executed.
 | Linux-ZOL target reconstruction after reboot | Yes | Yes | Yes, r740xd 2026-07-11 | Supported |
 | Linux-ZOL snapshots and snapshot restore | No | Negative-path only | No | Unsupported |
 | RouterOS/RDS volume create/delete, mount/remount, online expand | Yes | Yes | Yes, isolated Metal path 2026-07-11/12 | Compatibility backend |
-| RouterOS/RDS snapshot create/delete/list and same-backend restore | Yes | Yes | No; TC-08 pending | Validation in progress |
+| RouterOS/RDS snapshot create/delete/list and same-backend restore | Historical code/mock path only | Yes | Failed, Opti 2026-07-12 | Unsupported; `copy-from` did not preserve data |
 | RouterOS/RDS node-roll and disruption resilience | Yes / recovery paths | Mock and documented procedures | No; TC-09-TC-11 pending | Validation pending |
 
-CSI controller snapshot capabilities are currently advertised per driver
-instance, not per StorageClass. Linux-ZOL does not implement snapshots, and
-`CreateSnapshot` routing still relies on `VolumeSnapshotClass` parameters rather
-than authoritative source-volume ownership. Until that is hardened, deploy
-snapshot-capable RouterOS and snapshot-unsupported Linux-ZOL paths under
-separate CSI identities and use a RouterOS-specific `VolumeSnapshotClass`.
+CSI controller snapshot capabilities are not advertised. Helm disables
+`VolumeSnapshotClass` and scheduled-snapshot resources. Mock coverage of the
+historical RouterOS path is retained as implementation history, not capability
+evidence.
 
 ## Current Roadmap
 
@@ -239,21 +237,19 @@ separate CSI identities and use a RouterOS-specific `VolumeSnapshotClass`.
 - Isolated RouterOS controller and full data-path lifecycle live validation.
 - Configured CSI driver-name isolation across attachment and orphan reconciliation.
 - BusyBox/traditional `lsof` device-in-use safety fix.
+- RouterOS TC-08 failure analysis, safe cleanup, and snapshot capability disablement.
 
 ### Active validation
 
-1. Execute RouterOS snapshot TC-08 with an isolated nvmet-csi identity.
-2. Validate scheduled snapshot execution only after TC-08 succeeds.
-3. Execute non-destructive RouterOS resilience cases TC-09 and TC-11.
-4. Execute TC-10 appliance restart only in an approved maintenance window.
-5. Validate Linux-ZOL consumer-node drain and KubeVirt churn.
+1. Execute non-destructive RouterOS resilience cases TC-09 and TC-11.
+2. Execute TC-10 appliance restart only in an approved maintenance window.
+3. Validate Linux-ZOL consumer-node drain and KubeVirt churn.
 
 ### Release closure
 
 - Reconcile current versioning with the archived v0.11 predecessor history.
 - Publish a formal post-fork release only from the exact verified source commit.
-- Complete node-plugin rollout on `r640-1` and `c4140` when those nodes return;
-  they are not required for the current snapshot validation.
+- Complete node-plugin rollout on `r640-1` and `c4140` when those nodes return.
 
 ---
 
@@ -307,12 +303,12 @@ Potential areas for v1.0+ development:
 | Historical predecessor plans v0.1.0-v0.11.0 | Archived | `.planning/milestones/` |
 | Linux-ZOL backend and reboot safety | Live-validated | `docs/nvmet-csi-live-validation.md` |
 | RouterOS/RDS ordinary lifecycle through nvmet-csi | Live-validated | `docs/nvmet-csi-live-validation.md` |
-| RouterOS/RDS snapshots | Implemented + automated-tested; TC-08 pending | `docs/HARDWARE_VALIDATION.md` |
-| Linux-ZOL snapshots | Unsupported | `pkg/backend/linuxzol/backend.go` |
+| Volume snapshots on both backends | Unsupported; RouterOS TC-08 failed data-integrity validation | `docs/nvmet-csi-live-validation.md` |
 | RouterOS resilience TC-09-TC-11 | Automated/documented; live execution pending | `docs/HARDWARE_VALIDATION.md` |
 
-**Current focus:** isolated RouterOS snapshot TC-08, then scheduled snapshots
-and non-destructive resilience validation.
+**Current focus:** non-destructive RouterOS resilience validation and remaining
+Linux-ZOL consumer-node/KubeVirt churn. Snapshot work is deferred pending a
+proven data-preserving backend primitive.
 
 ---
 

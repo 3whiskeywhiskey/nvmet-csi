@@ -411,3 +411,51 @@ Use one `nvmet-csi` instance with multiple StorageClasses when:
 
 The first live rollout should optimize for isolation and auditability, not for
 minimum manifest count.
+
+## RouterOS Snapshot TC-08 — Failed / Capability Disabled (2026-07-12)
+
+TC-08 ran against RouterOS 7.23rc2 on the isolated Opti-oriented driver
+`nvmet-rds-test.csi.whiskey.works`. The source was a disposable 1 GiB ext4 PVC
+on `r640-3` containing `tc08-before-snapshot-20260712`.
+
+The first live run exposed an immediate safety defect: RouterOS
+`/disk add copy-from=[find slot=<source>]` inherited the source disk's
+`nvme-tcp-export=yes` and NQN unless `nvme-tcp-export=no` was explicit. The
+created snapshot was removed, the backing file was removed, and creation was
+patched to force `nvme-tcp-export=no`. Long wrapped `/file print detail` names
+also caused cleanup to miss backing files; the parser and RouterOS backend
+identity deduplication were corrected and live deletion then removed both the
+disk entry and file after a controller restart.
+
+The corrected command created an unexported snapshot, but `copy-from` disrupted
+the attached source's NVMe controller. The mounted workload returned I/O errors
+and the source subsystem had no controller. After deleting consumers, toggling
+only the disposable source export off/on, and remounting, the original marker
+was readable and source data was intact. The driver now rejects attached-source
+RouterOS snapshot requests with `FailedPrecondition`; the live negative check
+created no snapshot object on RDS and left the source marker readable.
+
+An offline retry still failed the core contract. After clean detach, the
+snapshot became `ReadyToUse` and showed `nvme-tcp-export=no`, but restoring it
+mounted a freshly formatted ext4 filesystem containing only `lost+found`; the
+marker was absent. Removing `file-size` from the restore command produced the
+same blank result. This proves RouterOS `/disk add copy-from` copies disk
+configuration rather than backing-image contents on this appliance.
+
+RouterOS `/file copy` is the plausible primitive for a future offline full-copy
+design, but the dedicated `metal-csi` user returned:
+
+```text
+not enough permissions (9) (/file/copy; line 1)
+```
+
+Result: **failed; snapshots unsupported**. CSI snapshot capabilities were
+removed from controller advertisement, Helm now defaults
+`snapshotClass.enabled=false`, and enabling snapshot or scheduled-snapshot
+templates fails rendering. Linux-ZOL snapshots were already unsupported.
+
+Cleanup completed: the disposable source, both restore attempts, snapshot,
+snapshot content, PVs, PVCs, `VolumeAttachment` objects, RouterOS disks and
+backing files, isolated Helm release, and namespace were removed. Exact RDS
+inventory returned to the pre-test baseline of 78 disks and 73 files matching
+`pvc-` or `snap-`.

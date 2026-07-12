@@ -4,6 +4,7 @@
 # And snapshot-controller to be deployed:
 #   kubectl kustomize https://github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller | kubectl create -f -
 {{- if .Values.snapshotClass.enabled }}
+{{- fail "snapshotClass.enabled=true is unsupported: nvmet-csi has no data-preserving snapshot backend" }}
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:

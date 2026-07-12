@@ -207,25 +207,6 @@ spec:
           resources:
             {{- toYaml .Values.sidecars.resizer.resources | nindent 12 }}
 
-        # CSI external-snapshotter sidecar (for snapshot operations)
-        - name: csi-snapshotter
-          image: "{{ .Values.sidecars.snapshotter.image.repository }}:{{ .Values.sidecars.snapshotter.image.tag }}"
-          args:
-            - "--csi-address=$(ADDRESS)"
-            - "--v=5"
-            - "--leader-election=true"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-            {{- range .Values.sidecars.snapshotter.additionalArgs }}
-            - {{ . | quote }}
-            {{- end }}
-          env:
-            - name: ADDRESS
-              value: /var/lib/csi/sockets/pluginproxy/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /var/lib/csi/sockets/pluginproxy/
-          resources:
-            {{- toYaml .Values.sidecars.snapshotter.resources | nindent 12 }}
 
         # CSI livenessprobe sidecar
         - name: liveness-probe

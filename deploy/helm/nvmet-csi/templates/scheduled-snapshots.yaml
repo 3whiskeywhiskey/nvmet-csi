@@ -1,4 +1,5 @@
 {{- if .Values.scheduledSnapshots.enabled }}
+{{- fail "scheduledSnapshots.enabled=true is unsupported while CSI snapshots are disabled" }}
 ---
 # Source: nvmet-csi/templates/scheduled-snapshots.yaml
 # ServiceAccount for scheduled snapshot CronJob pods

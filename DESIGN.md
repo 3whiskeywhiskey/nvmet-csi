@@ -52,13 +52,12 @@ hardware procedure is not live-validation evidence.
 | Linux-ZOL volume lifecycle, expansion, and target reconciliation | Implemented, automated-tested, and live-validated on Metal in July 2026 |
 | Linux-ZOL snapshots and snapshot restore | Unsupported |
 | RouterOS/RDS ordinary volume lifecycle through nvmet-csi | Implemented, automated-tested, and live-validated on an isolated Metal deployment in July 2026 |
-| RouterOS/RDS snapshot create/delete/list and same-backend restore | Implemented and automated-tested; real-RouterOS TC-08 pending |
+| RouterOS/RDS snapshot create/restore/list | Unsupported; live TC-08 proved `copy-from` does not preserve backing data and can disrupt an attached source |
 | RouterOS/RDS disruption and node-roll resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
 
-Snapshot capabilities are advertised globally by a driver instance even though
-only RouterOS implements them. Until source-volume routing and capability
-handling are hardened, operate RouterOS snapshot support and Linux-ZOL under
-separate CSI identities and backend-specific `VolumeSnapshotClass` objects.
+Snapshot capabilities are not advertised. Helm disables `VolumeSnapshotClass`
+creation by default. A future snapshot design must start from a data-preserving
+backend primitive and repeat live data-integrity validation before enablement.
 
 ## Preserve, Abstract, Keep, Add
 
@@ -83,12 +82,11 @@ The original backend-neutralization plan is complete:
 
 Remaining work is validation and capability hardening, not backend scaffolding:
 
-- real-RouterOS snapshot TC-08;
-- scheduled snapshot execution after TC-08;
 - RouterOS resilience TC-09-TC-11;
 - Linux-ZOL drain and KubeVirt churn;
-- snapshot routing from authoritative source-volume ownership;
-- an explicit policy for globally advertised snapshot capabilities.
+- a future snapshot design based on a proven data-preserving primitive;
+- RouterOS permissions and offline/application-consistency semantics for any
+  future full-file-copy snapshot path.
 
 ## Validation Policy
 

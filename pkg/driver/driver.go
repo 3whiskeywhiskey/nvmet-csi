@@ -552,20 +552,6 @@ func (d *Driver) addControllerServiceCapabilities() {
 				},
 			},
 		},
-		{
-			Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-				},
-			},
-		},
-		{
-			Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-				},
-			},
-		},
 	}
 }
 

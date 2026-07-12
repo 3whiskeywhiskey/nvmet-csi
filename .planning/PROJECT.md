@@ -26,16 +26,16 @@ controller restarts, and target-host reboot without unsafe mutation storms.
 | Linux-ZOL ordinary lifecycle and reboot export recovery | Implemented, automated-tested, live-validated |
 | Linux-ZOL snapshots | Unsupported |
 | RouterOS ordinary lifecycle through nvmet-csi | Implemented, automated-tested, live-validated under an isolated identity |
-| RouterOS snapshots and same-backend restore | Implemented, automated-tested; TC-08 pending live execution |
+| RouterOS snapshots and same-backend restore | Unsupported; live TC-08 failed data-integrity validation |
 | RouterOS resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
 
 ### Current Limitations
 
 - Controller replicas are intentionally single-instance; no leader-elected HA.
-- Snapshot capability advertisement is driver-global while Linux-ZOL does not implement snapshots.
-- `CreateSnapshot` routing is not yet derived from authoritative source-volume ownership.
+- Snapshot capabilities are not advertised; `VolumeSnapshotClass` is disabled by default.
+- RouterOS `/disk add copy-from` does not copy backing data on tested 7.23rc2 hardware.
 - Linux-ZOL host access control uses allow-any-host pending an ACL design.
-- RouterOS snapshot and disruption procedures still require live execution.
+- RouterOS disruption procedures TC-09-TC-11 still require live execution.
 
 ## Historical Milestones
 
@@ -43,9 +43,9 @@ The v0.1.0-v0.11.0 milestones record the RDS-focused predecessor's completed
 implementation, automated-test, and documentation plans. They are historical
 records, not current live-validation evidence. See `.planning/milestones/`.
 
-The v0.11 snapshot work replaced the invalid Btrfs-subvolume approach with
-RouterOS `/disk add copy-from`, added mock/sanity coverage and TC-08
-documentation. TC-08 was not actually executed at milestone archive time.
+The archived v0.11 snapshot work assumed RouterOS `/disk add copy-from` was a
+data-copy primitive. Live TC-08 on 2026-07-12 disproved that assumption; the
+archived milestone remains historical evidence of implementation, not support.
 
 ## Current Requirements
 
@@ -68,15 +68,13 @@ inventories, and limitations.
 
 ### Implemented and automated-tested; live validation pending
 
-- RouterOS snapshot create/delete/list and same-backend restore: TC-08.
-- Scheduled snapshots and retention: execute only after TC-08 passes.
 - RouterOS NVMe reconnect and node-failure recovery: TC-09 and TC-11.
 - RouterOS restart preservation: TC-10, approved maintenance window only.
 - Linux-ZOL consumer drain and KubeVirt churn.
 
 ### Unsupported
 
-- Linux-ZOL snapshots and snapshot restore.
+- Snapshot create, restore, and list on Linux-ZOL and RouterOS/RDS.
 - Cross-backend snapshot restore.
 - Controller HA.
 - NVMe multipath across independent targets.
@@ -84,9 +82,9 @@ inventories, and limitations.
 
 ### Active
 
-Execute TC-08 with a disposable RDS-backed volume under the isolated
-`nvmet-rds-test.csi.whiskey.works` identity, then record exact Kubernetes and
-RouterOS cleanup evidence.
+Execute non-destructive RouterOS resilience validation and remaining Linux-ZOL
+consumer-node/KubeVirt churn. Snapshot work is deferred until a backend exposes
+a proven data-preserving primitive.
 
 ### Out of Scope
 
@@ -97,9 +95,9 @@ RouterOS cleanup evidence.
 - Security hardening (SSH host key verification, injection fuzzing) — separate security milestone
 - Stress/load testing — hardware constraints, would require dedicated test infrastructure
 - Package refactoring unless code substantially modified — defer to v1.0+ if not triggered
-- Btrfs subvolume snapshots — file-backed disks aren't subvolumes; copy-from is correct
-- Application-consistent snapshots — requires app-level quiesce hooks (Velero territory)
-- Snapshot scheduling operator — CronJob is simpler and sufficient
+- Btrfs subvolume snapshots — file-backed disks are not subvolumes.
+- RouterOS `copy-from` snapshots — live validation proved they do not preserve backing data.
+- Snapshot scheduling — unavailable while snapshot capability is unsupported.
 
 ## Key Decisions
 
@@ -125,11 +123,11 @@ RouterOS cleanup evidence.
 | MaxElapsedTime=0 for reconnection | Never give up on RDS reconnection | ✓ Good |
 | Complexity threshold 50 | Justified by CSI spec compliance needs | ✓ Good |
 | golangci-lint v2 nested config | Required for v2 compatibility | ✓ Good |
-| `/disk add copy-from` for snapshots | Btrfs subvolumes don't work with file-backed disks; CoW reflink copies | ✓ Good |
-| UUID v5 snapshot IDs from CSI name | Deterministic, idempotent per CSI spec | ✓ Good |
-| Snapshot disks not NVMe-exported | Immutable backups, write-protected by omission | ✓ Good |
+| `/disk add copy-from` for snapshots | Live TC-08 proved this copies settings, not backing data | ✗ Rejected |
+| UUID v5 snapshot IDs from CSI name | Deterministic naming remains usable in a future design | Neutral |
+| Snapshot disks not NVMe-exported | Explicit `nvme-tcp-export=no` is retained as defense in depth | ✓ Required |
 | SetErrorMode for resilience tests | MockRDSServer.shutdown closes permanently on Stop() | ✓ Good |
-| CronJob over operator for scheduling | Simpler, sufficient, no custom CRDs needed | ✓ Good |
+| Disable snapshot scheduling | No schedule may target an unsupported snapshot capability | ✓ Safe |
 | blkid exit 1 = error (not unformatted) | Prevents data loss on NVMe-oF reconnect race | ✓ Good |
 
 ## Constraints
@@ -137,7 +135,7 @@ RouterOS cleanup evidence.
 - **RDS safety:** the appliance is fragile shared infrastructure; use isolated identities, dedicated credentials, rate-limited mutations, and exact inventory checks.
 - **Maintenance windows:** RDS restart or equivalent disruption requires explicit approval.
 - **Evidence:** documentation and automated tests never substitute for dated live hardware execution.
-- **Backend scope:** RouterOS snapshot support must not be presented as Linux-ZOL support.
+- **Backend scope:** snapshots are unsupported on both backends and must not be advertised.
 - **Data safety:** ownership metadata is required before destructive backend operations.
 
 ---

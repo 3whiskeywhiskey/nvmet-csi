@@ -327,20 +327,6 @@ sidecars:
       - "--timeout=300s"
       - "--handle-volume-inuse-error=false"
 
-  # CSI external-snapshotter (snapshot operations)
-  snapshotter:
-    image:
-      repository: registry.k8s.io/sig-storage/csi-snapshotter
-      tag: v8.2.0
-    resources:
-      requests:
-        cpu: 10m
-        memory: 64Mi
-      limits:
-        cpu: 100m
-        memory: 128Mi
-    additionalArgs:
-      - "--timeout=300s"
 
   # CSI livenessprobe sidecar
   livenessProbe:
@@ -454,9 +440,9 @@ storageClasses:
 
 # VolumeSnapshotClass configuration
 snapshotClass:
-  # Enable VolumeSnapshotClass creation
-  # Requires VolumeSnapshot CRDs and snapshot-controller to be installed
-  enabled: true
+  # Unsupported until a backend provides a data-preserving snapshot primitive.
+  # RouterOS /disk add copy-from copies disk settings, not backing-file data.
+  enabled: false
 
   # VolumeSnapshotClass name
   name: nvmet-csi-snapclass
@@ -467,7 +453,7 @@ snapshotClass:
 # Scheduled snapshot configuration
 # Creates a CronJob that periodically snapshots a target PVC
 scheduledSnapshots:
-  # Enable scheduled snapshots (requires snapshotClass.enabled=true)
+  # Reserved; rendering fails if enabled while snapshots are unsupported.
   enabled: false
 
   # List of snapshot schedules (one CronJob per entry)

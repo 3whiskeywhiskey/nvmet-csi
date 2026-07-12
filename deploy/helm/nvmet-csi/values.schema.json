@@ -510,7 +510,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Enable VolumeSnapshotClass creation"
+          "description": "Reserved; snapshots are unsupported and this must remain false"
         },
         "name": {
           "type": "string",
@@ -527,7 +527,7 @@
     },
     "scheduledSnapshots": {
       "type": "object",
-      "description": "Scheduled snapshot configuration",
+      "description": "Reserved; scheduled snapshots are unsupported",
       "properties": {
         "enabled": {
           "type": "boolean",

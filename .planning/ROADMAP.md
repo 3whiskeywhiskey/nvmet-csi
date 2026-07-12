@@ -12,8 +12,13 @@ maintained in `docs/nvmet-csi-live-validation.md`.
 | Linux-ZOL ordinary lifecycle and reboot recovery | Implemented, automated-tested, live-validated |
 | Linux-ZOL snapshots | Unsupported |
 | RouterOS ordinary lifecycle through nvmet-csi | Implemented, automated-tested, live-validated |
-| RouterOS snapshots and same-backend restore | Implemented, automated-tested; TC-08 pending live execution |
+| Volume snapshots on both backends | Unsupported; RouterOS TC-08 failed live data-integrity validation |
 | RouterOS resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
+
+
+RouterOS `/disk add copy-from` copied settings rather than backing data on the
+tested 7.23rc2 appliance. Snapshot capability advertisement and Helm class
+creation are therefore disabled pending a different, data-preserving design.
 
 ## Archived Predecessor Milestones
 

@@ -1282,296 +1282,44 @@ ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-aaaa|pvc-bbbb|pvc-cccc"
 
 ---
 
-### TC-08: Volume Snapshot Operations (copy-from)
+### TC-08: Volume Snapshot Operations — Failed / Unsupported
 
-**Objective:** Validate volume snapshot create/restore/delete via CSI driver using copy-from CoW copies
+**Executed:** 2026-07-12 against an isolated `nvmet-rds-test.csi.whiskey.works`
+deployment and RouterOS 7.23rc2.
 
-**Estimated Time:** 10 minutes
+**Do not execute the historical `copy-from` procedure.** Live testing proved
+that `/disk add copy-from=[find slot=<source>]` copies disk configuration, not
+the backing image data. Against an attached source it also disconnected the
+source NVMe controller and caused workload I/O errors until the disposable
+export was toggled off and on.
 
-**Prerequisites:**
-- VolumeSnapshotClass `nvmet-csi-snapclass` exists (deployed with v0.10.0+)
-- VolumeSnapshot CRDs installed (`kubectl get crd volumesnapshots.snapshot.storage.k8s.io`)
-- snapshot-controller running in cluster
-- At least 10GB free space on RDS (5Gi source + 5Gi snapshot CoW copy)
+After cleanly detaching the source, snapshot creation reached `ReadyToUse`, but
+restoring it produced a newly formatted blank ext4 filesystem containing only
+`lost+found`; the source marker `tc08-before-snapshot-20260712` was absent.
+Removing `file-size` from the restore command did not change the result.
 
-**Steps:**
+RouterOS `/file copy` is a possible basis for a future offline full-copy design,
+but the dedicated `metal-csi` account returned:
 
-#### 1. Create Source PVC with Test Data
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: test-hw-pvc-08-source
-  labels:
-    test: hardware-validation
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: rds-nvme-tcp
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-hw-pod-08-source
-  labels:
-    test: hardware-validation
-spec:
-  containers:
-  - name: app
-    image: nginx:alpine
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: test-hw-pvc-08-source
-EOF
+```text
+not enough permissions (9) (/file/copy; line 1)
 ```
 
-**Expected:** PVC bound and pod running within 60 seconds
+**Current result:** snapshot create, list, restore, and scheduling are
+unsupported. The driver does not advertise snapshot capabilities and Helm does
+not create a `VolumeSnapshotClass` by default.
 
-```bash
-kubectl wait --for=condition=Ready pod/test-hw-pod-08-source --timeout=90s
-```
+**Recovery and cleanup evidence:** the disposable source data remained intact
+after export reset; every test PVC, PV, `VolumeAttachment`, `VolumeSnapshot`,
+snapshot content, RouterOS disk, and backing file was removed. The isolated
+Helm release and namespace were deleted. Final appliance baseline returned to
+78 disks and 73 `pvc-`/`snap-` files.
 
-#### 2. Write Test Data to Source Volume
+Any future TC-08 replacement requires a proven data-preserving primitive,
+least-privilege access to it, explicit offline/application consistency
+semantics, negative attached-volume tests, restore data-integrity proof, and
+exact deletion cleanup evidence.
 
-```bash
-kubectl exec test-hw-pod-08-source -- sh -c 'echo "snapshot-test-data-$(date +%s)" > /data/test.txt'
-kubectl exec test-hw-pod-08-source -- cat /data/test.txt
-```
-
-**Expected:** Unique test data written and readable
-
-```
-snapshot-test-data-1738876543
-```
-
-**Save the data for later verification:**
-
-```bash
-SOURCE_DATA=$(kubectl exec test-hw-pod-08-source -- cat /data/test.txt)
-echo "Source data: $SOURCE_DATA"
-```
-
-#### 3. Create VolumeSnapshot
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: test-hw-snapshot-08
-  labels:
-    test: hardware-validation
-spec:
-  volumeSnapshotClassName: nvmet-csi-snapclass
-  source:
-    persistentVolumeClaimName: test-hw-pvc-08-source
-EOF
-```
-
-**Expected:** VolumeSnapshot created and becomes "ReadyToUse" within 10-15 seconds
-
-```bash
-kubectl get volumesnapshot test-hw-snapshot-08 --watch
-```
-
-```
-NAME                   READYTOUSE   SOURCEPVC                 SOURCESNAPSHOTCONTENT   RESTORESIZE   SNAPSHOTCLASS       SNAPSHOTCONTENT                                    CREATIONTIME   AGE
-test-hw-snapshot-08    false        test-hw-pvc-08-source                                           nvmet-csi-snapclass                                                                    2s
-test-hw-snapshot-08    true         test-hw-pvc-08-source                             5Gi           nvmet-csi-snapclass   snapcontent-12345678-1234-1234-1234-123456789abc   8s             8s
-```
-
-**If stuck in non-ready state >30s:** Check controller logs:
-```bash
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=30 | grep CreateSnapshot
-```
-
-#### 4. Verify Snapshot on RDS via SSH
-
-```bash
-# Check snapshot exists on RDS using slot prefix filter
-ssh admin@10.42.241.3 "/disk print detail where slot~\"snap-\""
-```
-
-**Expected:** Snapshot visible on RDS as a standard file-backed disk with no NVMe export flags
-
-```
-slot="snap-<uuid>-at-<hash>" type="file" file-path="/storage-pool/metal-csi/snap-<uuid>-at-<hash>.img" file-size=5368709120 status="ready"
-```
-
-**Note:** Snapshot disks are standard file-backed disks created via `/disk add copy-from=`. They have NO nvme-tcp-export, nvme-tcp-server-port, or nvme-tcp-server-nqn fields (not network-exported). The absence of NVMe flags is what makes them immutable backups — they cannot be accessed directly from hosts.
-
-The snapshot slot name uses the format `snap-<uuid5-of-csi-name>-at-<suffix>` — the UUID is derived from the CSI snapshot name (not the source volume UUID).
-
-#### 5. Restore from Snapshot (Create PVC from Snapshot)
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: test-hw-pvc-08-restored
-  labels:
-    test: hardware-validation
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: rds-nvme-tcp
-  resources:
-    requests:
-      storage: 5Gi
-  dataSource:
-    kind: VolumeSnapshot
-    apiGroup: snapshot.storage.k8s.io
-    name: test-hw-snapshot-08
-EOF
-```
-
-**Expected:** PVC created with dataSource pointing to snapshot
-
-```bash
-kubectl get pvc test-hw-pvc-08-restored
-```
-
-```
-NAME                      STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
-test-hw-pvc-08-restored   Pending                                      rds-nvme-tcp   3s
-```
-
-#### 6. Mount Restored Volume and Verify Data Integrity
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-hw-pod-08-restored
-  labels:
-    test: hardware-validation
-spec:
-  containers:
-  - name: app
-    image: nginx:alpine
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  volumes:
-  - name: data
-    persistentVolumeClaim:
-      claimName: test-hw-pvc-08-restored
-EOF
-```
-
-**Expected:** Pod running and restored volume mounted
-
-```bash
-kubectl wait --for=condition=Ready pod/test-hw-pod-08-restored --timeout=90s
-```
-
-**Verify data matches source:**
-
-```bash
-RESTORED_DATA=$(kubectl exec test-hw-pod-08-restored -- cat /data/test.txt)
-echo "Restored data: $RESTORED_DATA"
-echo "Source data:   $SOURCE_DATA"
-
-if [ "$SOURCE_DATA" = "$RESTORED_DATA" ]; then
-  echo "✓ Data integrity verified - snapshot restore successful"
-else
-  echo "✗ Data mismatch - snapshot restore failed"
-fi
-```
-
-**Expected:** Data matches exactly
-
-```
-Restored data: snapshot-test-data-1738876543
-Source data:   snapshot-test-data-1738876543
-✓ Data integrity verified - snapshot restore successful
-```
-
-#### 7. Delete Snapshot
-
-```bash
-kubectl delete volumesnapshot test-hw-snapshot-08
-```
-
-**Expected:** VolumeSnapshot deleted, but restored PVC still works
-
-```bash
-# Verify snapshot deleted
-kubectl get volumesnapshot test-hw-snapshot-08
-```
-
-```
-Error from server (NotFound): volumesnapshots.snapshot.storage.k8s.io "test-hw-snapshot-08" not found
-```
-
-**Verify snapshot disk entry and backing file removed from RDS:**
-
-```bash
-ssh admin@10.42.241.3 "/disk print detail where slot~\"snap-\""
-```
-
-**Expected:** No snapshots found (both disk entry and backing .img file removed from RDS)
-
-Note: The driver uses belt-and-suspenders cleanup — it removes both the `/disk` entry via `/disk remove` AND the backing `.img` file via `/file remove`.
-
-**Verify restored volume still accessible:**
-
-```bash
-kubectl exec test-hw-pod-08-restored -- cat /data/test.txt
-```
-
-**Expected:** Data still readable (snapshot deletion doesn't affect restored volumes)
-
-**Cleanup:**
-
-```bash
-# Delete pods
-kubectl delete pod test-hw-pod-08-source test-hw-pod-08-restored
-
-# Wait for pod deletion
-kubectl wait --for=delete pod/test-hw-pod-08-source pod/test-hw-pod-08-restored --timeout=60s
-
-# Delete PVCs
-kubectl delete pvc test-hw-pvc-08-source test-hw-pvc-08-restored
-
-# Wait for cleanup
-sleep 30
-
-# Verify all volumes deleted on RDS
-ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-"'
-```
-
-**Expected:** No test volumes remaining
-
-**Success Criteria:**
-- ✅ VolumeSnapshot created and becomes ReadyToUse within 15 seconds
-- ✅ Snapshot visible on RDS as file-backed disk with no NVMe export flags (type="file", no nvme-tcp-export)
-- ✅ Restored PVC created from snapshot successfully
-- ✅ Restored volume data matches source volume exactly
-- ✅ Snapshot deletion removes both disk entry and backing .img file from RDS
-- ✅ Snapshot deletion does not affect the independently restored volume
-- ✅ All resources cleaned up after test
-
-**Troubleshooting:**
-- **Snapshot stuck in non-ready state:** Check controller logs for CreateSnapshot errors, verify snapshot-controller running
-- **VolumeSnapshot CRD not found:** Install snapshot CRDs: `kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/v8.2.0/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml`
-- **Restore fails:** Verify VolumeSnapshotClass exists, check source snapshot is ReadyToUse
-- **copy-from failure:** Verify source volume exists on RDS with correct slot name (`/disk print detail where slot~"pvc-"`). Check that RDS has sufficient free space for the CoW copy (copy-from creates an independent full copy)
-- **Data mismatch after restore:** copy-from creates an independent copy at snapshot time; verify RDS had sufficient space to complete the full copy before any subsequent writes to the source
-- **Snapshot not deleted from RDS:** Check controller logs for DeleteSnapshot errors. The driver removes both the disk entry and backing file; verify both are cleaned up: `ssh admin@10.42.241.3 '/disk print detail where slot~"snap-"'` and `ssh admin@10.42.241.3 '/file print detail where name~"snap-"'`
-
-### Execution
-
-This test case is designed for manual execution against real RDS hardware. After automated sanity tests pass (Phase 30), execute TC-08 steps manually against the RDS at 10.42.241.3 and record results in the Results Template below. Document execution outcome in the phase SUMMARY.md.
 
 ---
 
