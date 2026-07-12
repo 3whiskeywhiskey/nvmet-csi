@@ -41,6 +41,25 @@ recovery more explicit, not merely move existing behavior behind new packages.
 See `docs/routeros-rds-hardening.md` for the detailed operational handoff and
 hardening requirements.
 
+## Current Capability and Evidence Status
+
+Current documents distinguish **Implemented**, **Automated-tested**,
+**Live-validated**, and **Unsupported**. A completed plan or documented
+hardware procedure is not live-validation evidence.
+
+| Backend / capability | Status |
+| --- | --- |
+| Linux-ZOL volume lifecycle, expansion, and target reconciliation | Implemented, automated-tested, and live-validated on Metal in July 2026 |
+| Linux-ZOL snapshots and snapshot restore | Unsupported |
+| RouterOS/RDS ordinary volume lifecycle through nvmet-csi | Implemented, automated-tested, and live-validated on an isolated Metal deployment in July 2026 |
+| RouterOS/RDS snapshot create/delete/list and same-backend restore | Implemented and automated-tested; real-RouterOS TC-08 pending |
+| RouterOS/RDS disruption and node-roll resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
+
+Snapshot capabilities are advertised globally by a driver instance even though
+only RouterOS implements them. Until source-volume routing and capability
+handling are hardened, operate RouterOS snapshot support and Linux-ZOL under
+separate CSI identities and backend-specific `VolumeSnapshotClass` objects.
+
 ## Preserve, Abstract, Keep, Add
 
 | Category | Scope | Intent |
@@ -48,51 +67,42 @@ hardening requirements.
 | Preserve | `pkg/nvme`, `pkg/mount`, `pkg/observability`, `pkg/security`, `pkg/utils`, `pkg/circuitbreaker`, `pkg/driver/identity.go`, `test/*` | Keep proven CSI, NVMe, mount, observability, validation, and test behavior unless a local change is required by the backend abstraction. |
 | Abstract | `pkg/driver`, `pkg/driver/server.go`, `pkg/driver/params.go`, `pkg/driver/controller.go`, `pkg/attachment`, `pkg/reconciler`, `cmd/nvmet-csi-plugin/main.go`, `deploy/*` | Move direct RDS knowledge out of shared controller and deployment surfaces. |
 | Keep | Existing `pkg/rds` behavior through a RouterOS/RDS backend adapter | Existing RDS-backed workloads remain independent until operators choose a migration. |
-| Add | `pkg/backend`, `pkg/backend/options`, `pkg/config`, `pkg/backend/rds`, `pkg/backend/nvmet` | Introduce a backend contract, RDS adapter, initial nvmet stub, then real ZFS + nvmet implementation. |
+| Added | `pkg/backend`, `pkg/backend/linuxzol`, `pkg/backend/routeros` | Typed backend contract with production Linux-ZOL and RouterOS adapters. |
 
-## Migration Map
+## Migration Status
 
-The working migration map came from the earlier symphony execution plan. We are
-preserving the plan as project guidance, but this repository no longer relies
-on symphony as the agent runtime.
+The original backend-neutralization plan is complete:
 
-0. **Target bootstrap**: done by mirror-pushing the predecessor repository into
-   `whiskey-works/nvmet-csi` with full history.
-1. **Seam capture**: document every place where controller, attachment, and
-   reconciler code knows about RDS. See issue `#5`.
-2. **Backend scaffolding**: add `pkg/backend`, `pkg/config`, and
-   `pkg/backend/options`. See issues `#6` and `#7`.
-3. **Controller inversion**: extract `pkg/backend/rds`, add a stub
-   `pkg/backend/nvmet`, and refactor `ControllerServer` to call the backend
-   interface. See issues `#8`, `#9`, and `#10`.
-4. **Attachment and reconciler decoupling**: remove RDS metadata assumptions
-   from attachment recovery and orphan reconciliation. See issue `#11`.
-5. **Deployment, config, and rename migration**: rename module path, driver
-   binary, image refs, manifests, and Helm chart with an explicit migration
-   runbook. See issues `#13`, `#14`, and `#15`.
-6. **Compile and parity gate**: prove the RDS path is still behaviorally stable
-   after abstraction, then tag the backend-abstraction milestone. See issue
-   `#12`.
+1. The predecessor repository and history were preserved.
+2. Storage operations were moved behind the typed `pkg/backend` contract.
+3. RouterOS/RDS was retained through an explicit adapter.
+4. The real Linux ZFS + kernel `nvmet` backend was implemented.
+5. Controller, attachment, and reconciliation paths were made backend-aware.
+6. Deployment and runtime identity became configurable for side-by-side use.
+7. Linux-ZOL and isolated RouterOS ordinary lifecycle paths were live-validated.
 
-The real Linux ZFS + `nvmet` backend follows this abstraction work in issue
-`#16`. Facility-backed runtime validation and production migration runbooks are
-tracked in issue `#17`.
+Remaining work is validation and capability hardening, not backend scaffolding:
+
+- real-RouterOS snapshot TC-08;
+- scheduled snapshot execution after TC-08;
+- RouterOS resilience TC-09-TC-11;
+- Linux-ZOL drain and KubeVirt churn;
+- snapshot routing from authoritative source-volume ownership;
+- an explicit policy for globally advertised snapshot capabilities.
 
 ## Validation Policy
 
-The first-party validation gate for abstraction work is compile, unit tests, and
-non-runtime integration tests. Runtime validation for real ZFS + `nvmet`
-requires privileged hosts with ZFS, configfs, kernel `nvmet` support, and
-NVMe/TCP initiators. That validation is deferred to the facility-backed v1.0
-track in issue `#17`.
+Code support, automated coverage, and hardware execution are reported
+separately. `docs/nvmet-csi-live-validation.md` is the source of truth for
+dated live observations. Historical `.planning/milestones/` checkmarks record
+completed deliverables, not necessarily hardware execution.
 
-Two inherited e2e failures, State Recovery and Orphan Detection, are accepted as
-baseline until the relevant refactors or facility tests prove otherwise. If a
-refactor makes either test pass, remove it from the baseline exception and
-document the change in the PR.
-
-RDS hardware tests that can disrupt routing or storage must only run during an
-approved maintenance window.
+Linux-ZOL validation uses disposable volumes and verifies every layer:
+Kubernetes objects, zvol metadata, configfs exports, client discovery, mount
+behavior, persisted data, and deletion cleanup. RouterOS tests use a dedicated
+CSI identity, non-default StorageClass, dedicated credentials, mutation
+rate-limits, and exact appliance-side inventory checks. RDS reboot or other
+high-blast-radius tests require an approved maintenance window.
 
 ## Rename Policy
 

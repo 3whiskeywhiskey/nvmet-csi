@@ -2,12 +2,28 @@
 
 This document provides a high-level overview of the nvmet-csi driver development milestones and current status. For detailed phase plans, see `.planning/ROADMAP.md`.
 
-## Overview
+## Current Project
 
-**Goal**: Build a production-ready CSI driver for MikroTik ROSE Data Server (RDS) NVMe/TCP storage
+**Identity:** `nvmet-csi` is a backend-neutral NVMe/TCP CSI driver and the
+successor to the RDS-focused driver whose v0.1.0-v0.11.0 history is preserved
+below. Linux ZFS-on-Linux with kernel `nvmet` is the primary backend;
+RouterOS/RDS is an explicit compatibility backend. The legacy `rds-csi`
+deployment remains separate.
 
-**Current Status**: v0.8.0 shipped, v0.9.0 in progress
+**Current status (2026-07-12):** post-fork backend abstraction, Linux-ZOL
+volume lifecycle and reboot recovery, and isolated RouterOS/RDS volume
+lifecycle are implemented. Dated hardware evidence lives in
+`docs/nvmet-csi-live-validation.md`.
 
+Status terms in current documents are evidence-scoped:
+
+- **Implemented:** a production code path exists.
+- **Automated-tested:** unit, mock, sanity, or automated E2E evidence exists.
+- **Live-validated:** the named scenario was executed on identified hardware.
+- **Unsupported:** the selected backend explicitly rejects or lacks the operation.
+
+The milestones below through v0.11.0 are historical predecessor records, not
+the current nvmet-csi release plan.
 ## Milestones
 
 ### ✅ v0.1.0 Foundation (Shipped: 2024-03-15)
@@ -177,110 +193,67 @@ This document provides a high-level overview of the nvmet-csi driver development
 
 ---
 
-### 🚧 v0.9.0 Production Readiness & Test Maturity (In Progress)
+### ✅ v0.9.0-v0.11.0 Historical Predecessor Milestones
 
-**Goal**: Validate CSI spec compliance and build production-ready testing infrastructure enabling confident v1.0 release
+The RDS-focused predecessor completed and archived its implementation plans
+through v0.11.0 in February 2026. Detailed records are under
+`.planning/milestones/`. A checked historical plan means its implementation,
+test, or documentation deliverable was completed; it does not by itself prove
+that a hardware procedure was executed.
 
-#### Completed Phases
+The important erratum is snapshot validation: RouterOS `copy-from` snapshot
+RPCs, restore, mock coverage, CSI sanity coverage, and TC-08 documentation were
+completed, but TC-08 was not executed against real RouterOS hardware at the
+time the milestone was archived. TC-09 through TC-11 were likewise documented
+but not live-executed.
 
-<details>
-<summary>Phase 22: CSI Sanity Tests Integration ✅</summary>
+---
 
-- csi-sanity test suite runs in CI without failures
-- All controller service methods pass idempotency validation
-- Negative test cases validate proper CSI error codes
-- CSI capability matrix documented
+## Current Backend Capability and Evidence Matrix
 
-**Plans**: 2/2 complete
+| Backend / capability | Implemented | Automated-tested | Live-validated | Current status |
+| --- | --- | --- | --- | --- |
+| Linux-ZOL volume create/delete, attach, mount, remount, expand | Yes | Yes | Yes, Metal 2026-07-12 | Supported |
+| Linux-ZOL target reconstruction after reboot | Yes | Yes | Yes, r740xd 2026-07-11 | Supported |
+| Linux-ZOL snapshots and snapshot restore | No | Negative-path only | No | Unsupported |
+| RouterOS/RDS volume create/delete, mount/remount, online expand | Yes | Yes | Yes, isolated Metal path 2026-07-11/12 | Compatibility backend |
+| RouterOS/RDS snapshot create/delete/list and same-backend restore | Yes | Yes | No; TC-08 pending | Validation in progress |
+| RouterOS/RDS node-roll and disruption resilience | Yes / recovery paths | Mock and documented procedures | No; TC-09-TC-11 pending | Validation pending |
 
-</details>
+CSI controller snapshot capabilities are currently advertised per driver
+instance, not per StorageClass. Linux-ZOL does not implement snapshots, and
+`CreateSnapshot` routing still relies on `VolumeSnapshotClass` parameters rather
+than authoritative source-volume ownership. Until that is hardened, deploy
+snapshot-capable RouterOS and snapshot-unsupported Linux-ZOL paths under
+separate CSI identities and use a RouterOS-specific `VolumeSnapshotClass`.
 
-<details>
-<summary>Phase 23: Mock RDS Enhancements ✅</summary>
+## Current Roadmap
 
-- Mock RDS server handles all volume lifecycle commands
-- Realistic SSH latency simulation (200ms average, 150-250ms range)
-- Error injection for disk full, SSH timeout, command parsing errors
-- Stateful volume tracking for sequential operation correctness
-- RouterOS-formatted output matching production RDS
-- Concurrent connection handling
+### Completed in the July 2026 nvmet-csi hardening cycle
 
-**Plans**: 2/2 complete
+- Backend-neutral controller and typed Linux-ZOL/RouterOS adapters.
+- Linux-ZOL plan/observe/apply lifecycle with ownership-checked deletion.
+- Durable zvol export intent and repair-only startup/periodic export reconciliation.
+- Idempotent configfs writes and batched backend observation.
+- Linux-ZOL reboot recovery and disposable worker lifecycle live validation.
+- Isolated RouterOS controller and full data-path lifecycle live validation.
+- Configured CSI driver-name isolation across attachment and orphan reconciliation.
+- BusyBox/traditional `lsof` device-in-use safety fix.
 
-</details>
+### Active validation
 
-<details>
-<summary>Phase 24: Automated E2E Test Suite ✅</summary>
+1. Execute RouterOS snapshot TC-08 with an isolated nvmet-csi identity.
+2. Validate scheduled snapshot execution only after TC-08 succeeds.
+3. Execute non-destructive RouterOS resilience cases TC-09 and TC-11.
+4. Execute TC-10 appliance restart only in an approved maintenance window.
+5. Validate Linux-ZOL consumer-node drain and KubeVirt churn.
 
-- Automated volume lifecycle test in CI (create → stage → publish → unpublish → unstage → delete)
-- Block volume test with KubeVirt VirtualMachineInstance
-- Volume expansion test validates filesystem resizes
-- Multi-volume test validates 5+ concurrent operations
-- Orphan detection and node failure simulation tests
-- Controller restart test validates state rebuild
+### Release closure
 
-**Plans**: 4/4 complete
-
-</details>
-
-<details>
-<summary>Phase 25: Coverage & Quality Improvements ✅</summary>
-
-- Error paths in controller and node services tested
-- Edge cases from sanity test failures have regression tests
-- Negative test scenarios validate CSI error codes
-- Coverage enforcement in CI at 65% baseline
-- Flaky tests identified and documented in TESTING.md
-
-**Plans**: 4/4 complete
-
-</details>
-
-<details>
-<summary>Phase 25.1: Attachment Reconciliation & RDS Resilience ✅</summary>
-
-- Controller reconciliation loop detects stale VolumeAttachment objects
-- Node NotReady watcher triggers proactive attachment validation
-- RDS connection loss triggers automatic reconnect with exponential backoff
-- CSI Probe health check reflects RDS connection state
-- Kubernetes events and Prometheus metrics for observability
-
-**Context**: Production incident fix - 5+ hour outage extended due to stale VolumeAttachments after RDS crash
-
-**Plans**: 3/3 complete
-
-</details>
-
-<details>
-<summary>Phase 25.2: Fix Linter Issues Blocking CI Verification ✅</summary>
-
-- Resolved 134 pre-existing linter issues (63 errcheck, 56 cyclop, 7 gocyclo, 8 staticcheck)
-- Updated golangci-lint config to v2 format
-- `make verify` passes without lint failures
-- CI/CD verification step succeeds
-
-**Context**: golangci-lint v2 upgrade exposed issues blocked by v1 config format
-
-**Plans**: 2/2 complete
-
-</details>
-
-#### Remaining Phases
-
-**Phase 26: Volume Snapshots** (Not Started)
-- Btrfs-based volume snapshots via RouterOS CLI
-- CreateSnapshot/DeleteSnapshot/ListSnapshots implementation
-- CreateVolume from snapshot (restore workflow)
-- external-snapshotter sidecar integration
-- CSI sanity snapshot tests
-
-**Phase 27: Documentation & Hardware Validation** (Not Started)
-- Manual test scenarios for production RDS testing
-- Testing guide for contributors (TESTING.md)
-- CSI capability gap analysis vs peer drivers
-- Known limitations documentation
-- CI/CD integration guide
-- Troubleshooting guide expansion
+- Reconcile current versioning with the archived v0.11 predecessor history.
+- Publish a formal post-fork release only from the exact verified source commit.
+- Complete node-plugin rollout on `r640-1` and `c4140` when those nodes return;
+  they are not required for the current snapshot validation.
 
 ---
 
@@ -329,23 +302,19 @@ Potential areas for v1.0+ development:
 
 ## Progress Summary
 
-| Milestone | Status | Phases | Shipped Date |
-|-----------|--------|--------|--------------|
-| v0.1.0 Foundation | ✅ Shipped | 1-3 | 2024-03-15 |
-| v0.2.0 Controller Service | ✅ Shipped | 4-5 | 2024-04-01 |
-| v0.3.0 Node Service | ✅ Shipped | 6-8 | 2024-05-15 |
-| v0.4.0 Production Hardening | ✅ Shipped | 9-11 | 2024-06-30 |
-| v0.5.0 NVMe-oF Reconnection | ✅ Shipped | 12-14 | 2025-01-15 |
-| v0.6.0 Block Volumes & KubeVirt | ✅ Shipped | 15-16 | 2025-11-15 |
-| v0.7.0 Migration Tracking | ✅ Shipped | 17-19 | 2026-01-20 |
-| v0.8.0 Code Quality & Logging | ✅ Shipped | 20-21 | 2026-02-04 |
-| v0.9.0 Production Readiness | 🚧 In Progress | 22-27 | Target: 2026-Q1 |
+| Workstream | Status | Evidence |
+| --- | --- | --- |
+| Historical predecessor plans v0.1.0-v0.11.0 | Archived | `.planning/milestones/` |
+| Linux-ZOL backend and reboot safety | Live-validated | `docs/nvmet-csi-live-validation.md` |
+| RouterOS/RDS ordinary lifecycle through nvmet-csi | Live-validated | `docs/nvmet-csi-live-validation.md` |
+| RouterOS/RDS snapshots | Implemented + automated-tested; TC-08 pending | `docs/HARDWARE_VALIDATION.md` |
+| Linux-ZOL snapshots | Unsupported | `pkg/backend/linuxzol/backend.go` |
+| RouterOS resilience TC-09-TC-11 | Automated/documented; live execution pending | `docs/HARDWARE_VALIDATION.md` |
 
-**Current Phase**: 26 of 27 (Volume Snapshots - Not Started)
-
-**Overall Progress**: ~37% of v0.9.0 complete (20/TBD plans)
+**Current focus:** isolated RouterOS snapshot TC-08, then scheduled snapshots
+and non-destructive resilience validation.
 
 ---
 
-*Last updated: 2026-07-11*
-*For detailed phase plans and requirements, see `.planning/ROADMAP.md`*
+*Last updated: 2026-07-12*
+*Historical phase plans and requirements remain under `.planning/milestones/`.*

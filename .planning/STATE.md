@@ -2,18 +2,24 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-18)
+See `DESIGN.md` for current architecture and `docs/nvmet-csi-live-validation.md`
+for dated hardware evidence. `.planning/milestones/` preserves the predecessor
+RDS-focused development history.
 
-**Core value:** Volumes remain accessible after NVMe-oF reconnections
-**Current focus:** Planning next milestone
+**Current project:** backend-neutral `nvmet-csi`; Linux-ZOL primary,
+RouterOS/RDS compatibility backend
+**Core value:** volumes remain accessible and recoverable through NVMe/TCP
+reconnections, controller restarts, and target-host reboot
+**Current focus:** RouterOS snapshot TC-08, then scheduled snapshots and
+non-destructive resilience validation
 
 ## Current Position
 
-Phase: 32 of 32 — ALL MILESTONES COMPLETE (v0.1.0 through v0.11.0)
-Status: v0.11.0 Data Protection archived and tagged
-Last activity: 2026-02-18 — v0.11.0 milestone archived
-
-Progress: v0.11.0 [██████████] 100% (7/7 plans) | All-time: 122 plans across 32 phases
+The predecessor plans through v0.11.0 are archived. Post-fork backend
+abstraction, Linux-ZOL lifecycle/reboot recovery, and isolated RouterOS
+ordinary lifecycle are implemented and live-validated. RouterOS snapshots are
+implemented and automated-tested but await TC-08 live execution. Linux-ZOL
+snapshots are unsupported.
 
 ## Performance Metrics
 
@@ -41,8 +47,10 @@ None.
 
 ### Blockers/Concerns
 
-- Hardware validation tests (TC-08 through TC-11) require maintenance window for execution against real RDS
-- Pre-existing race condition in pkg/rds tests under -race flag (TestReconnection_WithBackoff, TestOnReconnectCallback)
+- RouterOS snapshot TC-08 and resilience TC-09-TC-11 were documented but not live-executed in the archived milestone.
+- Scheduled snapshot CronJob execution remains live-unverified.
+- Linux-ZOL snapshot operations are unsupported.
+- Current observed evidence is recorded in `docs/nvmet-csi-live-validation.md`.
 
 ### Quick Tasks Completed
 
@@ -57,7 +65,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-18
-Stopped at: v0.11.0 milestone archived
-Resume file: None
-Next action: `/gsd:new-milestone` to define v0.12.0
+Last current activity: 2026-07-12
+Current work: isolated RouterOS TC-08 snapshot validation
+Deferred tonight: returning-node DaemonSet rollout on `r640-1` and `c4140`
+Next after TC-08: scheduled snapshot execution, then TC-09/TC-11

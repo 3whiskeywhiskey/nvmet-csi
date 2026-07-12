@@ -61,6 +61,7 @@ type SnapshotInfo struct {
 	FileSizeBytes int64     // Size of snapshot (copied from source volume)
 	CreatedAt     time.Time // Creation timestamp (parsed from slot name or RDS output)
 	FilePath      string    // Backing file path on RDS (e.g., /storage-pool/metal-csi/snap-xxx.img)
+	NVMETCPExport bool      // Whether RouterOS unexpectedly exported the snapshot
 }
 
 // CreateSnapshotOptions contains parameters for creating a snapshot

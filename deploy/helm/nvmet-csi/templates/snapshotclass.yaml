@@ -10,6 +10,6 @@ metadata:
   name: {{ .Values.snapshotClass.name }}
   labels:
     {{- include "nvmet-csi.labels" . | nindent 4 }}
-driver: nvmet.csi.whiskey.works
+driver: {{ include "nvmet-csi.driverName" . }}
 deletionPolicy: {{ .Values.snapshotClass.deletionPolicy | default "Delete" }}
 {{- end }}

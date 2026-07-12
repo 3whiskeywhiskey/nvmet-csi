@@ -4,18 +4,24 @@ This document provides a comprehensive analysis of the nvmet-csi driver's capabi
 
 ## Overview
 
-**Driver Version:** v0.9.0 (v0.10.0 in progress)
-**Maturity:** Production-tested on homelab cluster with KubeVirt workloads
-**Target Use Case:** Single-server NVMe/TCP storage for Kubernetes on MikroTik ROSE Data Server
-**Architecture:** Single-node storage backend (not distributed storage)
+**Project:** backend-neutral `nvmet-csi`, successor to the archived RDS-focused driver
+**Primary backend:** Linux ZFS-on-Linux with kernel `nvmet`
+**Compatibility backend:** MikroTik RouterOS/ROSE Data Server over SSH
+**Architecture:** single-target NVMe/TCP storage, not distributed storage
 
-The nvmet-csi driver is designed for a specific deployment scenario: high-performance block storage for Kubernetes clusters using MikroTik's ROSE Data Server as a centralized storage appliance. It is not intended to compete with distributed storage solutions like Longhorn or Ceph. Instead, it provides a simpler, lower-latency alternative for environments where a single high-performance storage server is appropriate.
+Capability status is backend-specific. This document uses:
 
-**Key Design Principles:**
-- **NVMe/TCP Protocol:** Lower latency (~1ms) vs iSCSI-based drivers (~3ms)
-- **File-backed Volumes:** Flexible sizing on Btrfs RAID without LVM overhead
-- **SSH Management:** Secure, auditable, debuggable control plane
-- **Production Focus:** Battle-tested resilience features from actual production incidents
+- **Implemented** for an existing production code path;
+- **Automated-tested** for unit, mock, sanity, or automated E2E evidence;
+- **Live-validated** only for a dated hardware execution recorded in
+  `nvmet-csi-live-validation.md`;
+- **Unsupported** when a backend explicitly rejects or lacks an operation.
+
+Linux-ZOL ordinary lifecycle and reboot recovery are live-validated. The
+RouterOS compatibility path's ordinary lifecycle is also live-validated under
+an isolated CSI identity. RouterOS snapshots are implemented and
+automated-tested but await TC-08 hardware execution; Linux-ZOL snapshots are
+unsupported.
 
 ## CSI Specification Coverage
 
@@ -35,22 +41,26 @@ The driver implements CSI Specification v1.5.0+ with the following capabilities:
 
 ### Controller Service
 
-| Capability | Status | Notes |
-|------------|--------|-------|
-| CREATE_DELETE_VOLUME | ✅ Supported | SSH-based provisioning with Btrfs file backing |
-| PUBLISH_UNPUBLISH_VOLUME | ✅ Supported | VolumeAttachment tracking with stale attachment reconciliation |
-| LIST_VOLUMES | ✅ Supported | Enumerates volumes via `/disk print` RouterOS command |
-| LIST_VOLUMES_PUBLISHED_NODES | ✅ Supported | Tracks node attachments via Kubernetes VolumeAttachment API |
-| GET_CAPACITY | ✅ Supported | Returns Btrfs storage pool capacity via SSH |
-| EXPAND_VOLUME | ✅ Supported | Online expansion (controller resizes file, node detects automatically) |
-| CREATE_DELETE_SNAPSHOT | 🔄 Planned (v0.10.0) | Phase 26 - Btrfs snapshot support via RouterOS CLI |
-| LIST_SNAPSHOTS | 🔄 Planned (v0.10.0) | Phase 26 - Snapshot enumeration |
-| CLONE_VOLUME | ❌ Not Planned | RouterOS doesn't expose Btrfs reflink via CLI (architectural constraint) |
-| GET_VOLUME | ❌ Not Implemented | Optional capability, not required by CSI spec |
-| VOLUME_CONTENT_SOURCE | 🔄 Planned (v0.10.0) | Required for snapshot restore (Phase 26) |
+| Capability | Linux-ZOL | RouterOS/RDS | Notes |
+|------------|-----------|--------------|-------|
+| CREATE_DELETE_VOLUME | ✅ Supported | ✅ Supported | Backend-specific provisioning and ownership checks |
+| PUBLISH_UNPUBLISH_VOLUME | ✅ Supported | ✅ Supported | `VolumeAttachment` tracking is scoped to the configured CSI identity |
+| LIST_VOLUMES | ✅ Supported | ✅ Supported | Uses backend observation rather than one shared command shape |
+| LIST_VOLUMES_PUBLISHED_NODES | ✅ Supported | ✅ Supported | Rebuilt from Kubernetes `VolumeAttachment` objects |
+| GET_CAPACITY | ✅ Supported | ✅ Supported | Backend-specific pool/appliance capacity |
+| EXPAND_VOLUME | ✅ Supported | ✅ Supported | Linux zvol resize and RouterOS file-backed expansion |
+| CREATE_DELETE_SNAPSHOT | ❌ Unsupported | ⚠️ Implemented, automated-tested | Real RouterOS TC-08 pending |
+| LIST_SNAPSHOTS | ❌ Unsupported | ⚠️ Implemented, automated-tested | Real RouterOS TC-08 pending |
+| VOLUME_CONTENT_SOURCE (snapshot restore) | ❌ Unsupported | ⚠️ Same-backend restore implemented, automated-tested | Real RouterOS TC-08 pending |
+| CLONE_VOLUME | ❌ Unsupported | ❌ Unsupported | Use snapshot restore where the backend supports it |
 
-**Why Not Clone Volume:**
-Volume cloning would require Btrfs reflink support, which RouterOS doesn't expose through the CLI interface. While the underlying Btrfs filesystem supports reflinks, there's no `/disk clone` command. Implementing this would require RouterOS-level changes outside the CSI driver's control.
+The CSI capability list is currently advertised globally by a driver instance,
+although Linux-ZOL does not implement snapshots. `CreateSnapshot` also selects
+from `VolumeSnapshotClass` parameters rather than authoritative source-volume
+ownership. Until this is hardened, use separate CSI identities for RouterOS
+snapshot support and Linux-ZOL, with a RouterOS-specific
+`VolumeSnapshotClass`. A class or capability advertisement is not proof that
+Linux-ZOL snapshots work.
 
 **Why Not GET_VOLUME:**
 This is an optional CSI capability primarily used for validation. The driver can enumerate volumes via LIST_VOLUMES, making GET_VOLUME redundant for our use case.
@@ -77,7 +87,7 @@ This table compares the nvmet-csi driver against two mature CSI drivers: AWS EBS
 | **Provisioning** |
 | Dynamic provisioning | ✅ Supported | ✅ Supported | ✅ Supported |
 | Volume expansion | ✅ Online expansion | ✅ Online expansion | ✅ Online expansion |
-| Volume snapshots | 🔄 Planned (v0.10.0) | ✅ Supported | ✅ Supported |
+| Volume snapshots | ⚠️ RouterOS only: implemented/automated-tested; TC-08 pending. Linux-ZOL unsupported | ✅ Supported | ✅ Supported |
 | Volume cloning | ❌ Not planned | ✅ Supported | ✅ Supported |
 | Volume import | ❌ Not supported | ✅ Supported | ❌ Not supported |
 | **Access Modes** |
@@ -284,35 +294,42 @@ This section provides honest assessment of capabilities the driver doesn't suppo
 
 ## Roadmap & Future Features
 
-### Phase 26 - Volume Snapshots (v0.10.0 - Planned)
+### RouterOS Snapshot Validation
 
-**Status:** In planning phase
-**Timeline:** Current development focus
-**Features:**
-- Btrfs-based volume snapshots via RouterOS `/disk snapshot` commands
-- VolumeSnapshot and VolumeSnapshotContent API support
-- Snapshot-based volume restore (CreateVolume from snapshot)
+**Status:** Implemented and automated-tested; real-RouterOS TC-08 pending.
 
-**Limitations:**
-- Same-RDS-only (snapshots can't be transferred between RDS instances)
-- Space overhead depends on Btrfs COW behavior
-- Snapshot count impacts performance (Btrfs metadata overhead)
+The RouterOS adapter uses `/disk add type=file copy-from=...` to create an
+independent file-backed snapshot without NVMe export fields. Delete removes the
+snapshot disk entry and backing file. Restore creates a writable, exported
+volume on the same backend. TC-08 must prove create, list, restore, data
+integrity, and cleanup on real hardware before this is called live-validated.
 
-See Phase 26 implementation plans for details.
+### Linux-ZOL Snapshots
 
-### Phase 27 - Documentation & Hardware Validation (v0.10.0 - Current)
+**Status:** Unsupported.
 
-**Status:** In progress
-**Scope:** Comprehensive testing documentation, hardware validation guide, capability gap analysis (this document)
+The Linux-ZOL adapter explicitly rejects create, delete, and restore and returns
+no snapshots. ZFS snapshot support requires a separate design covering naming,
+ownership, restore semantics, capacity, reconciliation, and CSI behavior; it
+must not be inferred from RouterOS support.
 
-### Phase 28 - Helm Chart (v0.10.0 - Planned)
+### Snapshot Routing and Advertisement Hardening
 
-**Status:** Planned after Phase 27
-**Features:**
-- Helm chart for simplified installation
-- ConfigMap-based configuration
-- Automated secret management
+Before snapshots are enabled in a mixed-backend driver instance:
 
+1. Resolve snapshot creation from authoritative source-volume ownership.
+2. Prove a Linux-ZOL source can never invoke a RouterOS mutation.
+3. Return a precise unsupported error for Linux-ZOL.
+4. Decide whether snapshot capabilities should be advertised only by
+   RouterOS-only driver instances.
+5. Gate the snapshot sidecar/class consistently in Helm.
+
+### Remaining Live Validation
+
+- RouterOS snapshot TC-08 and scheduled snapshot retention.
+- RouterOS NVMe reconnect and node-failure cases TC-09 and TC-11.
+- RouterOS restart TC-10 only in an approved maintenance window.
+- Linux-ZOL consumer-node drain and KubeVirt churn.
 ### Possible Future Features
 
 **RouterOS API Support** (not scheduled)

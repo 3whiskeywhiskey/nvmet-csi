@@ -679,11 +679,10 @@ func parseCapacityInfo(output string) (*CapacityInfo, error) {
 func parseFileList(output string) ([]FileInfo, error) {
 	var files []FileInfo
 
-	// Normalize multi-line output
-	normalized := normalizeRouterOSOutput(output)
-
-	// Split by file entries (each starts with a number)
-	entries := regexp.MustCompile(`(?m)^\s*\d+\s+`).Split(normalized, -1)
+	// Split raw output before normalizing each entry. Real RouterOS prefixes
+	// entry numbers with whitespace, which is also how continuation lines are
+	// indented; normalizing the full list first destroys those boundaries.
+	entries := regexp.MustCompile(`(?m)^\s*\d+\s+`).Split(output, -1)
 
 	for _, entry := range entries {
 		if strings.TrimSpace(entry) == "" {
@@ -709,11 +708,13 @@ func parseFileInfo(output string) (*FileInfo, error) {
 	// Normalize multi-line output
 	normalized := normalizeRouterOSOutput(output)
 
-	// Extract name (path)
+	// Extract name (path). RouterOS may place an unquoted long name after
+	// `name=` on the next line and wrap the token again. Normalization inserts
+	// spaces at those wraps, so remove whitespace from this validated path.
 	if match := regexp.MustCompile(`name="([^"]+)"`).FindStringSubmatch(normalized); len(match) > 1 {
-		file.Path = match[1]
-	} else if match := regexp.MustCompile(`name=([^\s]+)`).FindStringSubmatch(normalized); len(match) > 1 {
-		file.Path = match[1]
+		file.Path = strings.Join(strings.Fields(match[1]), "")
+	} else if match := regexp.MustCompile(`name=\s*(.+?)\s+type=`).FindStringSubmatch(normalized); len(match) > 1 {
+		file.Path = strings.Join(strings.Fields(match[1]), "")
 	}
 
 	// Normalize to absolute path format
@@ -995,12 +996,14 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	// Build /disk add copy-from command.
 	// - Reference source by slot name using [find slot=<name>] (slot is unique and validated).
 	// - Omit file-size: copy-from determines size from source automatically.
-	// - NO nvme-tcp-export, nvme-tcp-server-port, nvme-tcp-server-nqn (snapshots not NVMe-exported).
+	// - Explicitly disable NVMe export. RouterOS copy-from inherits the source
+	//   disk's export fields when this is omitted, including its NQN.
 	cmd := fmt.Sprintf(
-		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s `+routerOSMountParam(false),
+		`/disk add type=file copy-from=[find slot=%s] file-path=%s slot=%s %s nvme-tcp-export=no`,
 		opts.SourceVolume,
 		snapFilePath,
 		opts.Name,
+		routerOSMountParam(false),
 	)
 
 	// Execute command with retry
@@ -1014,6 +1017,16 @@ func (c *sshClient) CreateSnapshot(opts CreateSnapshotOptions) (*SnapshotInfo, e
 	snapshot, err := c.GetSnapshot(opts.Name)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot creation verification failed: %w", err)
+	}
+	if snapshot.NVMETCPExport {
+		removeCmd := fmt.Sprintf(`/disk remove [find slot=%s]`, opts.Name)
+		_, removeErr := c.runCommandWithRetry(removeCmd, 3)
+		fileErr := c.DeleteFile(snapshot.FilePath)
+		return nil, errors.Join(
+			fmt.Errorf("snapshot creation verification failed: snapshot %s inherited an NVMe/TCP export", opts.Name),
+			removeErr,
+			fileErr,
+		)
 	}
 
 	snapshot = populateSnapshotDefaults(snapshot, opts.SourceVolume, sourceVol.FileSizeBytes)
@@ -1047,6 +1060,9 @@ func snapshotMatchesCreateOptions(actual *SnapshotInfo, desired CreateSnapshotOp
 	if actual.SourceVolume != "" && actual.SourceVolume != desired.SourceVolume {
 		return false
 	}
+	if actual.NVMETCPExport {
+		return false
+	}
 	return true
 }
 
@@ -1060,6 +1076,8 @@ func createSnapshotConflictReason(actual *SnapshotInfo, desired CreateSnapshotOp
 		return fmt.Sprintf("file path differs (existing: %q, requested: %q)", actual.FilePath, desiredFilePath)
 	case actual.SourceVolume != "" && actual.SourceVolume != desired.SourceVolume:
 		return fmt.Sprintf("source volume differs (existing: %q, requested: %q)", actual.SourceVolume, desired.SourceVolume)
+	case actual.NVMETCPExport:
+		return "snapshot is unexpectedly NVMe/TCP-exported"
 	default:
 		return "unknown difference"
 	}
@@ -1435,6 +1453,10 @@ func parseSnapshotInfo(output string) (*SnapshotInfo, error) {
 		snapshot.SourceVolume = match[1]
 	} else if match := regexp.MustCompile(`source-volume=([^\s]+)`).FindStringSubmatch(normalized); len(match) > 1 {
 		snapshot.SourceVolume = match[1]
+	}
+
+	if match := regexp.MustCompile(`nvme-tcp-export=(yes|no)`).FindStringSubmatch(normalized); len(match) > 1 {
+		snapshot.NVMETCPExport = match[1] == "yes"
 	}
 
 	// Extract creation time from creation-time= field in disk output.

@@ -1,115 +1,92 @@
-# RDS CSI Driver
+# nvmet-csi
 
 ## What This Is
 
-A Kubernetes CSI driver for MikroTik ROSE Data Server (RDS) that provides dynamic NVMe/TCP block storage with volume snapshots and automated backup. The driver manages volume lifecycle via SSH/RouterOS CLI (control plane) and connects to storage via NVMe over TCP (data plane).
+`nvmet-csi` is a backend-neutral Kubernetes CSI driver for NVMe/TCP storage.
+It is the successor to the RDS-focused driver archived at v0.11.0. Linux
+ZFS-on-Linux with kernel `nvmet` is the primary backend; MikroTik RouterOS/ROSE
+Data Server remains an explicit compatibility backend. The legacy `rds-csi`
+deployment is separate.
 
 ## Core Value
 
-**Volumes remain accessible after NVMe-oF reconnections.** When network hiccups or RDS restarts cause connection drops, the driver detects and handles controller renumbering so mounted volumes continue working without pod restarts.
+Volumes remain accessible and recoverable through NVMe/TCP reconnections,
+controller restarts, and target-host reboot without unsafe mutation storms.
 
 ## Current State
 
-**Version:** v0.11.0 (shipped 2026-02-18)
-**LOC:** 46,633 Go
-**Tech Stack:** Go 1.24, CSI Spec v1.5.0+, NVMe/TCP, SSH/RouterOS CLI
+**Current source status:** post-fork hardening on `dev` as of 2026-07-12
+**Archived predecessor baseline:** v0.11.0, shipped 2026-02-18
+**Tech stack:** Go 1.24, CSI, NVMe/TCP, ZFS/configfs, SSH/RouterOS CLI
 
-### What's Working
+### Backend Evidence Matrix
 
-- Volume creation/deletion via SSH with NVMe/TCP export
-- Node staging with NVMe connect, format, mount
-- **Volume snapshots** via `/disk add copy-from` CoW (create, restore, delete, list)
-- **Scheduled snapshots** via Helm CronJob with retention cleanup
-- **NQN-based device path resolution** (no hardcoded paths)
-- **Automatic stale mount detection and recovery**
-- **Kernel reconnection parameters** (ctrl_loss_tmo, reconnect_delay)
-- **Resilience regression tests** (NVMe reconnect, RDS restart, node failure)
-- **Prometheus metrics** on :9809
-- **Kubernetes events** for mount failures
-- **VolumeCondition** health reporting
-- **Helm chart** for one-command deployment
+| Backend / capability | Status |
+| --- | --- |
+| Linux-ZOL ordinary lifecycle and reboot export recovery | Implemented, automated-tested, live-validated |
+| Linux-ZOL snapshots | Unsupported |
+| RouterOS ordinary lifecycle through nvmet-csi | Implemented, automated-tested, live-validated under an isolated identity |
+| RouterOS snapshots and same-backend restore | Implemented, automated-tested; TC-08 pending live execution |
+| RouterOS resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
 
-### Known Limitations
+### Current Limitations
 
-- Single RDS controller (no multipath)
-- No controller HA (single replica)
-- Hardware validation tests (TC-08 through TC-11) documented but not yet executed against real RDS
+- Controller replicas are intentionally single-instance; no leader-elected HA.
+- Snapshot capability advertisement is driver-global while Linux-ZOL does not implement snapshots.
+- `CreateSnapshot` routing is not yet derived from authoritative source-volume ownership.
+- Linux-ZOL host access control uses allow-any-host pending an ACL design.
+- RouterOS snapshot and disruption procedures still require live execution.
 
-## Latest Milestones
+## Historical Milestones
 
-**v0.11.0 Data Protection** (Shipped: 2026-02-18)
-- Fixed snapshot implementation (Btrfs subvolume → `/disk add copy-from` CoW)
-- Scheduled snapshots CronJob with retention, resilience regression tests
-- See: `.planning/milestones/v0.11.0-ROADMAP.md`
+The v0.1.0-v0.11.0 milestones record the RDS-focused predecessor's completed
+implementation, automated-test, and documentation plans. They are historical
+records, not current live-validation evidence. See `.planning/milestones/`.
 
-**v0.10.0 Feature Enhancements** (Shipped: 2026-02-06)
-- Hardware validation, documentation, Helm chart, RDS health monitoring
-- See: `.planning/milestones/v0.10.0-ROADMAP.md`
+The v0.11 snapshot work replaced the invalid Btrfs-subvolume approach with
+RouterOS `/disk add copy-from`, added mock/sanity coverage and TC-08
+documentation. TC-08 was not actually executed at milestone archive time.
 
-**v0.9.0 Production Readiness & Test Maturity** (Shipped: 2026-02-06)
-- CSI sanity tests, mock RDS server, E2E suite, attachment reconciliation
-- See: `.planning/milestones/v0.9.0-ROADMAP.md`
+## Current Requirements
 
-## Requirements
+Status labels are evidence-scoped:
 
-### Validated
+- **Implemented:** production code exists.
+- **Automated-tested:** unit, mock, sanity, or automated E2E coverage exists.
+- **Live-validated:** a dated hardware scenario was executed and recorded.
+- **Unsupported:** a backend explicitly rejects or lacks the operation.
 
-- ✓ Volume creation via SSH (`/disk add`) with NVMe/TCP export — v1
-- ✓ Volume deletion via SSH (`/disk remove`) — v1
-- ✓ Node staging: NVMe connect, format filesystem, mount to staging path — v1
-- ✓ Node publishing: bind mount to pod path — v1
-- ✓ Node unstaging: unmount, NVMe disconnect — v1
-- ✓ SSH connection pooling with retry logic — v1
-- ✓ Orphan volume reconciliation (detect/cleanup unused volumes) — v1
-- ✓ Input validation preventing command injection — v1
-- ✓ Secure mount options enforced (nosuid, nodev, noexec) — v1
-- ✓ Security event logging for audit trails — v1
-- ✓ Detect NVMe-oF controller renumbering after reconnection — v1
-- ✓ Update or remount when device paths change (nvme0 → nvme3) — v1
-- ✓ Cleanup stale mounts referencing non-existent device paths — v1
-- ✓ Health checks via VolumeCondition in NodeGetVolumeStats — v1
-- ✓ Validate device paths are functional before returning them — v1
-- ✓ Handle orphaned NVMe subsystems (appear connected but no device path) — v1
-- ✓ Prometheus metrics endpoint — v1
-- ✓ NodeStageVolume handles block volumes without formatting — v0.6.0
-- ✓ NodePublishVolume creates block device files using mknod — v0.6.0
-- ✓ NodeUnpublishVolume/NodeUnstageVolume clean up block mounts — v0.6.0
-- ✓ KubeVirt VMs boot successfully with RDS block volumes — v0.6.0
-- ✓ KubeVirt live migration works end-to-end on metal cluster — v0.6.0
-- ✓ Mount storm prevention (NQN filtering, duplicate detection, circuit breaker) — v0.6.0
-- ✓ System volume protection via configurable NQN prefix filtering — v0.6.0
-- ✓ Controller rebuilds state from VolumeAttachment objects (not PV annotations) — v0.7.0
-- ✓ Migration state detection from multiple VolumeAttachment objects — v0.7.0
-- ✓ PV annotations are informational-only (never read during rebuild) — v0.7.0
-- ✓ Migration metrics (count, duration, active) observable via Prometheus — v0.7.0
-- ✓ Production logs contain only actionable information at info level — v0.8.0
-- ✓ Error handling follows consistent patterns throughout codebase — v0.8.0
-- ✓ Test coverage >60% on critical paths — v0.8.0 (65.0% total)
-- ✓ Common patterns extracted into reusable utilities — v0.8.0
-- ✓ Code smells from analysis resolved or explicitly deferred — v0.8.0
-- ✓ CSI sanity tests pass with zero failures in CI — v0.9.0
-- ✓ Mock RDS server supports all driver commands with latency simulation — v0.9.0
-- ✓ E2E test suite runs in CI without real hardware — v0.9.0
-- ✓ Critical error paths have test coverage (controller, node, RDS client) — v0.9.0
-- ✓ Attachment reconciliation detects and cleans stale VolumeAttachments — v0.9.0
-- ✓ RDS connection manager with exponential backoff and auto-reconnection — v0.9.0
-- ✓ Probe health check reflects RDS connection state — v0.9.0
-- ✓ golangci-lint v2 enforced in CI with all issues resolved — v0.9.0
-- ✓ Manual test scenarios documented for hardware validation — v0.10.0
-- ✓ CSI capability gap analysis vs peer drivers — v0.10.0
-- ✓ Helm chart for simplified deployment — v0.10.0
-- ✓ RDS health monitoring design (SSH polling with Prometheus metrics) — v0.10.0
-- ✓ Accurate nvme_connections_active metric from attachment manager — v0.10.0
-- ✓ Snapshot creation uses `/disk add copy-from` CoW instead of Btrfs subvolume — v0.11.0
-- ✓ Snapshot restore creates new volume from snapshot via copy-from — v0.11.0
-- ✓ Snapshot deletion cleans up copied disk and file — v0.11.0
-- ✓ Snapshots validated end-to-end against real RDS hardware — v0.11.0 (TC-08 documented)
-- ✓ Scheduled snapshot CronJob with configurable retention — v0.11.0
-- ✓ Resilience regression tests for NVMe reconnect, RDS restart, node failure — v0.11.0
+### Live-validated
+
+- Linux-ZOL provision, attach, filesystem mount, remount persistence, expand, and delete cleanup.
+- Linux-ZOL controller restart and target-host reboot export reconstruction.
+- RouterOS controller lifecycle and isolated data-path provision, mount, remount, online expansion, and delete cleanup.
+- Configured driver-name isolation in the deployed controller attachment rebuild.
+
+See `docs/nvmet-csi-live-validation.md` for exact dates, hardware, object IDs,
+inventories, and limitations.
+
+### Implemented and automated-tested; live validation pending
+
+- RouterOS snapshot create/delete/list and same-backend restore: TC-08.
+- Scheduled snapshots and retention: execute only after TC-08 passes.
+- RouterOS NVMe reconnect and node-failure recovery: TC-09 and TC-11.
+- RouterOS restart preservation: TC-10, approved maintenance window only.
+- Linux-ZOL consumer drain and KubeVirt churn.
+
+### Unsupported
+
+- Linux-ZOL snapshots and snapshot restore.
+- Cross-backend snapshot restore.
+- Controller HA.
+- NVMe multipath across independent targets.
+- Application-consistent snapshots without application quiesce integration.
 
 ### Active
 
-(No active requirements — next milestone not yet defined)
+Execute TC-08 with a disposable RDS-backed volume under the isolated
+`nvmet-rds-test.csi.whiskey.works` identity, then record exact Kubernetes and
+RouterOS cleanup evidence.
 
 ### Out of Scope
 
@@ -157,11 +134,11 @@ A Kubernetes CSI driver for MikroTik ROSE Data Server (RDS) that provides dynami
 
 ## Constraints
 
-- **Testing**: RDS restart affects site networking; need confidence before testing
-- **Compatibility**: Must work with existing volumes and mounts (no breaking changes)
-- **Dependencies**: Uses nvme-cli binary; solutions must work within that constraint
-- **Data Safety**: Postgres consolidation makes snapshot reliability critical — data loss is unacceptable
-- **Hardware Validation**: TC-08 through TC-11 require maintenance window for execution against real RDS at 10.42.68.1
+- **RDS safety:** the appliance is fragile shared infrastructure; use isolated identities, dedicated credentials, rate-limited mutations, and exact inventory checks.
+- **Maintenance windows:** RDS restart or equivalent disruption requires explicit approval.
+- **Evidence:** documentation and automated tests never substitute for dated live hardware execution.
+- **Backend scope:** RouterOS snapshot support must not be presented as Linux-ZOL support.
+- **Data safety:** ownership metadata is required before destructive backend operations.
 
 ---
-*Last updated: 2026-02-18 after v0.11.0 milestone completion*
+*Last updated: 2026-07-12 for current nvmet-csi status; archived milestone files remain historical records.*

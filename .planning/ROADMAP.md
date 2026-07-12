@@ -1,4 +1,25 @@
-# Roadmap: RDS CSI Driver
+# Roadmap Index: nvmet-csi
+
+## Current nvmet-csi Status
+
+`nvmet-csi` is the backend-neutral successor to the RDS-focused driver whose
+v0.1.0-v0.11.0 plans are archived below. Linux-ZOL is the primary backend;
+RouterOS/RDS is an isolated compatibility backend. Current live evidence is
+maintained in `docs/nvmet-csi-live-validation.md`.
+
+| Backend / capability | Current evidence |
+| --- | --- |
+| Linux-ZOL ordinary lifecycle and reboot recovery | Implemented, automated-tested, live-validated |
+| Linux-ZOL snapshots | Unsupported |
+| RouterOS ordinary lifecycle through nvmet-csi | Implemented, automated-tested, live-validated |
+| RouterOS snapshots and same-backend restore | Implemented, automated-tested; TC-08 pending live execution |
+| RouterOS resilience | Automated/mock-tested or documented; TC-09-TC-11 pending live execution |
+
+## Archived Predecessor Milestones
+
+The statuses below are historical planning records. Phase completion denotes
+completion of the planned implementation, automated test, or documentation
+deliverable; it is not independent evidence that a hardware procedure ran.
 
 ## Milestones
 
@@ -34,16 +55,16 @@ See milestone archives in `.planning/milestones/` for complete phase details:
 </details>
 
 <details>
-<summary>✅ v0.11.0 Data Protection (Phases 29-32) - SHIPPED 2026-02-18</summary>
+<summary>✅ v0.11.0 Data Protection (Phases 29-32) - ARCHIVED 2026-02-18</summary>
 
 See: `.planning/milestones/v0.11.0-ROADMAP.md`
 
-- [x] Phase 29: Snapshot Implementation Fix (2/2 plans) — 2026-02-18
-- [x] Phase 30: Snapshot Validation (2/2 plans) — 2026-02-17
-- [x] Phase 31: Scheduled Snapshots (1/1 plan) — 2026-02-18
-- [x] Phase 32: Resilience Regression Tests (2/2 plans) — 2026-02-18
+- [x] Phase 29: Snapshot implementation fix (2/2 plans) — 2026-02-18
+- [x] Phase 30: Snapshot implementation/automated validation and TC-08 procedure (2/2 plans) — TC-08 was not live-executed at archive time
+- [x] Phase 31: Scheduled snapshot manifests and automated rendering (1/1 plan) — live CronJob execution pending
+- [x] Phase 32: Automated resilience regressions and TC-09-TC-11 procedures (2/2 plans) — hardware execution pending
 
 </details>
 
 ---
-*Last updated: 2026-02-18 after v0.11.0 milestone completion*
+*Last updated: 2026-07-12; historical milestone archives remain unchanged.*
