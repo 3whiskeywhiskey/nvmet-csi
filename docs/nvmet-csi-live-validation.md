@@ -184,6 +184,26 @@ for this live lifecycle.
 Still not validated live: snapshots against real RouterOS and node-roll churn
 against RDS-backed workloads.
 
+### Driver-isolation and device-safety rollout (metal, 2026-07-12)
+
+Commit `682920b` was built and deployed as
+`ghcr.io/3whiskeywhiskey/nvmet-csi:dev-20260712-driver-isolation-lsof-fix@sha256:99dde01dc9bc024b2413a9b7eb0d9775698692f56887db775535bb1c45b12d29`.
+The controller and all three Ready amd64 node plugins (`r740xd`, `r640-2`,
+and `r640-3`) run that digest. The DaemonSet still reports two unavailable
+nodes because `r640-1`, `c4140`, and `gpu-worker-1` retain terminating pods
+while those nodes are offline; they will receive the current template when
+they return.
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Configured-driver attachment rebuild | Passed | The production controller listed 12 cluster `VolumeAttachment` objects and rebuilt only the 7 owned by `nvmet.csi.whiskey.works`. Regression tests also cover a custom driver coexisting with the production identity. |
+| Foreign-driver orphan protection | Passed in tests | Every non-empty CSI `VolumeHandle` now protects its RDS disk and file from orphan cleanup, including handles owned by another CSI identity. Enabled reconciliation requires an explicit driver name; disabled construction remains a no-op-compatible path. |
+| Controller startup reconciliation | Passed | Startup completed with `targets=1, repaired=0, conflicts=0` in 6.25s. |
+| Target export state | Passed | r740xd had 10 subsystems and 10 port-4420 links after rollout. |
+| Client discovery | Passed | `r640-3` returned 11 discovery records: the discovery subsystem plus all 10 managed NQNs. |
+| BusyBox/traditional `lsof` parser | Passed in tests and deployed | Targeted race tests cover PID-first BusyBox output, command-first traditional output, headers, malformed rows, self-PID filtering, and numeric-command ambiguity. The corrected binary (`GitCommit: 682920b`) is running on all Ready node-plugin hosts; no destructive live unmount was induced solely to re-exercise the safety check. |
+
+
 ## Side-by-Side Install Shape
 
 Install `nvmet-csi` as a distinct CSI driver from the current RDS deployment.
