@@ -286,8 +286,7 @@ This document provides a high-level overview of the nvmet-csi driver development
 
 ## Linux-ZOL nvmet Reboot Safety (2026-07)
 
-**Status**: controller-side reconciliation implemented; pending live validation
-on r740xd (cluster currently down).
+**Status**: complete and live-validated on r740xd (2026-07-11).
 
 Kernel `nvmet` configfs state is lost on target host reboot; retained
 Linux-ZOL PVCs failed to mount until exports were rebuilt by hand. The
@@ -306,10 +305,11 @@ correct configfs export:
 - `linux-zol-plan` Helm job remains the dry-run/debug surface for the same
   planner the reconciler applies.
 
-Remaining for closure (needs hardware): live smoke test on r740xd
-(reboot → `nvme discover` shows all managed NQNs with no manual configfs
-work), image build + digest-pinned rollout, and confirmation that the netboot
-config imports `nixos/modules/nvmet-target.nix`.
+Live closure passed after an actual r740xd outage: startup reconciliation
+repaired all 12 managed exports with no conflicts; client discovery from
+`r640-3` returned all managed NQNs; a second controller startup repaired zero
+exports; and an existing ClickHouse workload remained operational. The image
+is digest-pinned through Flux. See `docs/nvmet-csi-live-validation.md`.
 
 ---
 
