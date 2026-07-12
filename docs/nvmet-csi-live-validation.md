@@ -190,9 +190,9 @@ Commit `682920b` was built and deployed as
 `ghcr.io/3whiskeywhiskey/nvmet-csi:dev-20260712-driver-isolation-lsof-fix@sha256:99dde01dc9bc024b2413a9b7eb0d9775698692f56887db775535bb1c45b12d29`.
 The controller and all three Ready amd64 node plugins (`r740xd`, `r640-2`,
 and `r640-3`) run that digest. The DaemonSet still reports two unavailable
-nodes because `r640-1`, `c4140`, and `gpu-worker-1` retain terminating pods
-while those nodes are offline; they will receive the current template when
-they return.
+desired nodes (`r640-1` and `c4140`), each with an old terminating pod; they
+will receive the current template when they return. `gpu-worker-1` has another
+terminating historical pod but is not part of the current desired count.
 
 | Check | Result | Notes |
 | --- | --- | --- |
