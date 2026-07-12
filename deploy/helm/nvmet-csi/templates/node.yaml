@@ -151,7 +151,7 @@ spec:
           image: "{{ .Values.node.livenessProbe.image.repository }}:{{ .Values.node.livenessProbe.image.tag }}"
           args:
             - "--csi-address=$(ADDRESS)"
-            - "--health-port=10300"
+            - "--health-port={{ .Values.node.livenessProbe.healthPort }}"
             - "--probe-timeout=3s"
             - "--v=5"
           env:

@@ -269,6 +269,7 @@ node:
     image:
       repository: registry.k8s.io/sig-storage/livenessprobe
       tag: v2.12.0
+    healthPort: 10300
     resources:
       requests:
         cpu: 10m
