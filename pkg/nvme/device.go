@@ -33,24 +33,26 @@ type DeviceUsageResult struct {
 	FilteredSelfPIDs int
 }
 
-// parseLsofLine extracts process identity from either BusyBox/Alpine lsof
-// output (PID COMMAND ...) or traditional lsof output (COMMAND PID ...).
-// Header and malformed lines are ignored.
-func parseLsofLine(line string) (pid int, command string, ok bool) {
+// parseLsofLine extracts process identity using the format established from
+// the complete lsof output. BusyBox/Alpine puts PID first; traditional lsof
+// puts COMMAND first and emits a header. Header and malformed lines are
+// ignored.
+func parseLsofLine(line string, pidFirst bool) (pid int, command string, ok bool) {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
 		return 0, "", false
 	}
 
-	if pid, err := strconv.Atoi(fields[0]); err == nil {
-		return pid, fields[1], true
+	pidField, commandField := 0, 1
+	if !pidFirst {
+		pidField, commandField = 1, 0
 	}
 
-	pid, err := strconv.Atoi(fields[1])
+	pid, err := strconv.Atoi(fields[pidField])
 	if err != nil {
 		return 0, "", false
 	}
-	return pid, fields[0], true
+	return pid, fields[commandField], true
 }
 
 // CheckDeviceInUse checks if a device has open file descriptors using lsof.
@@ -112,9 +114,16 @@ func CheckDeviceInUse(ctx context.Context, devicePath string) DeviceUsageResult 
 	// - The lsof check operation itself
 	processes := make([]string, 0, len(lines))
 	filteredCount := 0
+	pidFirst := true
+	if len(lines) > 0 {
+		fields := strings.Fields(lines[0])
+		if len(fields) >= 2 && strings.EqualFold(fields[0], "COMMAND") && strings.EqualFold(fields[1], "PID") {
+			pidFirst = false
+		}
+	}
 
 	for _, line := range lines {
-		pid, command, ok := parseLsofLine(line)
+		pid, command, ok := parseLsofLine(line, pidFirst)
 		if !ok {
 			continue
 		}

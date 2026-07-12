@@ -179,77 +179,94 @@ func TestCheckDeviceInUse_SelfPIDFiltering(t *testing.T) {
 }
 
 // TestParseLsofLine covers the parsing seam for both BusyBox (PID first, no header)
-// and traditional lsof (COMMAND first, with header) formats. The helper is the
-// smallest package-private API that production will expose.
+// and traditional lsof (COMMAND first, with header) formats using explicit pidFirst.
+// The helper is the smallest package-private API that production will expose.
 func TestParseLsofLine(t *testing.T) {
 	tests := []struct {
-		name    string
-		line    string
-		wantPID int
-		wantCmd string
-		wantOK  bool
+		name     string
+		line     string
+		pidFirst bool
+		wantPID  int
+		wantCmd  string
+		wantOK   bool
 	}{
 		{
-			name:    "BusyBox/Alpine no-header PID COMMAND FD NAME parses PID from field 0",
-			line:    "1\t/usr/local/bin/nvmet-csi-plugin\t0\t/dev/null",
-			wantPID: 1,
-			wantCmd: "/usr/local/bin/nvmet-csi-plugin",
-			wantOK:  true,
+			name:     "BusyBox/Alpine no-header PID COMMAND FD NAME parses PID from field 0",
+			line:     "1\t/usr/local/bin/nvmet-csi-plugin\t0\t/dev/null",
+			pidFirst: true,
+			wantPID:  1,
+			wantCmd:  "/usr/local/bin/nvmet-csi-plugin",
+			wantOK:   true,
 		},
 		{
-			name:    "BusyBox no-header line parses PID field0 command field1",
-			line:    "1234 /bin/sh 1 pipe:[123]",
-			wantPID: 1234,
-			wantCmd: "/bin/sh",
-			wantOK:  true,
+			name:     "BusyBox no-header line parses PID field0 command field1",
+			line:     "1234 /bin/sh 1 pipe:[123]",
+			pidFirst: true,
+			wantPID:  1234,
+			wantCmd:  "/bin/sh",
+			wantOK:   true,
 		},
 		{
-			name:    "traditional COMMAND PID USER FD data line parses PID from field 1 command from 0",
-			line:    "bash 5678 root 0u CHR 1,3 0t0 6 /dev/null",
-			wantPID: 5678,
-			wantCmd: "bash",
-			wantOK:  true,
+			name:     "traditional COMMAND PID USER FD data line parses PID from field 1 command from 0",
+			line:     "bash 5678 root 0u CHR 1,3 0t0 6 /dev/null",
+			pidFirst: false,
+			wantPID:  5678,
+			wantCmd:  "bash",
+			wantOK:   true,
 		},
 		{
-			name:   "traditional header line is rejected as non-data without error or panic",
-			line:   "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME",
-			wantOK: false,
+			name:     "traditional numeric COMMAND with pidFirst=false correctly takes PID from field 1 (command '1' not mistaken for PID)",
+			line:     "1 5678 root 0u CHR 1,3 0t0 6 /dev/null",
+			pidFirst: false,
+			wantPID:  5678,
+			wantCmd:  "1",
+			wantOK:   true,
 		},
 		{
-			name:   "blank line is rejected",
-			line:   "",
-			wantOK: false,
+			name:     "traditional header line is rejected as non-data without error or panic",
+			line:     "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME",
+			pidFirst: false,
+			wantOK:   false,
 		},
 		{
-			name:   "malformed too-few-fields line is rejected",
-			line:   "onlyonefield",
-			wantOK: false,
+			name:     "blank line is rejected",
+			line:     "",
+			pidFirst: false,
+			wantOK:   false,
 		},
 		{
-			name:   "malformed non-numeric pid in busybox-style is rejected",
-			line:   "abc /bin/foo 0 /dev/null",
-			wantOK: false,
+			name:     "malformed too-few-fields line is rejected",
+			line:     "onlyonefield",
+			pidFirst: false,
+			wantOK:   false,
 		},
 		{
-			name:   "malformed non-numeric pid in traditional pos is rejected",
-			line:   "cmd xyz user 0 /dev",
-			wantOK: false,
+			name:     "malformed non-numeric pid in busybox-style is rejected",
+			line:     "abc /bin/foo 0 /dev/null",
+			pidFirst: true,
+			wantOK:   false,
+		},
+		{
+			name:     "malformed non-numeric pid in traditional pos is rejected",
+			line:     "cmd xyz user 0 /dev",
+			pidFirst: false,
+			wantOK:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pid, cmd, ok := parseLsofLine(tt.line)
+			pid, cmd, ok := parseLsofLine(tt.line, tt.pidFirst)
 			if ok != tt.wantOK {
-				t.Errorf("parseLsofLine(%q) ok=%v want=%v", tt.line, ok, tt.wantOK)
+				t.Errorf("parseLsofLine(%q, %v) ok=%v want=%v", tt.line, tt.pidFirst, ok, tt.wantOK)
 				return
 			}
 			if ok {
 				if pid != tt.wantPID {
-					t.Errorf("parseLsofLine(%q) pid=%d want=%d", tt.line, pid, tt.wantPID)
+					t.Errorf("parseLsofLine(%q, %v) pid=%d want=%d", tt.line, tt.pidFirst, pid, tt.wantPID)
 				}
 				if cmd != tt.wantCmd {
-					t.Errorf("parseLsofLine(%q) cmd=%q want=%q", tt.line, cmd, tt.wantCmd)
+					t.Errorf("parseLsofLine(%q, %v) cmd=%q want=%q", tt.line, tt.pidFirst, cmd, tt.wantCmd)
 				}
 			}
 		})
@@ -261,9 +278,9 @@ func TestParseLsofLine(t *testing.T) {
 func TestParseLsofLine_SelfOwned_BusyBox(t *testing.T) {
 	ownPID := os.Getpid()
 	line := fmt.Sprintf("%d /usr/local/bin/nvmet-csi-plugin 0 /dev/null", ownPID)
-	pid, cmd, ok := parseLsofLine(line)
+	pid, cmd, ok := parseLsofLine(line, true)
 	if !ok {
-		t.Fatalf("expected parseLsofLine to accept BusyBox self line, got ok=false for %q", line)
+		t.Fatalf("expected parseLsofLine to accept BusyBox self line with pidFirst=true, got ok=false for %q", line)
 	}
 	if pid != ownPID {
 		t.Errorf("parseLsofLine self line pid=%d want=%d (os.Getpid)", pid, ownPID)
