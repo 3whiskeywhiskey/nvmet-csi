@@ -593,7 +593,7 @@ func parseVolumeInfo(output string) (*VolumeInfo, error) {
 
 	// Extract nvme-tcp-server-nqn
 	if match := regexp.MustCompile(`nvme-tcp-server-nqn="([^"]+)"`).FindStringSubmatch(normalized); len(match) > 1 {
-		volume.NVMETCPNQN = match[1]
+		volume.NVMETCPNQN = strings.Join(strings.Fields(match[1]), "")
 	}
 
 	// Extract status (if available)

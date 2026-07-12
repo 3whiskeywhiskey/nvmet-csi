@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,16 +12,20 @@ import (
 	"syscall"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/adoption"
 	storagebackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend"
 	linuxzolbackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend/linuxzol"
+	routerosbackend "gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/backend/routeros"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/nvme"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/observability"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 )
 
@@ -86,7 +91,8 @@ var (
 	vmiCacheTTL            = flag.Duration("vmi-cache-ttl", 60*time.Second, "Cache TTL for PVC-to-VMI mapping lookups")
 
 	// Kubernetes configuration
-	kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+	kubeconfig  = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+	kubeContext = flag.String("kube-context", "", "Kubeconfig context override for read-only command modes")
 
 	// Metrics configuration
 	metricsAddr = flag.String("metrics-address", ":9809", "Address for Prometheus metrics endpoint (empty to disable)")
@@ -121,6 +127,13 @@ var (
 	linuxZOLPlanSizeBytes    = flag.Int64("linux-zol-plan-size-bytes", 0, "Desired volume size in bytes for linux-zol-plan-action=ensure")
 	linuxZOLPlanNQN          = flag.String("linux-zol-plan-nqn", "", "Exact NQN for linux-zol-plan-action=ensure")
 	linuxZOLPlanNQNPrefix    = flag.String("linux-zol-plan-nqn-prefix", utils.NQNPrefix, "NQN namespace used to derive an NQN when --linux-zol-plan-nqn is omitted")
+
+	// RouterOS zero-copy import planning. This mode observes RouterOS and
+	// Kubernetes ownership state, prints JSON, and never mutates either system.
+	routerOSImportPlan          = flag.Bool("routeros-import-plan", false, "Validate a read-only RouterOS volume adoption plan and exit")
+	routerOSImportVolumeID      = flag.String("routeros-import-volume-id", "", "Existing RouterOS disk slot and CSI volume handle to validate")
+	routerOSImportSourceDriver  = flag.String("routeros-import-source-driver", "rds.csi.srvlab.io", "Legacy CSI driver currently owning the volume")
+	routerOSImportManagedPrefix = flag.String("routeros-import-managed-nqn-prefix", "nqn.2000-02.com.mikrotik:pvc-", "Managed NQN prefix for the target nvmet-csi identity")
 )
 
 func main() {
@@ -142,6 +155,12 @@ func main() {
 	if *linuxZOLPlan {
 		if err := runLinuxZOLPlan(context.Background(), os.Stdout); err != nil {
 			klog.Fatalf("Linux ZoL/nvmet plan failed: %v", err)
+		}
+		os.Exit(0)
+	}
+	if *routerOSImportPlan {
+		if err := runRouterOSImportPlan(context.Background(), os.Stdout); err != nil {
+			klog.Fatalf("RouterOS import plan failed: %v", err)
 		}
 		os.Exit(0)
 	}
@@ -552,20 +571,107 @@ func renderLinuxZOLPlan(out io.Writer, plan *storagebackend.VolumePlan) error {
 	return nil
 }
 
+func runRouterOSImportPlan(ctx context.Context, out io.Writer) error {
+	if *routerOSImportVolumeID == "" {
+		return fmt.Errorf("--routeros-import-volume-id is required")
+	}
+	if *rdsAddress == "" {
+		return fmt.Errorf("--rds-address is required")
+	}
+	if *rdsVolumeBasePath == "" {
+		return fmt.Errorf("--rds-volume-base-path is required")
+	}
+	if *rdsHostKey == "" && !*rdsInsecure {
+		return fmt.Errorf("--rds-host-key is required unless --rds-insecure-skip-verify is set")
+	}
+
+	privateKey, err := os.ReadFile(*rdsKeyFile)
+	if err != nil {
+		return fmt.Errorf("read RDS private key: %w", err)
+	}
+	var hostKey []byte
+	if *rdsHostKey != "" {
+		hostKey, err = os.ReadFile(*rdsHostKey)
+		if err != nil {
+			return fmt.Errorf("read RDS host key: %w", err)
+		}
+	}
+
+	client, err := rds.NewClient(rds.ClientConfig{
+		Address:            *rdsAddress,
+		Port:               *rdsPort,
+		User:               *rdsUser,
+		PrivateKey:         privateKey,
+		HostKey:            hostKey,
+		InsecureSkipVerify: *rdsInsecure,
+	})
+	if err != nil {
+		return fmt.Errorf("create RDS client: %w", err)
+	}
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("connect to RDS: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	observed, err := routerosbackend.New(client).GetVolume(ctx, *routerOSImportVolumeID)
+	if err != nil {
+		return fmt.Errorf("observe RouterOS volume: %w", err)
+	}
+	k8sClient, err := createKubernetesClientForContext(*kubeconfig, *kubeContext)
+	if err != nil {
+		return err
+	}
+	pvList, err := k8sClient.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list persistent volumes: %w", err)
+	}
+	vaList, err := k8sClient.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list volume attachments: %w", err)
+	}
+
+	plan := adoption.BuildRouterOSImportPlan(
+		*routerOSImportVolumeID,
+		*routerOSImportSourceDriver,
+		*driverName,
+		*routerOSImportManagedPrefix,
+		observed,
+		pvList.Items,
+		vaList.Items,
+	)
+	encoder := json.NewEncoder(out)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(plan); err != nil {
+		return err
+	}
+	if plan.Action == adoption.ImportActionConflict {
+		return fmt.Errorf("import plan contains conflicts")
+	}
+	return nil
+}
+
 // createKubernetesClient creates a Kubernetes client using in-cluster config or kubeconfig file
 func createKubernetesClient(kubeconfigPath string) (kubernetes.Interface, error) {
+	return createKubernetesClientForContext(kubeconfigPath, "")
+}
+
+func createKubernetesClientForContext(kubeconfigPath, contextName string) (kubernetes.Interface, error) {
 	var config *rest.Config
 	var err error
 
 	if kubeconfigPath != "" {
-		// Use kubeconfig file
-		klog.V(2).Infof("Using kubeconfig file: %s", kubeconfigPath)
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		loadingRules.ExplicitPath = kubeconfigPath
+		overrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
 		if err != nil {
-			return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
+			return nil, fmt.Errorf("failed to build config: %w", err)
 		}
+		klog.V(2).Infof("Using kubeconfig file %s (context=%q)", kubeconfigPath, contextName)
 	} else {
-		// Use in-cluster config
+		if contextName != "" {
+			return nil, fmt.Errorf("--kube-context requires --kubeconfig")
+		}
 		klog.V(2).Info("Using in-cluster Kubernetes config")
 		config, err = rest.InClusterConfig()
 		if err != nil {
@@ -573,11 +679,9 @@ func createKubernetesClient(kubeconfigPath string) (kubernetes.Interface, error)
 		}
 	}
 
-	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
-
 	return clientset, nil
 }

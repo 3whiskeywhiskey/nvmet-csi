@@ -154,15 +154,29 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	// Detect volume mode early - block volumes don't have filesystems
 	isBlockVolume := req.GetVolumeCapability().GetBlock() != nil
 
-	// Extract volume context
+	// ControllerPublishVolume observes the backend and returns the authoritative
+	// target coordinates. Fall back to PV volume attributes for compatibility
+	// with static volumes and older external-attacher behavior.
 	volumeContext := req.GetVolumeContext()
-	nqn := volumeContext[volumeContextNQN]
-	nvmeAddress := volumeContext[volumeContextNVMEAddress]
-	// Fall back to rdsAddress if nvmeAddress not set (backward compatibility)
+	publishContext := req.GetPublishContext()
+	nqn := publishContext[volumeContextNQN]
+	if nqn == "" {
+		nqn = volumeContext[volumeContextNQN]
+	}
+	nvmeAddress := publishContext[volumeContextNVMEAddress]
+	if nvmeAddress == "" {
+		nvmeAddress = volumeContext[volumeContextNVMEAddress]
+	}
+	if nvmeAddress == "" {
+		nvmeAddress = publishContext[volumeContextAddress]
+	}
 	if nvmeAddress == "" {
 		nvmeAddress = volumeContext[volumeContextAddress]
 	}
-	nvmePort := volumeContext[volumeContextPort]
+	nvmePort := publishContext[volumeContextPort]
+	if nvmePort == "" {
+		nvmePort = volumeContext[volumeContextPort]
+	}
 
 	if nqn == "" || nvmeAddress == "" || nvmePort == "" {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -186,6 +200,17 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	// The controller validates this during volume creation
 	if err := utils.ValidateNVMETargetContext(nqn, nvmeAddress, port, ""); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid NVMe target context: %v", err)
+	}
+
+	if ns.driver != nil && ns.driver.managedNQNPrefix != "" {
+		expectedNQN, err := ns.volumeIDToNQN(volumeID)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID: %v", err)
+		}
+		if nqn != expectedNQN {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"volume NQN %q does not match this driver instance's owned NQN %q", nqn, expectedNQN)
+		}
 	}
 
 	// Get filesystem type from capability or use default (only for filesystem volumes)
@@ -383,7 +408,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	}
 
 	// Derive NQN from volume ID for logging
-	nqn, err := volumeIDToNQN(volumeID)
+	nqn, err := ns.volumeIDToNQN(volumeID)
 	if err != nil {
 		nqn = "" // Will use empty NQN in logs
 	}
@@ -535,7 +560,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	// Step 2: Disconnect from NVMe/TCP target
 	// Derive NQN from volume ID (same as what was used during CreateVolume)
 	if nqn == "" {
-		nqn, err = volumeIDToNQN(volumeID)
+		nqn, err = ns.volumeIDToNQN(volumeID)
 		if err != nil {
 			// Log but don't fail - volume might have been disconnected already
 			klog.Warningf("Failed to derive NQN from volume ID %s: %v", volumeID, err)
@@ -593,7 +618,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		nqn := volumeContext[volumeContextNQN]
 		if nqn == "" {
 			var err error
-			nqn, err = volumeIDToNQN(volumeID)
+			nqn, err = ns.volumeIDToNQN(volumeID)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to derive NQN from volume ID: %v", err)
 			}
@@ -676,7 +701,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volumeContext := req.GetVolumeContext()
 	nqn := volumeContext[volumeContextNQN]
 	if nqn == "" {
-		nqn, _ = volumeIDToNQN(volumeID)
+		nqn, _ = ns.volumeIDToNQN(volumeID)
 	}
 	if nqn != "" {
 		fsType := defaultFSType
@@ -823,7 +848,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 
 	// Check for stale mount if we can derive NQN
 	// For stats, we just need to verify mount is healthy
-	nqn, err := volumeIDToNQN(volumeID)
+	nqn, err := ns.volumeIDToNQN(volumeID)
 	if err == nil && ns.staleChecker != nil {
 		stale, reason, checkErr := ns.staleChecker.IsMountStale(volumePath, nqn)
 		if checkErr != nil {
@@ -984,7 +1009,7 @@ func (ns *NodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 	}
 
 	// Derive NQN from volume ID to get device path
-	nqn, err := volumeIDToNQN(volumeID)
+	nqn, err := ns.volumeIDToNQN(volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to derive NQN from volume ID: %v", err)
 	}
@@ -1058,7 +1083,13 @@ func (ns *NodeServer) checkAndRecoverMount(ctx context.Context, stagingPath, nqn
 	return nil
 }
 
-// volumeIDToNQN converts a volume ID to an NVMe Qualified Name
-func volumeIDToNQN(volumeID string) (string, error) {
-	return utils.VolumeIDToNQN(volumeID)
+// volumeIDToNQN derives the NQN owned by this node-plugin instance. Using the
+// configured prefix keeps later CSI calls consistent with NodeStageVolume for
+// isolated backend identities and remains deterministic across pod restarts.
+func (ns *NodeServer) volumeIDToNQN(volumeID string) (string, error) {
+	prefix := ""
+	if ns != nil && ns.driver != nil {
+		prefix = ns.driver.managedNQNPrefix
+	}
+	return utils.VolumeIDToNQNWithPrefix(volumeID, prefix)
 }

@@ -564,8 +564,8 @@ func (cs *ControllerServer) validateBlockingNodeExists(ctx context.Context, node
 	return true, nil
 }
 
-// buildPublishContext creates the publish_context map with NVMe connection parameters.
-// Uses snake_case keys to match existing volumeContext conventions.
+// buildPublishContext returns the backend-observed target coordinates using
+// the same keys consumed by NodeStageVolume.
 func (cs *ControllerServer) buildPublishContext(volume *backend.Volume, params map[string]string) map[string]string {
 	fsType := "ext4"
 	if fs, ok := params[paramFSType]; ok && fs != "" {
@@ -573,10 +573,14 @@ func (cs *ControllerServer) buildPublishContext(volume *backend.Volume, params m
 	}
 
 	return map[string]string{
-		"nvme_address": cs.getNVMEAddress(params),
-		"nvme_port":    fmt.Sprintf("%d", volume.NVMETCPPort),
-		"nvme_nqn":     volume.NVMETCPNQN,
-		"fs_type":      fsType,
+		volumeContextNVMEAddress: cs.getNVMEAddress(params),
+		volumeContextPort:        fmt.Sprintf("%d", volume.NVMETCPPort),
+		volumeContextNQN:         volume.NVMETCPNQN,
+		volumeContextFSType:      fsType,
+		"nvme_address":           cs.getNVMEAddress(params),
+		"nvme_port":              fmt.Sprintf("%d", volume.NVMETCPPort),
+		"nvme_nqn":               volume.NVMETCPNQN,
+		"fs_type":                fsType,
 	}
 }
 
