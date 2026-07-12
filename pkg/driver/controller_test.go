@@ -690,7 +690,7 @@ func testControllerServer(t *testing.T, nodes ...*corev1.Node) (*ControllerServe
 		name:              DriverName,
 		version:           "test",
 		k8sClient:         k8sClient,
-		attachmentManager: attachment.NewAttachmentManager(k8sClient),
+		attachmentManager: attachment.NewAttachmentManager(k8sClient, DriverName),
 	}
 	driver.SetRDSClient(mockRDS)
 	driver.addVolumeCapabilities()
@@ -1694,7 +1694,7 @@ func TestControllerPublishVolume_MigrationTimeout(t *testing.T) {
 			mockRDS := rds.NewMockClient()
 			mockRDS.SetAddress("10.0.0.1")
 
-			am := attachment.NewAttachmentManager(k8sClient)
+			am := attachment.NewAttachmentManager(k8sClient, DriverName)
 			tt.setupState(am)
 
 			driver := &Driver{

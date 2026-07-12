@@ -91,7 +91,7 @@ func TestNewAttachmentReconciler_RequiresManager(t *testing.T) {
 }
 
 func TestNewAttachmentReconciler_RequiresK8sClient(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -108,7 +108,7 @@ func TestNewAttachmentReconciler_RequiresK8sClient(t *testing.T) {
 }
 
 func TestNewAttachmentReconciler_DefaultValues(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -134,7 +134,7 @@ func TestNewAttachmentReconciler_DefaultValues(t *testing.T) {
 }
 
 func TestReconciler_StartStop(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -175,7 +175,7 @@ func TestReconciler_StartStop(t *testing.T) {
 }
 
 func TestReconciler_ContextCancellation(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -221,7 +221,7 @@ func TestReconciler_ClearsStaleAttachment_NodeDeleted(t *testing.T) {
 	nodeLister, pvLister := createTestListers(k8sClient)
 
 	// Create attachment manager and track a volume
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-stale"
 	nodeID := "deleted-node"
@@ -272,7 +272,7 @@ func TestReconciler_PreservesValidAttachment_NodeExists(t *testing.T) {
 	nodeLister, pvLister := createTestListers(k8sClient)
 
 	// Create attachment manager and track a volume
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-valid"
 	nodeID := "existing-node"
@@ -311,7 +311,7 @@ func TestReconciler_RespectsGracePeriod(t *testing.T) {
 	nodeLister, pvLister := createTestListers(k8sClient)
 
 	// Create attachment manager
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-grace"
 	nodeID := "deleted-node"
@@ -366,7 +366,7 @@ func TestReconciler_HandlesAPIErrors(t *testing.T) {
 	nodeLister, pvLister := createTestListers(k8sClient)
 
 	// Create attachment manager and track a volume to non-existent node
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-cache-miss"
 	nodeID := "deleted-node"
@@ -400,7 +400,7 @@ func TestReconciler_HandlesAPIErrors(t *testing.T) {
 }
 
 func TestReconciler_GetGracePeriod(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -427,7 +427,7 @@ func TestTriggerReconcile_ImmediateReconciliation(t *testing.T) {
 	nodeLister, pvLister := createTestListers(k8sClient)
 
 	// Create attachment manager and track a volume to non-existent node
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-trigger"
 	nodeID := "deleted-node"
@@ -486,7 +486,7 @@ func TestTriggerReconcile_ImmediateReconciliation(t *testing.T) {
 }
 
 func TestTriggerReconcile_Deduplication(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -522,7 +522,7 @@ func TestTriggerReconcile_Deduplication(t *testing.T) {
 }
 
 func TestTriggerReconcile_NotRunning(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -555,7 +555,7 @@ func TestReconciler_RESIL03_StaleCleanupAndReattachment(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset(nodeB)
 	nodeLister, pvLister := createTestListers(k8sClient, nodeB)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-resil-03"
 	nodeA := "node-a" // This node does NOT exist in k8s
@@ -612,7 +612,7 @@ func TestReconciler_RESIL03_StaleCleanupAndReattachment(t *testing.T) {
 }
 
 func TestTriggerReconcile_AfterStop(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
@@ -656,7 +656,7 @@ func TestReconciler_StaleVolumeAttachmentRequiresConfirmations(t *testing.T) {
 	metrics := observability.NewMetrics()
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
-		Manager:                       NewAttachmentManager(nil),
+		Manager:                       NewAttachmentManager(nil, "nvmet.csi.whiskey.works"),
 		K8sClient:                     k8sClient,
 		NodeLister:                    nodeLister,
 		PVLister:                      pvLister,
@@ -697,7 +697,7 @@ func TestReconciler_StaleVolumeAttachmentDeleteDoesNotDelete(t *testing.T) {
 	metrics := observability.NewMetrics()
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
-		Manager:                       NewAttachmentManager(nil),
+		Manager:                       NewAttachmentManager(nil, "nvmet.csi.whiskey.works"),
 		K8sClient:                     k8sClient,
 		NodeLister:                    nodeLister,
 		PVLister:                      pvLister,
@@ -731,7 +731,7 @@ func TestReconciler_StaleVolumeAttachmentPreservesLiveNode(t *testing.T) {
 	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
-		Manager:                       NewAttachmentManager(nil),
+		Manager:                       NewAttachmentManager(nil, "nvmet.csi.whiskey.works"),
 		K8sClient:                     k8sClient,
 		NodeLister:                    nodeLister,
 		PVLister:                      pvLister,
@@ -760,7 +760,7 @@ func TestReconciler_StaleVolumeAttachmentRequiresPV(t *testing.T) {
 	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient)
 
 	r, err := NewAttachmentReconciler(ReconcilerConfig{
-		Manager:                       NewAttachmentManager(nil),
+		Manager:                       NewAttachmentManager(nil, "nvmet.csi.whiskey.works"),
 		K8sClient:                     k8sClient,
 		NodeLister:                    nodeLister,
 		PVLister:                      pvLister,
@@ -816,4 +816,75 @@ func testVolumeAttachment(name, volumeID, nodeID, attacher string, createdAt tim
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+// TestReconciler_StaleVolumeAttachment_DriverNameIsolation is a regression test
+// proving that when AttachmentManager is configured with a custom driver name,
+// stale VolumeAttachment cleanup (via cached lister) only considers VAs whose
+// attacher matches the manager's driver. A production-driver stale VA must be
+// ignored even when present alongside a custom-driver stale VA.
+//
+// Setup: one prod-driver stale VA + PV, one custom-driver stale VA + PV;
+// no Node objects (deleted nodes); dry-run (Delete=false); min confirmations=1.
+// After one reconcile, directly assert r.staleVolumeAttachmentSeen contains vaTest
+// and does not contain vaProd; retain dry-run no-delete assertions.
+func TestReconciler_StaleVolumeAttachment_DriverNameIsolation(t *testing.T) {
+	ctx := context.Background()
+	prodDriver := "nvmet.csi.whiskey.works"
+	testDriver := "nvmet-rds-test.csi.whiskey.works"
+
+	prodVol := "pvc-prod-stale"
+	testVol := "pvc-test-stale"
+
+	// Both VAs are stale (point at non-existent nodes). Use helper accepting explicit attacher.
+	vaProd := testVolumeAttachment("va-prod-stale", prodVol, "deleted-prod-node", prodDriver, time.Now().Add(-time.Hour))
+	vaTest := testVolumeAttachment("va-test-stale", testVol, "deleted-test-node", testDriver, time.Now().Add(-time.Hour))
+
+	// PVs for the volumeID lookup inside stale logic (driver inside PV is irrelevant for this path).
+	pvProd := testPersistentVolume(prodVol)
+	pvTest := testPersistentVolume(testVol)
+
+	k8sClient := fake.NewSimpleClientset()
+	nodeLister, pvLister, vaLister := createTestListersWithVolumeAttachments(k8sClient, pvProd, pvTest, vaProd, vaTest)
+	// (metrics not required for this test; isolation is asserted via staleVolumeAttachmentSeen)
+
+	am := NewAttachmentManager(k8sClient, testDriver)
+
+	r, err := NewAttachmentReconciler(ReconcilerConfig{
+		Manager:                       am,
+		K8sClient:                     k8sClient,
+		NodeLister:                    nodeLister,
+		PVLister:                      pvLister,
+		VolumeAttachmentLister:        vaLister,
+		Interval:                      time.Hour,
+		GracePeriod:                   time.Nanosecond,
+		StaleVolumeAttachmentCleanup:  true,
+		StaleVolumeAttachmentDelete:   false, // dry-run, like the "DoesNotDelete" test
+		StaleVolumeAttachmentMinConfs: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewAttachmentReconciler failed: %v", err)
+	}
+
+	// Single reconcile (minConfs=1): only the VA whose attacher matches the
+	// configured manager driverName must be considered.
+	r.reconcile(ctx)
+
+	// Direct state assertion on the reconciler (same package): staleVolumeAttachmentSeen
+	// must contain the custom-driver VA and must not contain the prod one.
+	// Primary regression guard (avoids brittle metric scrape/count assumptions).
+	if _, ok := r.staleVolumeAttachmentSeen[vaProd.Name]; ok {
+		t.Error("production-driver stale VA must never appear in staleVolumeAttachmentSeen")
+	}
+	if _, ok := r.staleVolumeAttachmentSeen[vaTest.Name]; !ok {
+		t.Error("custom-driver stale VA must be present in staleVolumeAttachmentSeen after reconcile")
+	}
+
+	// Retain dry-run / no-delete assertions: neither VA is removed.
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, vaProd.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("production-driver stale VA should have been left untouched (not selected): %v", err)
+	}
+	if _, err := k8sClient.StorageV1().VolumeAttachments().Get(ctx, vaTest.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("custom-driver stale VA should still exist (dry-run): %v", err)
+	}
 }

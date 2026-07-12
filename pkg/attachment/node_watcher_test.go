@@ -25,7 +25,7 @@ func TestNodeWatcher_UpdateFunc_ReadyToNotReady(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset(testNode)
 	nodeLister, pvLister := createTestListers(k8sClient, testNode)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:    am,
 		K8sClient:  k8sClient,
@@ -85,7 +85,7 @@ func TestNodeWatcher_UpdateFunc_NoChange(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:    am,
 		K8sClient:  k8sClient,
@@ -127,7 +127,7 @@ func TestNodeWatcher_UpdateFunc_NotReadyToNotReady(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:    am,
 		K8sClient:  k8sClient,
@@ -169,7 +169,7 @@ func TestNodeWatcher_DeleteFunc_TriggersReconciliation(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:     am,
 		K8sClient:   k8sClient,
@@ -223,7 +223,7 @@ func TestNodeWatcher_DeleteFunc_HandlesTombstone(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:    am,
 		K8sClient:  k8sClient,
@@ -270,7 +270,7 @@ func TestNodeWatcher_NilMetrics(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	nodeLister, pvLister := createTestListers(k8sClient)
 
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	reconciler, err := NewAttachmentReconciler(ReconcilerConfig{
 		Manager:    am,
 		K8sClient:  k8sClient,

@@ -83,6 +83,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        false,
@@ -125,6 +126,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        false,
@@ -166,6 +168,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        false,
@@ -200,6 +203,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        true, // DRY RUN
@@ -262,6 +266,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        false,
@@ -313,6 +318,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        true,
@@ -358,6 +364,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		rec, err := reconciler.NewOrphanReconciler(reconciler.OrphanReconcilerConfig{
 			RDSClient:     rdsClient,
 			K8sClient:     k8sClient,
+			DriverName:    "nvmet.csi.whiskey.works",
 			CheckInterval: 1 * time.Hour,
 			GracePeriod:   1 * time.Second,
 			DryRun:        false,

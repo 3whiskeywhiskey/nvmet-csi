@@ -14,7 +14,7 @@ import (
 
 func TestAttachmentManager_TrackAttachment(t *testing.T) {
 	// Create AttachmentManager with nil k8sClient for in-memory only
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	volumeID := "vol-1"
@@ -47,7 +47,7 @@ func TestAttachmentManager_TrackAttachment(t *testing.T) {
 }
 
 func TestAttachmentManager_TrackAttachment_Idempotent(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	volumeID := "vol-1"
@@ -73,7 +73,7 @@ func TestAttachmentManager_TrackAttachment_Idempotent(t *testing.T) {
 }
 
 func TestAttachmentManager_TrackAttachment_ConflictError(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	volumeID := "vol-1"
@@ -109,7 +109,7 @@ func TestAttachmentManager_TrackAttachment_ConflictError(t *testing.T) {
 }
 
 func TestAttachmentManager_UntrackAttachment(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	volumeID := "vol-1"
@@ -141,7 +141,7 @@ func TestAttachmentManager_UntrackAttachment(t *testing.T) {
 }
 
 func TestAttachmentManager_UntrackAttachment_Idempotent(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// Untrack non-existent volume - should not error
@@ -163,7 +163,7 @@ func TestAttachmentManager_UntrackAttachment_Idempotent(t *testing.T) {
 }
 
 func TestAttachmentManager_ListAttachments(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// Track multiple volumes
@@ -211,7 +211,7 @@ func TestAttachmentManager_ListAttachments(t *testing.T) {
 }
 
 func TestAttachmentManager_ConcurrentTrack(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	numGoroutines := 50
@@ -279,7 +279,7 @@ func TestAttachmentManager_PersistAttachment(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(pv)
 
 	// Create AttachmentManager with fake client
-	am := NewAttachmentManager(fakeClient)
+	am := NewAttachmentManager(fakeClient, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// Track attachment
@@ -316,7 +316,7 @@ func TestAttachmentManager_ClearAttachment(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(pv)
 
 	// Create AttachmentManager
-	am := NewAttachmentManager(fakeClient)
+	am := NewAttachmentManager(fakeClient, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// Track then untrack
@@ -357,7 +357,7 @@ func TestAttachmentManager_RebuildState(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(pv1, pv2, pv3, va1, va2)
 
 	// Create AttachmentManager
-	am := NewAttachmentManager(fakeClient)
+	am := NewAttachmentManager(fakeClient, "nvmet.csi.whiskey.works")
 
 	// Call Initialize (which calls RebuildState from VolumeAttachments)
 	err := am.Initialize(ctx)
@@ -417,7 +417,7 @@ func TestAttachmentManager_RebuildState_IgnoresOtherDrivers(t *testing.T) {
 	}
 
 	fakeClient := fake.NewSimpleClientset(pv)
-	am := NewAttachmentManager(fakeClient)
+	am := NewAttachmentManager(fakeClient, "nvmet.csi.whiskey.works")
 
 	// RebuildState should not include it
 	err := am.RebuildState(ctx)
@@ -433,7 +433,7 @@ func TestAttachmentManager_RebuildState_IgnoresOtherDrivers(t *testing.T) {
 
 func TestAttachmentManager_RebuildState_NoClient(t *testing.T) {
 	// Create AttachmentManager with nil k8sClient
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// RebuildState should return nil (not error)
@@ -456,7 +456,7 @@ func TestAttachmentManager_PersistRollback(t *testing.T) {
 	// Create fake client WITHOUT the PV (simulate PV not existing)
 	fakeClient := fake.NewSimpleClientset()
 
-	am := NewAttachmentManager(fakeClient)
+	am := NewAttachmentManager(fakeClient, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 
 	// Track attachment - should succeed (persistence failure is non-fatal for missing PV)
@@ -476,7 +476,7 @@ func TestAttachmentManager_PersistRollback(t *testing.T) {
 }
 
 func TestIsWithinGracePeriod_NoDetachTimestamp(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 
 	// Volume never tracked/detached should not be within grace period
 	result := am.IsWithinGracePeriod("pvc-never-existed", 30*time.Second)
@@ -486,7 +486,7 @@ func TestIsWithinGracePeriod_NoDetachTimestamp(t *testing.T) {
 }
 
 func TestIsWithinGracePeriod_WithinPeriod(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-grace-within"
 	nodeID := "node-1"
@@ -510,7 +510,7 @@ func TestIsWithinGracePeriod_WithinPeriod(t *testing.T) {
 }
 
 func TestIsWithinGracePeriod_OutsidePeriod(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-grace-outside"
 	nodeID := "node-1"
@@ -537,7 +537,7 @@ func TestIsWithinGracePeriod_OutsidePeriod(t *testing.T) {
 }
 
 func TestGetDetachTimestamp(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-detach-time"
 	nodeID := "node-1"
@@ -565,7 +565,7 @@ func TestGetDetachTimestamp(t *testing.T) {
 }
 
 func TestClearDetachTimestamp(t *testing.T) {
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-test-clear-time"
 	nodeID := "node-1"
@@ -592,7 +592,7 @@ func TestClearDetachTimestamp(t *testing.T) {
 
 func TestGracePeriod_LiveMigrationScenario(t *testing.T) {
 	// Simulates KubeVirt live migration: detach from node-1, attach to node-2
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 	ctx := context.Background()
 	volumeID := "pvc-kubevirt-vm-disk"
 	node1 := "worker-node-1"
@@ -691,7 +691,7 @@ func TestAttachmentManager_AddSecondaryAttachment(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			am := NewAttachmentManager(nil)
+			am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 			tc.setup(am)
 
 			err := am.AddSecondaryAttachment(context.Background(), tc.volumeID, tc.nodeID, 5*time.Minute)
@@ -764,7 +764,7 @@ func TestAttachmentManager_RemoveNodeAttachment(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			am := NewAttachmentManager(nil)
+			am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 			tc.setup(am)
 
 			fullyDetached, err := am.RemoveNodeAttachment(context.Background(), tc.volumeID, tc.nodeID)
@@ -868,7 +868,7 @@ func TestAttachmentState_NodeCount(t *testing.T) {
 
 func TestAddSecondaryAttachment_MigrationTracking(t *testing.T) {
 	ctx := context.Background()
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 
 	// Setup: create primary attachment
 	volumeID := "pvc-test-migration"
@@ -919,7 +919,7 @@ func TestAddSecondaryAttachment_MigrationTracking(t *testing.T) {
 
 func TestRemoveNodeAttachment_ClearsMigrationState(t *testing.T) {
 	ctx := context.Background()
-	am := NewAttachmentManager(nil)
+	am := NewAttachmentManager(nil, "nvmet.csi.whiskey.works")
 
 	// Setup: create dual-attach migration scenario
 	volumeID := "pvc-test-clear-migration"

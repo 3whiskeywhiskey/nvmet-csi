@@ -378,7 +378,7 @@ func (r *AttachmentReconciler) reconcileStaleVolumeAttachments(ctx context.Conte
 			klog.V(2).Info("Stale VolumeAttachment reconciliation interrupted by context cancellation")
 			return
 		}
-		if va.Spec.Attacher != driverName {
+		if va.Spec.Attacher != r.manager.driverName {
 			continue
 		}
 		if va.DeletionTimestamp != nil {

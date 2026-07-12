@@ -33,17 +33,21 @@ type AttachmentManager struct {
 	// k8sClient is used for future PV annotation updates (can be nil initially)
 	k8sClient kubernetes.Interface
 
+	// driverName scopes Kubernetes attachment state to this CSI identity.
+	driverName string
+
 	// metrics for recording migration operations (optional, can be nil)
 	metrics *observability.Metrics
 }
 
-// NewAttachmentManager creates a new AttachmentManager
-func NewAttachmentManager(k8sClient kubernetes.Interface) *AttachmentManager {
+// NewAttachmentManager creates an AttachmentManager scoped to driverName.
+func NewAttachmentManager(k8sClient kubernetes.Interface, driverName string) *AttachmentManager {
 	return &AttachmentManager{
 		attachments:      make(map[string]*AttachmentState),
 		detachTimestamps: make(map[string]time.Time),
 		volumeLocks:      NewVolumeLockManager(),
 		k8sClient:        k8sClient,
+		driverName:       driverName,
 	}
 }
 

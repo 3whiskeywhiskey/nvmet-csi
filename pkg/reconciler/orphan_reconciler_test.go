@@ -12,6 +12,8 @@ import (
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/rds"
 )
 
+const driverName = "nvmet.csi.whiskey.works"
+
 // mockRDSClient implements rds.RDSClient for testing
 type mockRDSClient struct {
 	volumes        []rds.VolumeInfo
@@ -125,27 +127,50 @@ func TestNewOrphanReconciler(t *testing.T) {
 		{
 			name: "valid config",
 			config: OrphanReconcilerConfig{
-				RDSClient: &mockRDSClient{},
-				K8sClient: fake.NewSimpleClientset(),
-				Enabled:   true,
+				RDSClient:  &mockRDSClient{},
+				K8sClient:  fake.NewSimpleClientset(),
+				DriverName: driverName,
+				Enabled:    true,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing RDS client",
 			config: OrphanReconcilerConfig{
-				K8sClient: fake.NewSimpleClientset(),
-				Enabled:   true,
+				K8sClient:  fake.NewSimpleClientset(),
+				DriverName: driverName,
+				Enabled:    true,
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing k8s client",
 			config: OrphanReconcilerConfig{
-				RDSClient: &mockRDSClient{},
-				Enabled:   true,
+				RDSClient:  &mockRDSClient{},
+				DriverName: driverName,
+				Enabled:    true,
 			},
 			wantErr: true,
+		},
+		{
+			name: "empty driver name rejected",
+			config: OrphanReconcilerConfig{
+				RDSClient:  &mockRDSClient{},
+				K8sClient:  fake.NewSimpleClientset(),
+				Enabled:    true,
+				DriverName: "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "enabled=false accepts empty driver name (disabled performs no inventory)",
+			config: OrphanReconcilerConfig{
+				RDSClient:  &mockRDSClient{},
+				K8sClient:  fake.NewSimpleClientset(),
+				Enabled:    false,
+				DriverName: "",
+			},
+			wantErr: false,
 		},
 	}
 
@@ -273,6 +298,7 @@ func TestOrphanReconciler_Reconcile(t *testing.T) {
 			config := OrphanReconcilerConfig{
 				RDSClient:            mockRDS,
 				K8sClient:            k8sClient,
+				DriverName:           driverName,
 				CheckInterval:        1 * time.Hour,
 				GracePeriod:          1 * time.Second, // Short grace period for testing
 				DryRun:               tt.dryRun,
@@ -337,6 +363,7 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
 		RDSClient:            mockRDS,
 		K8sClient:            k8sClient,
+		DriverName:           driverName,
 		GracePeriod:          time.Second,
 		DryRun:               true,
 		Enabled:              true,
@@ -378,6 +405,102 @@ func TestOrphanReconciler_BuildInventoryPlansMutationsWithoutDeleting(t *testing
 	}
 	if inventory.PlannedMutations[1].Action != OrphanMutationDeleteFile || inventory.PlannedMutations[1].Target != "/storage-pool/metal-csi/pvc-file-orphan.img" {
 		t.Fatalf("second planned mutation = %+v, want delete_file pvc-file-orphan.img", inventory.PlannedMutations[1])
+	}
+	if len(mockRDS.deletedVolumes) != 0 || len(mockRDS.deletedFiles) != 0 {
+		t.Fatalf("BuildInventory mutated RDS: deletedVolumes=%v deletedFiles=%v", mockRDS.deletedVolumes, mockRDS.deletedFiles)
+	}
+}
+
+func TestOrphanReconciler_DriverNameIsolation(t *testing.T) {
+	mockRDS := &mockRDSClient{
+		volumes: []rds.VolumeInfo{
+			{Slot: "pvc-custom", FilePath: "/storage-pool/metal-csi/pvc-custom.img", FileSizeBytes: 10 << 30},
+			{Slot: "pvc-prod", FilePath: "/storage-pool/metal-csi/pvc-prod.img", FileSizeBytes: 20 << 30},
+			{Slot: "pvc-orphan", FilePath: "/storage-pool/metal-csi/pvc-orphan.img", FileSizeBytes: 20 << 30},
+		},
+		files: []rds.FileInfo{
+			{Name: "pvc-custom.img", Path: "/storage-pool/metal-csi/pvc-custom.img", SizeBytes: 10 << 30, Type: "file"},
+			{Name: "pvc-prod.img", Path: "/storage-pool/metal-csi/pvc-prod.img", SizeBytes: 20 << 30, Type: "file"},
+			{Name: "pvc-orphan.img", Path: "/storage-pool/metal-csi/pvc-orphan.img", SizeBytes: 20 << 30, Type: "file"},
+			{Name: "pvc-file-orphan.img", Path: "/storage-pool/metal-csi/pvc-file-orphan.img", SizeBytes: 5 << 30, Type: "file", CreatedAt: time.Now().Add(-time.Hour)},
+		},
+		deletedVolumes: []string{},
+		deletedFiles:   []string{},
+	}
+	k8sClient := fake.NewSimpleClientset(
+		&v1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: "pv-custom"},
+			Spec: v1.PersistentVolumeSpec{
+				PersistentVolumeSource: v1.PersistentVolumeSource{
+					CSI: &v1.CSIPersistentVolumeSource{
+						Driver:       "nvmet-rds-test.csi.whiskey.works",
+						VolumeHandle: "pvc-custom",
+					},
+				},
+			},
+		},
+		&v1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: "pv-prod"},
+			Spec: v1.PersistentVolumeSpec{
+				PersistentVolumeSource: v1.PersistentVolumeSource{
+					CSI: &v1.CSIPersistentVolumeSource{
+						Driver:       "nvmet.csi.whiskey.works",
+						VolumeHandle: "pvc-prod",
+					},
+				},
+			},
+		},
+	)
+
+	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
+		RDSClient:            mockRDS,
+		K8sClient:            k8sClient,
+		GracePeriod:          time.Second,
+		DryRun:               true,
+		Enabled:              true,
+		MinimumConfirmations: 1,
+		DriverName:           "nvmet-rds-test.csi.whiskey.works",
+		BasePath:             "/storage-pool/metal-csi",
+	})
+	if err != nil {
+		t.Fatalf("NewOrphanReconciler() failed: %v", err)
+	}
+
+	inventory, err := reconciler.BuildInventory(context.Background())
+	if err != nil {
+		t.Fatalf("BuildInventory() failed: %v", err)
+	}
+
+	if inventory.RDSVolumeCount != 3 {
+		t.Fatalf("RDSVolumeCount = %d, want 3", inventory.RDSVolumeCount)
+	}
+	if inventory.CSIVolumeCount != 3 {
+		t.Fatalf("CSIVolumeCount = %d, want 3", inventory.CSIVolumeCount)
+	}
+	if inventory.ActivePVCount != 2 {
+		t.Fatalf("ActivePVCount = %d, want 2 (custom driver PV + foreign prod driver PV both protect their volumeHandles from orphaning)", inventory.ActivePVCount)
+	}
+	if len(inventory.DiskOrphans) != 1 || inventory.DiskOrphans[0].VolumeID != "pvc-orphan" {
+		t.Fatalf("DiskOrphans = %+v, want only pvc-orphan (foreign production-driver PV must protect pvc-prod disk from being classified orphan)", inventory.DiskOrphans)
+	}
+	if inventory.RDSFileCount != 4 {
+		t.Fatalf("RDSFileCount = %d, want 4", inventory.RDSFileCount)
+	}
+	if len(inventory.FileOrphans) != 1 || inventory.FileOrphans[0].FilePath != "/storage-pool/metal-csi/pvc-file-orphan.img" {
+		t.Fatalf("FileOrphans = %+v, want only pvc-file-orphan.img (foreign prod-driver PV protects matching file via volumeHandle; pvc-prod file protected)", inventory.FileOrphans)
+	}
+	if len(inventory.PlannedMutations) != 2 {
+		t.Fatalf("PlannedMutations len = %d, want 2: %+v", len(inventory.PlannedMutations), inventory.PlannedMutations)
+	}
+	if !hasOrphanMutation(inventory.PlannedMutations, OrphanMutationDeleteDisk, "pvc-orphan") {
+		t.Fatalf("expected delete_disk pvc-orphan planned, got: %+v", inventory.PlannedMutations)
+	}
+	if !hasOrphanMutation(inventory.PlannedMutations, OrphanMutationDeleteFile, "/storage-pool/metal-csi/pvc-file-orphan.img") {
+		t.Fatalf("expected delete_file pvc-file-orphan.img planned, got: %+v", inventory.PlannedMutations)
+	}
+	if hasOrphanMutation(inventory.PlannedMutations, OrphanMutationDeleteDisk, "pvc-prod") ||
+		hasOrphanMutation(inventory.PlannedMutations, OrphanMutationDeleteFile, "/storage-pool/metal-csi/pvc-prod.img") {
+		t.Fatalf("unexpected delete mutation for pvc-prod (protected by foreign prod-driver PV), got: %+v", inventory.PlannedMutations)
 	}
 	if len(mockRDS.deletedVolumes) != 0 || len(mockRDS.deletedFiles) != 0 {
 		t.Fatalf("BuildInventory mutated RDS: deletedVolumes=%v deletedFiles=%v", mockRDS.deletedVolumes, mockRDS.deletedFiles)
@@ -458,6 +581,7 @@ func TestOrphanReconciler_FileCleanupGuardrails(t *testing.T) {
 			reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
 				RDSClient:            mockRDS,
 				K8sClient:            fake.NewSimpleClientset(),
+				DriverName:           driverName,
 				GracePeriod:          time.Minute,
 				DryRun:               false,
 				Enabled:              true,
@@ -497,6 +621,7 @@ func TestOrphanReconciler_DefaultConfirmationsDeferCleanup(t *testing.T) {
 	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
 		RDSClient:   mockRDS,
 		K8sClient:   fake.NewSimpleClientset(),
+		DriverName:  driverName,
 		GracePeriod: time.Second,
 		Enabled:     true,
 	})
@@ -529,6 +654,7 @@ func TestOrphanReconciler_StartSkipsStartupInventoryByDefault(t *testing.T) {
 	reconciler, err := NewOrphanReconciler(OrphanReconcilerConfig{
 		RDSClient:     mockRDS,
 		K8sClient:     fake.NewSimpleClientset(),
+		DriverName:    driverName,
 		CheckInterval: time.Hour,
 		GracePeriod:   time.Second,
 		Enabled:       true,
@@ -658,6 +784,7 @@ func TestOrphanReconciler_OrphanedFiles(t *testing.T) {
 			config := OrphanReconcilerConfig{
 				RDSClient:            mockRDS,
 				K8sClient:            k8sClient,
+				DriverName:           driverName,
 				CheckInterval:        1 * time.Hour,
 				GracePeriod:          1 * time.Second,
 				DryRun:               true, // Always dry-run for tests

@@ -13,6 +13,8 @@ import (
 
 // Helper functions for creating test objects
 
+const driverName = "nvmet.csi.whiskey.works"
+
 // createFakeVolumeAttachment creates a test VolumeAttachment with specified parameters.
 func createFakeVolumeAttachment(name, attacher, volumeID, nodeID string, attached bool) *storagev1.VolumeAttachment {
 	return &storagev1.VolumeAttachment{
@@ -80,7 +82,7 @@ func TestRebuildStateFromVolumeAttachments_SingleAttachment(t *testing.T) {
 
 	// Create fake clientset
 	client := fake.NewSimpleClientset(va, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -139,7 +141,7 @@ func TestRebuildStateFromVolumeAttachments_MultipleVolumes(t *testing.T) {
 	pv3 := createFakePV(vol3, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce})
 
 	client := fake.NewSimpleClientset(va1, va2, va3, pv1, pv2, pv3)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -173,7 +175,7 @@ func TestRebuildStateFromVolumeAttachments_MultipleVolumes(t *testing.T) {
 func TestRebuildStateFromVolumeAttachments_NoAttachments(t *testing.T) {
 	// Create fake clientset with no VolumeAttachments
 	client := fake.NewSimpleClientset()
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -196,7 +198,7 @@ func TestRebuildStateFromVolumeAttachments_DetachedVA(t *testing.T) {
 	pv := createFakePV(volumeID, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce})
 
 	client := fake.NewSimpleClientset(va, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -220,7 +222,7 @@ func TestRebuildStateFromVolumeAttachments_OtherDriverVA(t *testing.T) {
 	pv := createFakePV(volumeID, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce})
 
 	client := fake.NewSimpleClientset(va, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -253,7 +255,7 @@ func TestRebuildStateFromVolumeAttachments_MigrationState(t *testing.T) {
 	pv := createFakePV(volumeID, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany})
 
 	client := fake.NewSimpleClientset(va1, va2, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -327,7 +329,7 @@ func TestRebuildStateFromVolumeAttachments_MigrationTimestamp(t *testing.T) {
 	pv := createFakePV(volumeID, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany})
 
 	client := fake.NewSimpleClientset(va1, va2, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -361,7 +363,7 @@ func TestRebuildStateFromVolumeAttachments_MoreThanTwoVAs(t *testing.T) {
 	pv := createFakePV(volumeID, []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany})
 
 	client := fake.NewSimpleClientset(va1, va2, va3, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state (should log warning but continue)
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -391,7 +393,7 @@ func TestRebuildStateFromVolumeAttachments_AccessModeFallback(t *testing.T) {
 
 	// Client has VA but no PV
 	client := fake.NewSimpleClientset(va)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -430,7 +432,7 @@ func TestRebuildStateFromVolumeAttachments_IgnoresStaleAnnotations(t *testing.T)
 	va := createFakeVolumeAttachment("va1", driverName, volumeID, correctNode, true)
 
 	client := fake.NewSimpleClientset(va, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -467,7 +469,7 @@ func TestRebuildStateFromVolumeAttachments_NoVAButHasAnnotation(t *testing.T) {
 
 	// Client has PV but no VA
 	client := fake.NewSimpleClientset(pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -495,7 +497,7 @@ func TestRebuildStateFromVolumeAttachments_VAAndMatchingAnnotation(t *testing.T)
 	pv := createFakePVWithAnnotations(volumeID, nodeID, attachedAt.Format(metav1.RFC3339Micro))
 
 	client := fake.NewSimpleClientset(va, pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Rebuild state
 	err := am.RebuildStateFromVolumeAttachments(context.Background())
@@ -524,7 +526,7 @@ func TestRebuildStateFromAnnotations_StillWorks(t *testing.T) {
 	pv := createFakePVWithAnnotations(volumeID, nodeID, attachedAt.Format(metav1.RFC3339Micro))
 
 	client := fake.NewSimpleClientset(pv)
-	am := NewAttachmentManager(client)
+	am := NewAttachmentManager(client, "nvmet.csi.whiskey.works")
 
 	// Call RebuildStateFromAnnotations (deprecated)
 	err := am.RebuildStateFromAnnotations(context.Background())
@@ -543,4 +545,101 @@ func TestRebuildStateFromAnnotations_StillWorks(t *testing.T) {
 	}
 
 	// Ensures we didn't break the fallback (even though it's deprecated)
+}
+
+// TestAttachmentManager_DriverNameIsolation_Rebuild is the core regression test
+// for configurable CSI driver-name isolation in attachment state rebuild.
+// It constructs two attached VolumeAttachments + PVs using different driver names
+// (production "nvmet.csi.whiskey.works" vs custom "nvmet-rds-test.csi.whiskey.works").
+// Using the desired explicit constructor NewAttachmentManager(k8sClient, driverName)
+// and calling Initialize (which calls RebuildStateFromVolumeAttachments), it asserts
+// that only the configured driver's volume appears in the manager state.
+// The assertions are written so that any cross-driver contamination would cause failure.
+func TestAttachmentManager_DriverNameIsolation_Rebuild(t *testing.T) {
+	prodDriver := "nvmet.csi.whiskey.works"
+	testDriver := "nvmet-rds-test.csi.whiskey.works"
+
+	prodVol := "pvc-prod-volume"
+	testVol := "pvc-test-volume"
+	prodNode := "node-prod"
+	testNode := "node-test"
+
+	// Attached VAs for both drivers (attacher field carries the driver identity for VA)
+	vaProd := createFakeVolumeAttachment("va-prod", prodDriver, prodVol, prodNode, true)
+	vaTest := createFakeVolumeAttachment("va-test", testDriver, testVol, testNode, true)
+
+	// PVs must be built with explicit CSI.Driver; we do not call createFakePV
+	// (which hard-codes the package driverName const) to keep this test self-contained.
+	pvProd := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: prodVol},
+		Spec: corev1.PersistentVolumeSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				CSI: &corev1.CSIPersistentVolumeSource{
+					Driver:       prodDriver,
+					VolumeHandle: prodVol,
+				},
+			},
+		},
+	}
+	pvTest := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: testVol},
+		Spec: corev1.PersistentVolumeSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				CSI: &corev1.CSIPersistentVolumeSource{
+					Driver:       testDriver,
+					VolumeHandle: testVol,
+				},
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset(vaProd, vaTest, pvProd, pvTest)
+
+	// DESIRED explicit API: NewAttachmentManager now takes driverName.
+	// This call (and the one below) will cause compile failure until parent
+	// updates the production signature.
+	am := NewAttachmentManager(client, testDriver)
+
+	// Exercise both entry points mentioned in the contract.
+	if err := am.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Direct rebuild should be a no-op second time but must still respect driver.
+	if err := am.RebuildStateFromVolumeAttachments(context.Background()); err != nil {
+		t.Fatalf("RebuildStateFromVolumeAttachments failed: %v", err)
+	}
+
+	// === Assertions that MUST fail on cross-driver contamination ===
+
+	// Configured driver's volume must be tracked.
+	state, exists := am.GetAttachment(testVol)
+	if !exists {
+		t.Fatal("expected attachment for test-driver volume to be tracked after rebuild")
+	}
+	if state.NodeID != testNode {
+		t.Errorf("test volume: expected node %s, got %s", testNode, state.NodeID)
+	}
+	if state.VolumeID != testVol {
+		t.Errorf("test volume: expected VolumeID %s, got %s", testVol, state.VolumeID)
+	}
+
+	// Production driver's volume must NOT be present (the critical isolation assertion).
+	if _, exists := am.GetAttachment(prodVol); exists {
+		t.Error("cross-driver contamination: production volume appeared in AttachmentManager for test driver")
+	}
+
+	// ListAttachments must contain exactly the one configured volume.
+	all := am.ListAttachments()
+	if len(all) != 1 {
+		t.Fatalf("expected exactly 1 attachment after rebuild with test driver, got %d", len(all))
+	}
+	if _, hasProd := all[prodVol]; hasProd {
+		t.Error("cross-driver contamination: production volume present in ListAttachments()")
+	}
+	if _, hasTest := all[testVol]; !hasTest {
+		t.Error("expected test volume to be present in ListAttachments()")
+	}
 }

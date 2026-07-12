@@ -11,11 +11,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const (
-	// driverName is the CSI driver name used to filter PVs
-	driverName = "nvmet.csi.whiskey.works"
-)
-
 // RebuildState rebuilds attachment state from VolumeAttachment objects.
 // This is the main entry point for state recovery on controller startup.
 func (am *AttachmentManager) RebuildState(ctx context.Context) error {
@@ -51,7 +46,7 @@ func (am *AttachmentManager) RebuildStateFromAnnotations(ctx context.Context) er
 	rebuiltCount := 0
 	for _, pv := range pvList.Items {
 		// Only process PVs belonging to our driver
-		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != driverName {
+		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != am.driverName {
 			continue
 		}
 
@@ -202,7 +197,7 @@ func (am *AttachmentManager) RebuildStateFromVolumeAttachments(ctx context.Conte
 	klog.Info("Rebuilding attachment state from VolumeAttachment objects")
 
 	// Step 1: List all VolumeAttachments for our driver
-	allVAs, err := ListDriverVolumeAttachments(ctx, am.k8sClient)
+	allVAs, err := ListDriverVolumeAttachments(ctx, am.k8sClient, am.driverName)
 	if err != nil {
 		return fmt.Errorf("failed to list VolumeAttachments: %w", err)
 	}

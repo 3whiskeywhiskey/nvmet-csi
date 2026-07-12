@@ -297,7 +297,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 
 	// Initialize attachment manager if controller is enabled
 	if config.EnableController && config.K8sClient != nil {
-		driver.attachmentManager = attachment.NewAttachmentManager(config.K8sClient)
+		driver.attachmentManager = attachment.NewAttachmentManager(config.K8sClient, config.DriverName)
 		if config.Metrics != nil {
 			driver.attachmentManager.SetMetrics(config.Metrics)
 
@@ -456,6 +456,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		reconcilerConfig := reconciler.OrphanReconcilerConfig{
 			RDSClient:            driver.rdsClient,
 			K8sClient:            config.K8sClient,
+			DriverName:           config.DriverName,
 			CheckInterval:        config.OrphanCheckInterval,
 			GracePeriod:          config.OrphanGracePeriod,
 			DryRun:               config.OrphanDryRun,

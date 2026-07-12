@@ -72,7 +72,7 @@ func TestListDriverVolumeAttachments(t *testing.T) {
 			client := fake.NewSimpleClientset(objs...)
 
 			// List VolumeAttachments
-			result, err := ListDriverVolumeAttachments(context.Background(), client)
+			result, err := ListDriverVolumeAttachments(context.Background(), client, "nvmet.csi.whiskey.works")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -255,5 +255,64 @@ func TestGroupVolumeAttachmentsByVolume(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestListDriverVolumeAttachments_DriverNameIsolation is a regression test for
+// configurable CSI driver-name isolation. It exercises the desired explicit API
+// signature ListDriverVolumeAttachments(ctx, client, driverName) with two
+// attached VAs for different drivers. It asserts that the lister returns *only*
+// the VAs for the supplied driverName, never cross-contaminating production
+// "nvmet.csi.whiskey.works" state when a custom driver name is configured.
+func TestListDriverVolumeAttachments_DriverNameIsolation(t *testing.T) {
+	prodDriver := "nvmet.csi.whiskey.works"
+	testDriver := "nvmet-rds-test.csi.whiskey.works"
+
+	prodVol := "pvc-prod"
+	testVol := "pvc-test"
+
+	// Two attached VAs, different drivers (attacher field)
+	vaProd := createTestVolumeAttachment("va-prod", prodDriver, prodVol, "node-prod", true)
+	vaTest := createTestVolumeAttachment("va-test", testDriver, testVol, "node-test", true)
+
+	client := fake.NewSimpleClientset(vaProd, vaTest)
+
+	// Call the DESIRED explicit API passing driverName (will not compile until
+	// production ListDriverVolumeAttachments accepts the third parameter).
+	result, err := ListDriverVolumeAttachments(context.Background(), client, testDriver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Must return exactly the one VA for the configured driver.
+	if len(result) != 1 {
+		t.Fatalf("expected 1 VA for test driver, got %d", len(result))
+	}
+
+	if result[0].Spec.Attacher != testDriver {
+		t.Errorf("expected attacher %s, got %s", testDriver, result[0].Spec.Attacher)
+	}
+
+	// Explicitly verify no cross-driver contamination.
+	for _, va := range result {
+		if va.Spec.Attacher == prodDriver {
+			t.Errorf("cross-driver contamination: production driver VA leaked into test-driver list")
+		}
+		if *va.Spec.Source.PersistentVolumeName == prodVol {
+			t.Errorf("cross-driver contamination: production volume %s appeared for test driver", prodVol)
+		}
+	}
+
+	// Also sanity-check that calling with prod driver would see the other one
+	// (proves the filter is using the passed driverName, not a global).
+	resultProd, err := ListDriverVolumeAttachments(context.Background(), client, prodDriver)
+	if err != nil {
+		t.Fatalf("unexpected error listing prod driver: %v", err)
+	}
+	if len(resultProd) != 1 {
+		t.Fatalf("expected 1 VA for prod driver, got %d", len(resultProd))
+	}
+	if resultProd[0].Spec.Attacher != prodDriver {
+		t.Errorf("prod list: expected attacher %s, got %s", prodDriver, resultProd[0].Spec.Attacher)
 	}
 }

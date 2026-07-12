@@ -39,6 +39,9 @@ type OrphanReconcilerConfig struct {
 	// K8sClient is the Kubernetes clientset for listing PVs
 	K8sClient kubernetes.Interface
 
+	// DriverName scopes Kubernetes PV ownership to this CSI identity.
+	DriverName string
+
 	// CheckInterval is how often to check for orphans
 	CheckInterval time.Duration
 
@@ -133,6 +136,9 @@ func NewOrphanReconciler(config OrphanReconcilerConfig) (*OrphanReconciler, erro
 	}
 	if config.K8sClient == nil {
 		return nil, fmt.Errorf("K8sClient is required")
+	}
+	if config.Enabled && config.DriverName == "" {
+		return nil, fmt.Errorf("DriverName is required when orphan reconciliation is enabled")
 	}
 
 	// Set defaults
@@ -258,42 +264,50 @@ func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory
 		return nil, fmt.Errorf("failed to list Kubernetes PVs: %w", err)
 	}
 
-	// Build a map of active volume IDs from Kubernetes PVs
-	activeVolumeIDs := make(map[string]bool)
+	// Every CSI PV protects its backing volume from this shared backend cleanup.
+	// DriverName identifies this reconciler's own PVs for diagnostics, but a PV
+	// owned by another CSI identity must never be converted into a delete candidate.
+	referencedVolumeIDs := make(map[string]bool)
 	klog.V(4).Infof("Scanning %d PersistentVolumes in Kubernetes", len(pvList.Items))
 	for _, pv := range pvList.Items {
-		// Only consider PVs from this CSI driver
-		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == "nvmet.csi.whiskey.works" {
-			volumeID := pv.Spec.CSI.VolumeHandle
-			activeVolumeIDs[volumeID] = true
+		if pv.Spec.CSI == nil || pv.Spec.CSI.VolumeHandle == "" {
+			continue
+		}
+
+		volumeID := pv.Spec.CSI.VolumeHandle
+		referencedVolumeIDs[volumeID] = true
+		if pv.Spec.CSI.Driver == r.config.DriverName {
 			klog.V(4).Infof("  Found active PV: %s → VolumeHandle=%s, Phase=%s, ClaimRef=%s/%s",
 				pv.Name, volumeID, pv.Status.Phase,
 				getNamespace(pv.Spec.ClaimRef), getName(pv.Spec.ClaimRef))
+		} else {
+			klog.V(4).Infof("  Protecting foreign CSI PV: %s → Driver=%s, VolumeHandle=%s",
+				pv.Name, pv.Spec.CSI.Driver, volumeID)
 		}
 	}
 
-	klog.Infof("Orphan reconciliation: %d volumes in RDS, %d active PVs in Kubernetes", len(rdsVolumes), len(activeVolumeIDs))
+	klog.Infof("Orphan reconciliation: %d volumes in RDS, %d referenced CSI PVs in Kubernetes", len(rdsVolumes), len(referencedVolumeIDs))
 
 	inventory := &OrphanInventory{
 		ObservedAt:     time.Now(),
 		RDSVolumeCount: len(rdsVolumes),
-		ActivePVCount:  len(activeVolumeIDs),
+		ActivePVCount:  len(referencedVolumeIDs),
 	}
 
 	// Log all RDS volumes for visibility
 	for _, vol := range rdsVolumes {
 		if strings.HasPrefix(vol.Slot, VolumeIDPrefix) {
 			inventory.CSIVolumeCount++
-			hasActivePV := activeVolumeIDs[vol.Slot]
-			klog.V(4).Infof("  RDS volume: %s (size=%d bytes, path=%s, hasActivePV=%v)",
+			hasActivePV := referencedVolumeIDs[vol.Slot]
+			klog.V(4).Infof("  RDS volume: %s (size=%d bytes, path=%s, hasReferencedPV=%v)",
 				vol.Slot, vol.FileSizeBytes, vol.FilePath, hasActivePV)
 		}
 	}
 
-	inventory.DiskOrphans = r.findOrphanedDisks(rdsVolumes, activeVolumeIDs)
+	inventory.DiskOrphans = r.findOrphanedDisks(rdsVolumes, referencedVolumeIDs)
 
 	if r.config.BasePath != "" {
-		fileOrphans, fileCount, err := r.findOrphanedFiles(rdsVolumes, activeVolumeIDs)
+		fileOrphans, fileCount, err := r.findOrphanedFiles(rdsVolumes, referencedVolumeIDs)
 		if err != nil {
 			klog.Errorf("Failed to inventory orphaned files: %v", err)
 		} else {
@@ -307,8 +321,8 @@ func (r *OrphanReconciler) BuildInventory(ctx context.Context) (*OrphanInventory
 	return inventory, nil
 }
 
-// findOrphanedDisks identifies orphaned disk objects without mutating RDS.
-func (r *OrphanReconciler) findOrphanedDisks(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) []OrphanedVolume {
+// findOrphanedDisks identifies disk objects without any CSI PV reference.
+func (r *OrphanReconciler) findOrphanedDisks(rdsVolumes []rds.VolumeInfo, referencedVolumeIDs map[string]bool) []OrphanedVolume {
 	orphans := []OrphanedVolume{}
 
 	klog.V(4).Infof("Checking %d RDS volumes for orphans (CSI-managed volumes must start with '%s')", len(rdsVolumes), VolumeIDPrefix)
@@ -320,9 +334,10 @@ func (r *OrphanReconciler) findOrphanedDisks(rdsVolumes []rds.VolumeInfo, active
 			continue
 		}
 
-		// Check if this volume has a corresponding PV
-		if activeVolumeIDs[vol.Slot] {
-			klog.V(4).Infof("  Volume %s: HAS active PV - keeping", vol.Slot)
+		// Any CSI PV reference protects the backend object, including PVs owned
+		// by another driver identity sharing the RDS inventory.
+		if referencedVolumeIDs[vol.Slot] {
+			klog.V(4).Infof("  Volume %s: HAS referenced CSI PV - keeping", vol.Slot)
 			continue
 		}
 
@@ -394,8 +409,8 @@ func (r *OrphanReconciler) applyOrphanInventory(inventory *OrphanInventory) {
 	r.applyOrphanedFiles(inventory.FileOrphans, plannedFileDeletes)
 }
 
-// findOrphanedFiles identifies orphaned files (files without disk objects AND without PVs).
-func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, activeVolumeIDs map[string]bool) ([]OrphanedFile, int, error) {
+// findOrphanedFiles identifies image files without disk objects or CSI PV references.
+func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, referencedVolumeIDs map[string]bool) ([]OrphanedFile, int, error) {
 	klog.V(4).Infof("Checking for orphaned files in %s", r.config.BasePath)
 
 	// Get all files in the base path
@@ -437,9 +452,10 @@ func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, active
 			continue
 		}
 
-		// Skip if this file is referenced by an active PV
-		if activeVolumeIDs[volumeID] {
-			klog.V(5).Infof("File %s is referenced by active PV %s (missing disk object)", file.Path, volumeID)
+		// Any CSI PV reference protects the file, including PVs owned by another
+		// driver identity sharing the RDS base path.
+		if referencedVolumeIDs[volumeID] {
+			klog.V(5).Infof("File %s is referenced by CSI PV %s (missing disk object)", file.Path, volumeID)
 			continue
 		}
 

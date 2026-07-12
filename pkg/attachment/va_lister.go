@@ -9,9 +9,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// ListDriverVolumeAttachments lists all VolumeAttachments for our driver (nvmet.csi.whiskey.works).
+// ListDriverVolumeAttachments lists all VolumeAttachments for driverName.
 // Returns empty slice (not nil) if no attachments found.
-func ListDriverVolumeAttachments(ctx context.Context, k8sClient kubernetes.Interface) ([]*storagev1.VolumeAttachment, error) {
+func ListDriverVolumeAttachments(ctx context.Context, k8sClient kubernetes.Interface, driverName string) ([]*storagev1.VolumeAttachment, error) {
 	// List all VolumeAttachments in the cluster
 	vaList, err := k8sClient.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 // This is the critical method that enables migration metrics recording.
 func TestAttachmentManager_SetMetricsMethod(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
-	am := attachment.NewAttachmentManager(k8sClient)
+	am := attachment.NewAttachmentManager(k8sClient, DriverName)
 
 	if am == nil {
 		t.Fatal("Failed to create AttachmentManager")
@@ -32,7 +32,7 @@ func TestAttachmentManager_SetMetricsMethod(t *testing.T) {
 // TestAttachmentManager_SetMetricsNil verifies SetMetrics handles nil gracefully.
 func TestAttachmentManager_SetMetricsNil(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
-	am := attachment.NewAttachmentManager(k8sClient)
+	am := attachment.NewAttachmentManager(k8sClient, DriverName)
 
 	// SetMetrics with nil should not panic (even though it's pointless)
 	am.SetMetrics(nil)
