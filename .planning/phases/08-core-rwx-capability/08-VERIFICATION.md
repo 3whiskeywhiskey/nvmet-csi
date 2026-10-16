@@ -249,7 +249,7 @@ if isRWX {
 **Lines:** 252-264
 **Status:** ✓ VERIFIED — Substantive, Wired
 
-**Level 1 (Exists):** ✓ File exists at /Users/whiskey/code/rds-csi/pkg/driver/driver.go
+**Level 1 (Exists):** ✓ File exists at /path/to/rds-csi/pkg/driver/driver.go
 
 **Level 2 (Substantive):** ✓ Substantive
 - 454 lines total (well above minimum)
@@ -266,7 +266,7 @@ if isRWX {
 **Lines:** 66, 831-842, 466-546
 **Status:** ✓ VERIFIED — Substantive, Wired
 
-**Level 1 (Exists):** ✓ File exists at /Users/whiskey/code/rds-csi/pkg/driver/controller.go
+**Level 1 (Exists):** ✓ File exists at /path/to/rds-csi/pkg/driver/controller.go
 
 **Level 2 (Substantive):** ✓ Substantive
 - 852 lines total
@@ -290,7 +290,7 @@ if isRWX {
 **Lines:** 1-67
 **Status:** ✓ VERIFIED — Substantive, Wired
 
-**Level 1 (Exists):** ✓ File exists at /Users/whiskey/code/rds-csi/pkg/attachment/types.go
+**Level 1 (Exists):** ✓ File exists at /path/to/rds-csi/pkg/attachment/types.go
 
 **Level 2 (Substantive):** ✓ Substantive
 - 67 lines total
@@ -314,7 +314,7 @@ if isRWX {
 **Lines:** 106-136 (AddSecondaryAttachment)
 **Status:** ✓ VERIFIED — Substantive, Wired
 
-**Level 1 (Exists):** ✓ File exists at /Users/whiskey/code/rds-csi/pkg/attachment/manager.go
+**Level 1 (Exists):** ✓ File exists at /path/to/rds-csi/pkg/attachment/manager.go
 
 **Level 2 (Substantive):** ✓ Substantive
 - AddSecondaryAttachment is 31 lines with complete logic:

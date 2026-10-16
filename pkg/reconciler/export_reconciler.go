@@ -61,7 +61,7 @@ type DesiredExport struct {
 // expects it to export.
 type ExportTarget struct {
 	// Key identifies the backend for logs and reports,
-	// e.g. "linux-zol-nvmet/10.42.68.4/tank".
+	// e.g. "linux-zol-nvmet/198.51.100.23/tank".
 	Key     string
 	Backend ExportBackend
 	Desired []DesiredExport

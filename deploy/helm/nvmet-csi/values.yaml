@@ -25,10 +25,10 @@ rds:
   enabled: true
 
   # Management interface IP (SSH control plane)
-  managementIP: "10.42.241.3"
+  managementIP: "192.0.2.10"
 
   # Storage interface IP (NVMe/TCP data plane)
-  storageIP: "10.42.68.1"
+  storageIP: "198.51.100.20"
 
   # SSH port for RouterOS CLI
   sshPort: 22
@@ -369,6 +369,12 @@ monitoring:
   rdsMonitoring:
     # Enable RDS disk and hardware metrics
     enabled: true
+    # Disk slot queried over SSH. SNMP hardware metrics are optional.
+    diskSlot: storage-pool
+    snmp:
+      # Leave empty to disable SNMP. If set, the RDS Secret must contain
+      # snmp-community; the value is read from a mounted file.
+      host: ""
 
 # StorageClass configuration
 storageClasses:

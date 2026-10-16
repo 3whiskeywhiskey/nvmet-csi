@@ -266,7 +266,7 @@ func TestGroupVolumeAttachmentsByVolume(t *testing.T) {
 // "nvmet.csi.whiskey.works" state when a custom driver name is configured.
 func TestListDriverVolumeAttachments_DriverNameIsolation(t *testing.T) {
 	prodDriver := "nvmet.csi.whiskey.works"
-	testDriver := "nvmet-rds-test.csi.whiskey.works"
+	testDriver := "example-rds.invalid"
 
 	prodVol := "pvc-prod"
 	testVol := "pvc-test"

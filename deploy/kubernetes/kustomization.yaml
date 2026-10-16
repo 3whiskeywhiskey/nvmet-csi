@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: kube-system
+namespace: nvmet-csi
 
 resources:
   - rbac.yaml
@@ -14,24 +14,8 @@ images:
   - name: ghcr.io/3whiskeywhiskey/nvmet-csi
     newTag: latest
 
-# ConfigMap generator for RDS settings
-# Users can override these with kustomize overlays
-configMapGenerator:
-  - name: nvmet-csi-config
-    behavior: replace
-    literals:
-      - rds-address=10.42.241.3
-      - rds-port=22
-      - rds-user=metal-csi
-      - rds-volume-base-path=/storage-pool/metal-csi/volumes
-
-# Secret generator for RDS credentials
-# NOTE: This is a placeholder - replace with actual credentials
-secretGenerator:
-  - name: nvmet-csi-secret
-    type: Opaque
-    files:
-      - rds-private-key=rds-private-key.example
+# Create nvmet-csi-secret separately in this namespace before deploying.
+# Keep private keys and pinned host keys out of source control.
 
 # Common labels applied to all resources
 commonLabels:

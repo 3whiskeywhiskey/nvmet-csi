@@ -63,7 +63,7 @@ This runs the Go-based sanity test suite with an in-process mock RDS server. It 
 #### With Real RDS Hardware
 
 ```bash
-make test-sanity-real RDS_ADDRESS=10.42.68.1 RDS_SSH_KEY=~/.ssh/id_rsa
+make test-sanity-real RDS_ADDRESS=198.51.100.20 RDS_SSH_KEY=~/.ssh/id_rsa
 ```
 
 WARNING: This runs tests against real hardware and will create/delete actual volumes. Use a dedicated test RDS instance.
@@ -99,7 +99,7 @@ make test-e2e
 For testing against real RDS hardware, use the hardware integration test suite:
 
 ```bash
-RDS_ADDRESS=10.42.241.3 RDS_USER=admin RDS_PRIVATE_KEY_PATH=~/.ssh/id_rsa go test -v ./test/integration/ -run TestHardwareIntegration
+RDS_ADDRESS=192.0.2.10 RDS_USER=admin RDS_PRIVATE_KEY_PATH=~/.ssh/id_rsa go test -v ./test/integration/ -run TestHardwareIntegration
 ```
 
 **Key points:**

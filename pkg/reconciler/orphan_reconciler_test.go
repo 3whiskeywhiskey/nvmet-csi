@@ -83,7 +83,7 @@ func (m *mockRDSClient) Close() error {
 }
 
 func (m *mockRDSClient) GetAddress() string {
-	return "10.42.241.3"
+	return "192.0.2.10"
 }
 
 func (m *mockRDSClient) IsConnected() bool {
@@ -433,7 +433,7 @@ func TestOrphanReconciler_DriverNameIsolation(t *testing.T) {
 			Spec: v1.PersistentVolumeSpec{
 				PersistentVolumeSource: v1.PersistentVolumeSource{
 					CSI: &v1.CSIPersistentVolumeSource{
-						Driver:       "nvmet-rds-test.csi.whiskey.works",
+						Driver:       "example-rds.invalid",
 						VolumeHandle: "pvc-custom",
 					},
 				},
@@ -459,7 +459,7 @@ func TestOrphanReconciler_DriverNameIsolation(t *testing.T) {
 		DryRun:               true,
 		Enabled:              true,
 		MinimumConfirmations: 1,
-		DriverName:           "nvmet-rds-test.csi.whiskey.works",
+		DriverName:           "example-rds.invalid",
 		BasePath:             "/storage-pool/metal-csi",
 	})
 	if err != nil {

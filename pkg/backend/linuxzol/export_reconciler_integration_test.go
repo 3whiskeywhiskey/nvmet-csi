@@ -65,7 +65,7 @@ func TestExportReconciler_RebootRecovery_RedGreen(t *testing.T) {
 		{VolumeID: desired2.ID, NQN: desired2.NVMETCPNQN, Port: desired2.NVMETCPPort},
 	}
 	tgt := reconciler.ExportTarget{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: be, // *Backend satisfies reconciler.ExportBackend
 		Desired: des,
 	}

@@ -374,8 +374,8 @@ verify-helm:
 	grep -q -- "backend: \"linux-zol-nvmet\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "executor: \"host-namespace\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "zfsPool: \"tank/nvmet\"" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "targetAddress: \"10.42.68.4\"" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "nvmeAddress: \"10.42.68.4\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "targetAddress: \"198.51.100.23\"" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "nvmeAddress: \"198.51.100.23\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "nvmePort: \"4420\"" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "hostPID: true" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "name: host-nvmet-configfs" /tmp/nvmet-zol-helm.yaml
@@ -388,14 +388,14 @@ verify-helm:
 	grep -q -- "-linux-zol-preflight" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "-linux-zol-preflight-target-address=10.42.68.4" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-preflight-target-address=198.51.100.23" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-preflight-min-mtu=9000" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "app.kubernetes.io/component: linux-zol-plan" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-action=ensure" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-executor=host-namespace" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-zfs-pool=tank/nvmet" /tmp/nvmet-zol-helm.yaml
-	grep -q -- "-linux-zol-plan-target-address=10.42.68.4" /tmp/nvmet-zol-helm.yaml
+	grep -q -- "-linux-zol-plan-target-address=198.51.100.23" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-volume-id=pvc-11111111-1111-1111-1111-111111111111" /tmp/nvmet-zol-helm.yaml
 	grep -q -- "-linux-zol-plan-size-bytes=1073741824" /tmp/nvmet-zol-helm.yaml
 	@if grep -q -- "-rds-address" /tmp/nvmet-zol-helm.yaml; then \

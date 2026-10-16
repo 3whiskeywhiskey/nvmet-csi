@@ -39,7 +39,7 @@ The nvmet-csi driver interacts with the RDS via **SSH** using RouterOS command-l
 
 **Example**:
 ```bash
-ssh admin@10.42.68.1 '/disk add \
+ssh admin@198.51.100.20 '/disk add \
   type=file \
   file-path=/storage-pool/kubernetes-volumes/pvc-abc123.img \
   file-size=50G \
@@ -99,7 +99,7 @@ ssh admin@10.42.68.1 '/disk add \
 
 **Example**:
 ```bash
-ssh admin@10.42.68.1 '/disk remove [find slot=pvc-abc123]'
+ssh admin@198.51.100.20 '/disk remove [find slot=pvc-abc123]'
 ```
 
 **Expected Output** (on success):
@@ -182,8 +182,8 @@ free-space: 5497558138880
 
 **Output Format**:
 ```
- 0  interface="nvme-tcp1" remote-address=10.42.67.8 state="connected"
- 1  interface="nvme-tcp1" remote-address=10.42.67.9 state="connected"
+ 0  interface="nvme-tcp1" remote-address=203.0.113.8 state="connected"
+ 1  interface="nvme-tcp1" remote-address=203.0.113.9 state="connected"
 ```
 
 **Use Case**: Debug connection issues, verify which nodes are connected
@@ -216,8 +216,8 @@ free-space: 5497558138880
 **Output**:
 ```
 12:34:56 disk,info disk added: pvc-abc123
-12:35:10 nvme,info nvme-tcp connection from 10.42.67.8
-12:40:22 nvme,warning nvme-tcp connection timeout from 10.42.67.9
+12:35:10 nvme,info nvme-tcp connection from 203.0.113.8
+12:40:22 nvme,warning nvme-tcp connection timeout from 203.0.113.9
 ```
 
 **Use Case**: Debug volume creation failures or connection issues
@@ -248,7 +248,7 @@ version: "7.16 (stable)"
 ### Basic Connection Test
 
 ```bash
-ssh admin@10.42.68.1 '/system identity print'
+ssh admin@198.51.100.20 '/system identity print'
 ```
 
 **Expected Output**:
@@ -261,7 +261,7 @@ name: rds
 ### Authenticating with SSH Key
 
 ```bash
-ssh -i /path/to/rds-key admin@10.42.68.1 '/disk print'
+ssh -i /path/to/rds-key admin@198.51.100.20 '/disk print'
 ```
 
 ---
@@ -269,7 +269,7 @@ ssh -i /path/to/rds-key admin@10.42.68.1 '/disk print'
 ### Connection with Timeout
 
 ```bash
-ssh -o ConnectTimeout=10 admin@10.42.68.1 '/disk print'
+ssh -o ConnectTimeout=10 admin@198.51.100.20 '/disk print'
 ```
 
 **Use Case**: Prevent indefinite hanging if RDS is unreachable
@@ -280,14 +280,14 @@ ssh -o ConnectTimeout=10 admin@10.42.68.1 '/disk print'
 
 **Successful Command** (exit code 0):
 ```bash
-$ ssh admin@10.42.68.1 '/disk print'
+$ ssh admin@198.51.100.20 '/disk print'
 $ echo $?
 0
 ```
 
 **Failed Command** (exit code != 0):
 ```bash
-$ ssh admin@10.42.68.1 '/disk remove [find slot=nonexistent]'
+$ ssh admin@198.51.100.20 '/disk remove [find slot=nonexistent]'
 failure: no such item
 $ echo $?
 1
@@ -487,7 +487,7 @@ cmd := fmt.Sprintf("/disk remove [find slot=%s]", volumeID)
 ### Create Test Volume
 
 ```bash
-ssh admin@10.42.68.1 '
+ssh admin@198.51.100.20 '
 /disk add \
   type=file \
   file-path=/storage-pool/test/test-volume.img \
@@ -505,10 +505,10 @@ ssh admin@10.42.68.1 '
 
 ```bash
 # Discover target
-nvme discover -t tcp -a 10.42.68.1 -s 4420
+nvme discover -t tcp -a 198.51.100.20 -s 4420
 
 # Connect
-nvme connect -t tcp -a 10.42.68.1 -s 4420 \
+nvme connect -t tcp -a 198.51.100.20 -s 4420 \
   -n nqn.2000-02.com.mikrotik:test-volume
 
 # Verify device appeared
@@ -523,7 +523,7 @@ nvme disconnect -n nqn.2000-02.com.mikrotik:test-volume
 ### Delete Test Volume
 
 ```bash
-ssh admin@10.42.68.1 '/disk remove [find slot=test-volume]'
+ssh admin@198.51.100.20 '/disk remove [find slot=test-volume]'
 ```
 
 ---

@@ -37,7 +37,7 @@ func (m *mockRDSClient) IsConnected() bool {
 }
 
 func (m *mockRDSClient) GetAddress() string {
-	return "10.42.68.1"
+	return "198.51.100.20"
 }
 
 func (m *mockRDSClient) CreateVolume(opts CreateVolumeOptions) error {

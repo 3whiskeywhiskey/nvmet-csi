@@ -61,7 +61,7 @@ All security logs follow a structured format:
 |-------|-------------|---------|
 | `username` | SSH username | `admin` |
 | `source_ip` | Source IP address | `10.0.0.1` |
-| `target_ip` | Target IP address | `10.42.68.1` |
+| `target_ip` | Target IP address | `198.51.100.20` |
 | `node_id` | Kubernetes node ID | `worker-node-1` |
 | `namespace` | Kubernetes namespace | `default` |
 | `pod_name` | Pod name | `my-app-pod-abc123` |

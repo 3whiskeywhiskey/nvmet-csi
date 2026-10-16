@@ -65,6 +65,12 @@ spec:
             - "-rds-key-file=/etc/nvmet-csi/rds-private-key"
             - "-rds-host-key=/etc/nvmet-csi/rds-host-key"
             - "-rds-volume-base-path={{ .Values.rds.basePath }}"
+            - "-rds-monitoring-enabled={{ .Values.monitoring.rdsMonitoring.enabled }}"
+            - "-rds-monitoring-slot={{ .Values.monitoring.rdsMonitoring.diskSlot }}"
+            {{- if .Values.monitoring.rdsMonitoring.snmp.host }}
+            - "-rds-snmp-host={{ .Values.monitoring.rdsMonitoring.snmp.host }}"
+            - "-rds-snmp-community-file=/etc/nvmet-csi/snmp-community"
+            {{- end }}
             - "-rds-mutation-min-interval={{ .Values.rds.mutationGuard.minInterval }}"
             - "-rds-mutation-burst={{ .Values.rds.mutationGuard.burst }}"
             - "-rds-mutation-timeout={{ .Values.rds.mutationGuard.timeout }}"

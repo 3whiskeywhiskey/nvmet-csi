@@ -17,7 +17,7 @@ metadata:
   name: nvmet-csi-config
   namespace: nvmet-csi
 data:
-  rds-address: "10.42.241.3"
+  rds-address: "192.0.2.10"
   rds-port: "22"
   rds-user: "metal-csi"
   rds-volume-base-path: "/storage-pool/metal-csi"
@@ -29,22 +29,17 @@ data:
 
 ### SSH Credentials
 
-Provide SSH credentials via Secret `nvmet-csi-secret`:
+Provide SSH credentials via an external Secret named `nvmet-csi-secret`.
+Verify the host key fingerprint through a trusted channel before creating it:
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nvmet-csi-secret
-  namespace: nvmet-csi
-type: Opaque
-stringData:
-  rds-private-key: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    ...
-    -----END OPENSSH PRIVATE KEY-----
-  rds-host-key: "ssh-rsa AAAAB3NzaC1yc2..."
+```bash
+kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+  --from-file=rds-private-key=/path/to/nvmet-csi-key \
+  --from-file=rds-host-key=/path/to/verified-rds-host-key.pub
 ```
+
+Keep both files outside the repository. The deployment manifest references this
+Secret by name and does not contain credential material.
 
 ## Error Resilience Settings (Phase 14)
 

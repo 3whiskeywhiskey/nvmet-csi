@@ -36,8 +36,8 @@ Output: A race-free shutdown pattern in run() that prioritizes stopCh, plus a ha
 </objective>
 
 <execution_context>
-@/Users/whiskey/.claude/get-shit-done/workflows/execute-plan.md
-@/Users/whiskey/.claude/get-shit-done/templates/summary.md
+@~/.claude/get-shit-done/workflows/execute-plan.md
+@~/.claude/get-shit-done/templates/summary.md
 </execution_context>
 
 <context>

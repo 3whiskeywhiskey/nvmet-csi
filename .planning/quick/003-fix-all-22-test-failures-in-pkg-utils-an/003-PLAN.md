@@ -39,8 +39,8 @@ Output: All tests pass, `make test` exits cleanly for both packages.
 </objective>
 
 <execution_context>
-@/Users/whiskey/.claude/get-shit-done/workflows/execute-plan.md
-@/Users/whiskey/.claude/get-shit-done/templates/summary.md
+@~/.claude/get-shit-done/workflows/execute-plan.md
+@~/.claude/get-shit-done/templates/summary.md
 </execution_context>
 
 <context>

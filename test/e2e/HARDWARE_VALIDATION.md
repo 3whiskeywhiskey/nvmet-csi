@@ -406,7 +406,7 @@ This is a blocker for v0.6.0 release. Options:
 - liveness-probe
 - node-driver-registrar
 
-**RDS Server:** 10.42.241.3
+**RDS Server:** 192.0.2.10
 **Storage Pool:** /storage-pool/metal-csi/
 **NVMe Port:** 4420
 

@@ -69,7 +69,7 @@ kubectl delete pvc test-migration-pvc -n default
 SSH to RDS and confirm the test volume is removed:
 
 ```bash
-ssh metal-csi@10.42.241.3
+ssh metal-csi@192.0.2.10
 /disk print detail where slot~"test-migration"
 ```
 

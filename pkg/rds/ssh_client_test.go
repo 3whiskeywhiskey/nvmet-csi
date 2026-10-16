@@ -49,7 +49,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "valid config with all fields",
 			config: ClientConfig{
-				Address:            "10.42.68.1",
+				Address:            "198.51.100.20",
 				Port:               22,
 				User:               "admin",
 				PrivateKey:         []byte("test-key"),
@@ -71,7 +71,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "missing user returns error",
 			config: ClientConfig{
-				Address:    "10.42.68.1",
+				Address:    "198.51.100.20",
 				PrivateKey: []byte("test-key"),
 			},
 			expectErr: true,
@@ -80,7 +80,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "default port when not specified",
 			config: ClientConfig{
-				Address:            "10.42.68.1",
+				Address:            "198.51.100.20",
 				User:               "admin",
 				InsecureSkipVerify: true,
 			},
@@ -89,7 +89,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "default timeout when not specified",
 			config: ClientConfig{
-				Address:            "10.42.68.1",
+				Address:            "198.51.100.20",
 				User:               "admin",
 				InsecureSkipVerify: true,
 			},
@@ -98,7 +98,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "invalid HostKeyCallback type returns error",
 			config: ClientConfig{
-				Address:         "10.42.68.1",
+				Address:         "198.51.100.20",
 				User:            "admin",
 				HostKeyCallback: "not-a-callback", // Wrong type
 			},
@@ -108,7 +108,7 @@ func TestNewSSHClient(t *testing.T) {
 		{
 			name: "custom HostKeyCallback is used",
 			config: ClientConfig{
-				Address: "10.42.68.1",
+				Address: "198.51.100.20",
 				User:    "admin",
 				HostKeyCallback: ssh.HostKeyCallback(func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 					return nil
@@ -157,7 +157,7 @@ func TestNewSSHClient(t *testing.T) {
 func TestRunCommandRecordsCommandFailure(t *testing.T) {
 	observer := &recordingCommandObserver{}
 	client := &sshClient{
-		address:         "10.42.68.1",
+		address:         "198.51.100.20",
 		commandObserver: observer,
 	}
 
@@ -708,7 +708,7 @@ func TestSSHClientRunCommandWithRetry(t *testing.T) {
 
 func TestSSHClientNotConnected(t *testing.T) {
 	client := &sshClient{
-		address: "10.42.68.1",
+		address: "198.51.100.20",
 		port:    22,
 		user:    "admin",
 	}

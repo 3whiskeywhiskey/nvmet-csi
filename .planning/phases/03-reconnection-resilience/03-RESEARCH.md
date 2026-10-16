@@ -490,7 +490,7 @@ func connectWithParameters(target, ctrlLossTmo, reconnectDelay int) error {
     args := []string{
         "connect",
         "-t", "tcp",
-        "-a", "10.42.68.1",
+        "-a", "198.51.100.20",
         "-s", "4420",
         "-n", "nqn.2000-02.com.mikrotik:pvc-abc123",
         "-l", fmt.Sprintf("%d", ctrlLossTmo),    // Controller loss timeout
@@ -502,7 +502,7 @@ func connectWithParameters(target, ctrlLossTmo, reconnectDelay int) error {
 }
 
 // Production best practice: unlimited reconnection
-// nvme connect -t tcp -a 10.42.68.1 -s 4420 -n nqn.2000-02.com.mikrotik:pvc-abc123 -l -1 -c 5
+// nvme connect -t tcp -a 198.51.100.20 -s 4420 -n nqn.2000-02.com.mikrotik:pvc-abc123 -l -1 -c 5
 ```
 
 ### Exponential Backoff with wait.Backoff
@@ -542,8 +542,8 @@ metadata:
   name: rds-nvme-resilient
 provisioner: rds.csi.srvlab.io
 parameters:
-  rdsAddress: "10.42.68.1"
-  nvmeAddress: "10.42.68.1"
+  rdsAddress: "198.51.100.20"
+  nvmeAddress: "198.51.100.20"
   nvmePort: "4420"
   volumePath: "/storage-pool/kubernetes-volumes"
 

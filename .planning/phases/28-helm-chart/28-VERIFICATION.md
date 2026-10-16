@@ -87,7 +87,7 @@ None. All truths are programmatically verifiable via helm lint, helm template, a
 
 **helm lint:**
 ```
-==> Linting /Users/whiskey/code/rds-csi/deploy/helm/rds-csi-driver/
+==> Linting /path/to/rds-csi/deploy/helm/rds-csi-driver/
 [INFO] Chart.yaml: icon is recommended
 
 1 chart(s) linted, 0 chart(s) failed

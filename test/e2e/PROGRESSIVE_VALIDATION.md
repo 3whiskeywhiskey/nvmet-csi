@@ -15,7 +15,7 @@ Before starting validation, ensure the environment is ready:
 - [ ] Latest driver image built and pushed (with Phase 14 features)
 - [ ] ConfigMap `nvmet-csi-config` contains `nqn-prefix` key
 - [ ] All nodes healthy and ready
-- [ ] RDS accessible at 10.42.241.3:22
+- [ ] RDS accessible at 192.0.2.10:22
 - [ ] No existing test PVCs from previous runs
 
 ```bash
@@ -67,7 +67,7 @@ kubectl get pvc test-basic-fs -w
 
 ```bash
 # SSH to RDS and check volume exists
-ssh metal-csi@10.42.241.3 '/disk print detail where slot~"pvc-"'
+ssh metal-csi@192.0.2.10 '/disk print detail where slot~"pvc-"'
 
 # Expected output should show:
 # - slot: pvc-<uuid>
@@ -97,7 +97,7 @@ kubectl get pv
 **Verify volume deleted from RDS:**
 
 ```bash
-ssh metal-csi@10.42.241.3 '/disk print detail where slot~"pvc-"'
+ssh metal-csi@192.0.2.10 '/disk print detail where slot~"pvc-"'
 # Expected: Volume should be removed
 ```
 
@@ -900,7 +900,7 @@ kubectl get pod -l test=nvmet-csi-validation --all-namespaces
 kubectl get vm -l test=nvmet-csi-validation --all-namespaces
 
 # Check RDS for orphaned volumes
-ssh metal-csi@10.42.241.3 '/disk print detail where slot~"pvc-"'
+ssh metal-csi@192.0.2.10 '/disk print detail where slot~"pvc-"'
 # Expected: Only production volumes, no test volumes
 
 # Review driver logs for any errors

@@ -48,8 +48,8 @@ Output: Safe IsFormatted/Format behavior with retry logic in NodeStageVolume
 </objective>
 
 <execution_context>
-@/Users/whiskey/.claude/get-shit-done/workflows/execute-plan.md
-@/Users/whiskey/.claude/get-shit-done/templates/summary.md
+@~/.claude/get-shit-done/workflows/execute-plan.md
+@~/.claude/get-shit-done/templates/summary.md
 </execution_context>
 
 <context>
@@ -130,7 +130,7 @@ Output: Safe IsFormatted/Format behavior with retry logic in NodeStageVolume
   3. Update `TestFormatUnsupportedFilesystem` if needed - this test uses exit code 2 for the blkid mock, which should still work correctly.
   </action>
   <verify>
-  Run `cd /Users/whiskey/code/rds-csi && make test` - all tests pass.
+  Run `cd /path/to/rds-csi && make test` - all tests pass.
   Run specifically: `go test ./pkg/mount/ -v -run "TestIsFormatted|TestFormat"` - verify new test cases pass.
   Verify the "device error exit 1" test case returns (false, error).
   Verify the "not formatted exit 2" test case still returns (false, nil).
@@ -259,7 +259,7 @@ Output: Safe IsFormatted/Format behavior with retry logic in NodeStageVolume
   For the context deadline, use a context with a generous timeout (30s) so the retries can complete without the context cancelling first, but the delay will make this test slow. To avoid that, consider adding a way to override the retry delay in tests. The simplest approach: extract the retry constants to package-level vars or accept that the test will take ~10s (5 retries * 2s). Given this is a critical safety test, 10s is acceptable. Alternatively, use a short context timeout (e.g., 3s) to verify the context cancellation path.
   </action>
   <verify>
-  Run `cd /Users/whiskey/code/rds-csi && make test` - all tests pass.
+  Run `cd /path/to/rds-csi && make test` - all tests pass.
   Run specifically: `go test ./pkg/driver/ -v -run "TestNodeStageVolume" -timeout 60s` - verify existing and new test cases pass.
   Run `make lint` to verify no linting issues.
   Run `make verify` for full verification.

@@ -141,7 +141,7 @@ parameters:
   migrationTimeoutSeconds: "300"
 
   # Standard RDS parameters
-  rdsAddress: "10.42.68.1"
+  rdsAddress: "198.51.100.20"
   rdsPort: "22"
   rdsBasePath: "/storage-pool/kubernetes-volumes"
   nvmePort: "4420"
@@ -374,7 +374,7 @@ Failed to connect to NVMe target: nvme connect failed with exit code 1
 
 1. **Verify NVMe export on RDS:**
    ```bash
-   ssh admin@10.42.68.1
+   ssh admin@198.51.100.20
    /disk print detail where slot=pvc-xyz123
    # Check: nvme-tcp-export=yes, nvme-tcp-server-port=4420
    ```
@@ -382,12 +382,12 @@ Failed to connect to NVMe target: nvme connect failed with exit code 1
 2. **Test network connectivity:**
    ```bash
    # From target node
-   nc -zv 10.42.68.1 4420
+   nc -zv 198.51.100.20 4420
    ```
 
 3. **Check NVMe discovery:**
    ```bash
-   nvme discover -t tcp -a 10.42.68.1 -s 4420
+   nvme discover -t tcp -a 198.51.100.20 -s 4420
    # Should list the volume's NQN
    ```
 

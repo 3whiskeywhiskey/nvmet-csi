@@ -39,7 +39,7 @@ re_verification: false
 | `docs/CAPABILITIES.md` | CSI capability comparison with AWS EBS CSI and Longhorn | ✓ VERIFIED | 357 lines, feature comparison matrix, CSI spec coverage tables, "Why Not" explanations (17 instances), architectural differences section |
 | `docs/TESTING.md` | Testing guide for all test types with troubleshooting | ✓ VERIFIED | 530 lines, covers unit/integration/sanity/E2E tests, 5 troubleshooting subsections, mock-reality divergence section, v0.9.0 coverage metrics (68.6%, 65% threshold) |
 | `docs/ci-cd.md` | CI/CD integration guide with job templates | ✓ VERIFIED | 413 lines, "Adding a New Test Job" section with YAML template, "Interpreting Test Results" section with failure pattern tables for 4 job types |
-| `README.md` Known Limitations | RouterOS compatibility, NVMe timing, dual-IP architecture | ✓ VERIFIED | RouterOS 7.1+ requirement, 30s timeout, dual-IP guidance (10.42.241.3 management, 10.42.68.1 storage), single controller, access mode restrictions |
+| `README.md` Known Limitations | RouterOS compatibility, NVMe timing, dual-IP architecture | ✓ VERIFIED | RouterOS 7.1+ requirement, 30s timeout, dual-IP guidance (192.0.2.10 management, 198.51.100.20 storage), single controller, access mode restrictions |
 
 ### Key Link Verification
 
@@ -208,7 +208,7 @@ $ grep -A 20 "## Known Limitations" README.md
 **Documented Limitations:**
 1. RouterOS Version Compatibility: 7.1+ requirement, detection via SSH errors, workaround is 7.16+
 2. NVMe Device Timing: 30s timeout assumption, detection via "timeout waiting for NVMe device" logs
-3. Dual-IP Architecture: Management (10.42.241.3) vs Storage (10.42.68.1) separation recommended
+3. Dual-IP Architecture: Management (192.0.2.10) vs Storage (198.51.100.20) separation recommended
 4. Single Controller Instance: 10s unavailability during restarts (documented in same section)
 5. Access Mode Restrictions: RWO only (single-initiator NVMe/TCP limitation)
 6. Volume Size Minimum: 1 GiB minimum (sub-1GiB rounded up)

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,13 +42,17 @@ var (
 	driverName = flag.String("driver-name", "nvmet.csi.whiskey.works", "Name of the CSI driver")
 
 	// RDS configuration
-	rdsAddress        = flag.String("rds-address", "", "RDS server IP address (required for controller)")
-	rdsPort           = flag.Int("rds-port", 22, "RDS SSH port")
-	rdsUser           = flag.String("rds-user", "admin", "RDS SSH user")
-	rdsKeyFile        = flag.String("rds-key-file", "/etc/nvmet-csi/ssh-key/id_rsa", "Path to RDS SSH private key")
-	rdsHostKey        = flag.String("rds-host-key", "", "Path to RDS SSH host public key (required for secure verification)")
-	rdsInsecure       = flag.Bool("rds-insecure-skip-verify", false, "Skip SSH host key verification (INSECURE - for testing only)")
-	rdsVolumeBasePath = flag.String("rds-volume-base-path", "", "Base path for volumes on RDS (e.g., /storage-pool/metal-csi, required for file orphan detection)")
+	rdsAddress           = flag.String("rds-address", "", "RDS server IP address (required for controller)")
+	rdsPort              = flag.Int("rds-port", 22, "RDS SSH port")
+	rdsUser              = flag.String("rds-user", "admin", "RDS SSH user")
+	rdsKeyFile           = flag.String("rds-key-file", "/etc/nvmet-csi/ssh-key/id_rsa", "Path to RDS SSH private key")
+	rdsHostKey           = flag.String("rds-host-key", "", "Path to RDS SSH host public key (required for secure verification)")
+	rdsInsecure          = flag.Bool("rds-insecure-skip-verify", false, "Skip SSH host key verification (INSECURE - for testing only)")
+	rdsVolumeBasePath    = flag.String("rds-volume-base-path", "", "Base path for volumes on RDS (e.g., /storage-pool/metal-csi, required for file orphan detection)")
+	rdsMonitoringEnabled = flag.Bool("rds-monitoring-enabled", true, "Enable RDS disk performance metrics over SSH")
+	rdsMonitoringSlot    = flag.String("rds-monitoring-slot", "storage-pool", "RDS disk slot to monitor over SSH")
+	rdsSNMPHost          = flag.String("rds-snmp-host", "", "Optional SNMP host for RDS hardware metrics")
+	rdsSNMPCommunityFile = flag.String("rds-snmp-community-file", "", "File containing the SNMP community; required with --rds-snmp-host")
 
 	// RDS mutation guardrails
 	rdsMutationMinInterval = flag.Duration("rds-mutation-min-interval", 250*time.Millisecond, "Minimum spacing between mutating RDS operations (0 disables guard)")
@@ -203,6 +208,20 @@ func main() {
 	} else if *controllerMode {
 		klog.Info("No RDS address configured; RouterOS/RDS backend will be unavailable unless configured later")
 	}
+	var snmpCommunity string
+	if *rdsSNMPHost != "" || *rdsSNMPCommunityFile != "" {
+		if *rdsSNMPHost == "" || *rdsSNMPCommunityFile == "" {
+			klog.Fatal("--rds-snmp-host and --rds-snmp-community-file must be set together")
+		}
+		communityBytes, readErr := os.ReadFile(*rdsSNMPCommunityFile)
+		if readErr != nil {
+			klog.Fatalf("Failed to read SNMP community file: %v", readErr)
+		}
+		snmpCommunity = strings.TrimSpace(string(communityBytes))
+		if snmpCommunity == "" {
+			klog.Fatal("SNMP community file is empty")
+		}
+	}
 
 	// Create Kubernetes client if needed. The controller uses it for durable
 	// backend resolution from PersistentVolume attributes during operations that
@@ -237,6 +256,10 @@ func main() {
 		RDSHostKey:                    hostKey,
 		RDSInsecureSkipVerify:         *rdsInsecure,
 		RDSVolumeBasePath:             *rdsVolumeBasePath,
+		EnableRDSMonitoring:           *rdsMonitoringEnabled,
+		RDSMonitoringSlot:             *rdsMonitoringSlot,
+		RDSSNMPHost:                   *rdsSNMPHost,
+		RDSSNMPCommunity:              snmpCommunity,
 		RDSMutationMinInterval:        *rdsMutationMinInterval,
 		RDSMutationBurst:              *rdsMutationBurst,
 		RDSMutationTimeout:            *rdsMutationTimeout,

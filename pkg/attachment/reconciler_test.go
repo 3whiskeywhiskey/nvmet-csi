@@ -831,7 +831,7 @@ func stringPtr(value string) *string {
 func TestReconciler_StaleVolumeAttachment_DriverNameIsolation(t *testing.T) {
 	ctx := context.Background()
 	prodDriver := "nvmet.csi.whiskey.works"
-	testDriver := "nvmet-rds-test.csi.whiskey.works"
+	testDriver := "example-rds.invalid"
 
 	prodVol := "pvc-prod-stale"
 	testVol := "pvc-test-stale"

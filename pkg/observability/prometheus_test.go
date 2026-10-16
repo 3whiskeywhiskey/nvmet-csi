@@ -887,7 +887,7 @@ func TestRecordConnectionState_Connected(t *testing.T) {
 	m := NewMetrics()
 
 	// Record connected state
-	m.RecordConnectionState("10.42.68.1", true)
+	m.RecordConnectionState("198.51.100.20", true)
 
 	handler := m.Handler()
 	req := httptest.NewRequest("GET", "/metrics", nil)
@@ -897,7 +897,7 @@ func TestRecordConnectionState_Connected(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check gauge set to 1.0 for connected
-	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 1`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="198.51.100.20"} 1`) {
 		t.Errorf("expected connection_state to be 1 for connected, got:\n%s", body)
 	}
 }
@@ -906,7 +906,7 @@ func TestRecordConnectionState_Disconnected(t *testing.T) {
 	m := NewMetrics()
 
 	// Record disconnected state
-	m.RecordConnectionState("10.42.68.1", false)
+	m.RecordConnectionState("198.51.100.20", false)
 
 	handler := m.Handler()
 	req := httptest.NewRequest("GET", "/metrics", nil)
@@ -916,7 +916,7 @@ func TestRecordConnectionState_Disconnected(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check gauge set to 0.0 for disconnected
-	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 0`) {
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="198.51.100.20"} 0`) {
 		t.Errorf("expected connection_state to be 0 for disconnected, got:\n%s", body)
 	}
 }
@@ -925,8 +925,8 @@ func TestRecordConnectionState_MultipleAddresses(t *testing.T) {
 	m := NewMetrics()
 
 	// Record state for multiple addresses
-	m.RecordConnectionState("10.42.68.1", true)
-	m.RecordConnectionState("10.42.68.2", false)
+	m.RecordConnectionState("198.51.100.20", true)
+	m.RecordConnectionState("198.51.100.21", false)
 
 	handler := m.Handler()
 	req := httptest.NewRequest("GET", "/metrics", nil)
@@ -936,11 +936,11 @@ func TestRecordConnectionState_MultipleAddresses(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check both addresses recorded
-	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.1"} 1`) {
-		t.Error("expected connection_state for 10.42.68.1 to be 1")
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="198.51.100.20"} 1`) {
+		t.Error("expected connection_state for 198.51.100.20 to be 1")
 	}
-	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="10.42.68.2"} 0`) {
-		t.Error("expected connection_state for 10.42.68.2 to be 0")
+	if !strings.Contains(body, `nvmet_csi_rds_connection_state{address="198.51.100.21"} 0`) {
+		t.Error("expected connection_state for 198.51.100.21 to be 0")
 	}
 }
 
@@ -1023,7 +1023,7 @@ func TestRDSMetrics_Registration(t *testing.T) {
 	// Register with test callbacks
 	m.SetRDSMonitoring(
 		"storage-pool",
-		"10.42.68.1",
+		"198.51.100.20",
 		"public",
 		func() (*DiskHealthSnapshot, error) {
 			return &DiskHealthSnapshot{
@@ -1104,7 +1104,7 @@ func TestRDSMetrics_ErrorReturnsZero(t *testing.T) {
 	// Register with error-returning callbacks
 	m.SetRDSMonitoring(
 		"storage-pool",
-		"10.42.68.1",
+		"198.51.100.20",
 		"public",
 		func() (*DiskHealthSnapshot, error) {
 			return nil, fmt.Errorf("SSH connection failed")
@@ -1134,7 +1134,7 @@ func TestRDSMetrics_DynamicUpdates(t *testing.T) {
 	hwCallCount := 0
 	m.SetRDSMonitoring(
 		"storage-pool",
-		"10.42.68.1",
+		"198.51.100.20",
 		"public",
 		func() (*DiskHealthSnapshot, error) {
 			diskCallCount++
@@ -1176,6 +1176,21 @@ func TestRDSMetrics_NotRegisteredWithoutCall(t *testing.T) {
 	body := scrapeMetrics(t, m)
 	if strings.Contains(body, "rds_disk_") || strings.Contains(body, "rds_hardware_") {
 		t.Error("rds metrics should not appear without SetRDSMonitoring call")
+	}
+}
+
+func TestRDSMetrics_DiskWithoutSNMP(t *testing.T) {
+	m := NewMetrics()
+	m.SetRDSMonitoring("storage-pool", "", "", func() (*DiskHealthSnapshot, error) {
+		return &DiskHealthSnapshot{ReadOpsPerSecond: 7}, nil
+	}, nil)
+
+	body := scrapeMetrics(t, m)
+	if !strings.Contains(body, `rds_disk_read_ops_per_second{slot="storage-pool"} 7`) {
+		t.Error("disk metrics should remain available without SNMP")
+	}
+	if strings.Contains(body, "rds_hardware_") {
+		t.Error("hardware metrics should be absent when SNMP is unconfigured")
 	}
 }
 

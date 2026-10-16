@@ -59,7 +59,7 @@ The nvmet-csi driver is a Kubernetes-native storage driver that enables dynamic 
                  │ NVMe/TCP Port 4420: Block Device Access
                  │
 ┌────────────────▼──────────────────────────────────────────────────────────────┐
-│ MikroTik ROSE Data Server (RDS) - 10.42.68.1                                 │
+│ MikroTik ROSE Data Server (RDS) - 198.51.100.20                                 │
 │                                                                               │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │ RouterOS CLI (SSH Management Interface)                                │  │
@@ -180,7 +180,7 @@ other volumes on the same target.
 
 5. Return VolumeContext:
    - volumeID: pvc-<uuid>
-   - rdsAddress: 10.42.68.1
+   - rdsAddress: 198.51.100.20
    - nvmePort: 4420
    - nqn: nqn.2000-02.com.mikrotik:pvc-<uuid>
 ```

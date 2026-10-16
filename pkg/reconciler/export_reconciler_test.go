@@ -81,7 +81,7 @@ func TestExportReconciler_Reconcile_PostRebootRepair(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-a", SizeBytes: 10 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.a", NVMETCPPort: 4420},
 			{ID: "vol-b", SizeBytes: 20 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.b", NVMETCPPort: 4420},
@@ -92,7 +92,7 @@ func TestExportReconciler_Reconcile_PostRebootRepair(t *testing.T) {
 		},
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-a"}, {VolumeID: "vol-b"}},
 	}}
@@ -134,7 +134,7 @@ func TestExportReconciler_Reconcile_Idempotency(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-a", SizeBytes: 10 << 30, NVMETCPExport: true, NVMETCPNQN: "nqn.a", NVMETCPPort: 4420},
 			{ID: "vol-b", SizeBytes: 20 << 30, NVMETCPExport: true, NVMETCPNQN: "nqn.b", NVMETCPPort: 4420},
@@ -142,7 +142,7 @@ func TestExportReconciler_Reconcile_Idempotency(t *testing.T) {
 		// no buildPlans: should not be called
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-a"}, {VolumeID: "vol-b"}},
 	}}
@@ -175,7 +175,7 @@ func TestExportReconciler_Reconcile_ConflictFromPlan(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-conf", SizeBytes: 10 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.conf", NVMETCPPort: 4420},
 		},
@@ -184,7 +184,7 @@ func TestExportReconciler_Reconcile_ConflictFromPlan(t *testing.T) {
 		},
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-conf"}},
 	}}
@@ -218,11 +218,11 @@ func TestExportReconciler_Reconcile_MissingBackingVolume(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name:    "linux-zol-nvmet",
-		addr:    "10.42.0.10",
+		addr:    "203.0.113.10",
 		volumes: []backend.Volume{}, // no vol-miss
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-miss"}},
 	}}
@@ -252,7 +252,7 @@ func TestExportReconciler_Reconcile_DryRun(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-dry", SizeBytes: 10 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.dry", NVMETCPPort: 4420},
 		},
@@ -261,7 +261,7 @@ func TestExportReconciler_Reconcile_DryRun(t *testing.T) {
 		},
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-dry"}},
 	}}
@@ -295,14 +295,14 @@ func TestExportReconciler_Reconcile_UnmanagedVolumes(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "managed", SizeBytes: 10 << 30, NVMETCPExport: true, NVMETCPNQN: "nqn.m", NVMETCPPort: 4420},
 			{ID: "orphan1", SizeBytes: 5 << 30, NVMETCPExport: true, NVMETCPNQN: "nqn.o", NVMETCPPort: 4420},
 		},
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "managed"}},
 	}}
@@ -445,7 +445,7 @@ func TestExportReconciler_Reconcile_NoopRace(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-race", SizeBytes: 10 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.r", NVMETCPPort: 4420},
 		},
@@ -454,7 +454,7 @@ func TestExportReconciler_Reconcile_NoopRace(t *testing.T) {
 		},
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-race"}},
 	}}
@@ -485,14 +485,14 @@ func TestExportReconciler_Reconcile_ConflictFromDesiredMismatch(t *testing.T) {
 	ctx := context.Background()
 	fb := &fakeExportBackend{
 		name: "linux-zol-nvmet",
-		addr: "10.42.0.10",
+		addr: "203.0.113.10",
 		volumes: []backend.Volume{
 			{ID: "vol-mis", SizeBytes: 10 << 30, NVMETCPExport: false, NVMETCPNQN: "nqn.real", NVMETCPPort: 4420},
 		},
 		// no need for plans, since desiredRequest errs before Build
 	}
 	targets := []ExportTarget{{
-		Key:     "linux-zol-nvmet/10.42.0.10/tank",
+		Key:     "linux-zol-nvmet/203.0.113.10/tank",
 		Backend: fb,
 		Desired: []DesiredExport{{VolumeID: "vol-mis", NQN: "nqn.wrong", Port: 4420}},
 	}}

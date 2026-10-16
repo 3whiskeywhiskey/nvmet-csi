@@ -46,7 +46,7 @@ Validated live state:
 - Flux source commit for that image: `0bcfa0d` in `~/code/flux-repo`;
 - controller and node image `pullPolicy` remains `IfNotPresent`;
 - controller is pinned to the r740xd storage host;
-- ZoL target address is `10.42.68.4` on the v68 jumbo-frame storage VLAN;
+- ZoL target address is `198.51.100.23` on the v68 jumbo-frame storage VLAN;
 - no RDS reboot, RouterOS mutation, or Kubernetes node mount surgery was used
   during ZoL validation;
 - no `nvmet.csi.whiskey.works` `VolumeAttachment` objects remained after each
@@ -82,7 +82,7 @@ Startup recovery results:
 | --- | --- | --- |
 | Controller startup repair | Passed | `targets=1, repaired=12, conflicts=0` in 28.8s. All 12 driver PVs were included, including two `Released` Retain-policy PVs. |
 | Kernel configfs inventory | Passed | Exactly 12 subsystems and 12 symlinks under port 4420 after reconciliation. |
-| Client discovery from r640-3 | Passed | `nvme discover -t tcp -a 10.42.68.4 -s 4420` returned 13 records: the discovery subsystem plus all 12 managed NQNs. |
+| Client discovery from r640-3 | Passed | `nvme discover -t tcp -a 198.51.100.23 -s 4420` returned 13 records: the discovery subsystem plus all 12 managed NQNs. |
 | Idempotent second startup | Passed | Controller restart completed with `targets=1, repaired=0, conflicts=0` in 6.4s. |
 | Attachment recovery | Passed | Seven active driver `VolumeAttachment` objects rebuilt from Kubernetes state. |
 | Existing workload | Passed | ClickHouse on `pvc-5ebfb48b-eea8-452a-ad5d-6f572cfbc920` remained running; `clickhouse-client --query 'SELECT 1'` returned `1`. |
@@ -100,7 +100,7 @@ exports were reconstructed from durable zvol metadata and Kubernetes PV state
 without manual configfs mutation, and a repeated startup performed no repairs.
 
 Environmental note: during final observation the Kubernetes API VIP
-`10.42.67.100:6443` stopped advertising. Direct DPU API endpoints initially
+`203.0.113.100:6443` stopped advertising. Direct DPU API endpoints initially
 worked, then one refused connections and the other reported failed `etcd`
 readiness. Storage recovery and workload checks above completed before that
 separate control-plane instability.
@@ -125,7 +125,7 @@ without mounting, rebinding, or deleting either volume:
 ## Live RDS Controller-Path Validation (opti, 2026-07-11)
 
 First live RouterOS/RDS validation under the `nvmet-csi` name, run from the
-opti cluster against the production RDS appliance (`10.42.241.3`, RouterOS
+opti cluster against the production RDS appliance (`192.0.2.10`, RouterOS
 7.23rc2 on ROSE Data Server). Opti reaches the RDS management interface but
 not the v68 storage VLAN, so this deliberately validated the controller path
 only: `Immediate`-binding StorageClass, no pod ever mounted a volume.
@@ -157,7 +157,7 @@ Bugs found and fixed during this validation (commits `2583b5b`, `c0f6337`):
 ### Live RDS data-path validation (metal, 2026-07-12)
 
 The missing RDS data-path coverage was completed with an isolated temporary
-driver (`nvmet-rds-test.csi.whiskey.works`), dedicated namespace and key,
+driver (`example-rds.invalid`), dedicated namespace and key,
 controller on r740xd, node plugin only on `r640-3`, and one non-default
 WaitForFirstConsumer/Delete StorageClass. The legacy RDS driver and production
 Linux-ZOL driver were not modified. Mutation guard defaults remained active
@@ -415,7 +415,7 @@ minimum manifest count.
 ## RouterOS Snapshot TC-08 — Failed / Capability Disabled (2026-07-12)
 
 TC-08 ran against RouterOS 7.23rc2 on the isolated Opti-oriented driver
-`nvmet-rds-test.csi.whiskey.works`. The source was a disposable 1 GiB ext4 PVC
+`example-rds.invalid`. The source was a disposable 1 GiB ext4 PVC
 on `r640-3` containing `tc08-before-snapshot-20260712`.
 
 The first live run exposed an immediate safety defect: RouterOS

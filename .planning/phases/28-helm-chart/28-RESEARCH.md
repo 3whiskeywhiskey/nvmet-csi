@@ -102,8 +102,8 @@ node:
     - operator: Exists  # Run on all nodes
 
 rds:
-  managementIP: "10.42.241.3"
-  storageIP: "10.42.68.1"
+  managementIP: "192.0.2.10"
+  storageIP: "198.51.100.20"
   sshPort: 22
   nvmePort: 4420
   sshUser: "metal-csi"
@@ -376,9 +376,9 @@ metadata:
 type: Opaque
 stringData:
   ssh-key: |          # SSH private key for RouterOS CLI
-    -----BEGIN OPENSSH PRIVATE KEY-----
+    [private key supplied by operator]
     ...
-    -----END OPENSSH PRIVATE KEY-----
+    [end generated key]
   snmp-community: "public"  # SNMP community string for hardware monitoring
 ```
 

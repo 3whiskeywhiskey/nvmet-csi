@@ -21,9 +21,9 @@ Before running these tests, ensure you have:
 
 ### Access Requirements
 - **RDS accessible via two networks:**
-  - Management IP: `10.42.241.3` (SSH port 22 for volume management)
-  - Storage IP: `10.42.68.1` (NVMe/TCP port 4420 for block device access)
-- **SSH access to RDS:** `ssh admin@10.42.241.3` with working credentials
+  - Management IP: `192.0.2.10` (SSH port 22 for volume management)
+  - Storage IP: `198.51.100.20` (NVMe/TCP port 4420 for block device access)
+- **SSH access to RDS:** `ssh admin@192.0.2.10` with working credentials
 - **SSH access to worker nodes:** For verifying NVMe/TCP connections
 - **kubectl access:** Cluster-admin privileges to create/delete test resources
 
@@ -33,7 +33,7 @@ Before running these tests, ensure you have:
 - Worker nodes with:
   - `nvme-cli` installed (for NVMe/TCP operations)
   - Kernel 5.0+ (for NVMe/TCP support)
-  - Network connectivity to RDS storage IP (10.42.68.1)
+  - Network connectivity to RDS storage IP (198.51.100.20)
 
 ### Validation Tools
 - `kubectl` command-line tool
@@ -97,7 +97,7 @@ rds-nvme-tcp    nvmet.csi.whiskey.works     Delete          WaitForFirstConsumer
 ### Step 4: Verify SSH Connectivity to RDS
 
 ```bash
-ssh admin@10.42.241.3 '/system/resource/print'
+ssh admin@192.0.2.10 '/system/resource/print'
 ```
 
 **Expected:** RouterOS system information output
@@ -115,7 +115,7 @@ ssh admin@10.42.241.3 '/system/resource/print'
 ### Step 5: Verify RDS Storage Capacity
 
 ```bash
-ssh admin@10.42.241.3 '/disk print brief'
+ssh admin@192.0.2.10 '/disk print brief'
 ```
 
 **Expected:** List of disks with available slots
@@ -220,7 +220,7 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --ta
 #### 3. Verify Volume on RDS
 
 ```bash
-ssh admin@10.42.241.3 '/disk print detail where slot~"pvc-"' | head -20
+ssh admin@192.0.2.10 '/disk print detail where slot~"pvc-"' | head -20
 ```
 
 **Expected:** Volume exists with correct size and NVMe/TCP export enabled
@@ -307,7 +307,7 @@ kubectl delete pvc test-hw-pvc-01
 sleep 30
 
 # Verify volume deleted on RDS
-ssh admin@10.42.241.3 '/disk print detail where slot~"pvc-12345678"'
+ssh admin@192.0.2.10 '/disk print detail where slot~"pvc-12345678"'
 ```
 
 **Expected:** No output (volume deleted)
@@ -415,7 +415,7 @@ ssh <node-ip> 'nvme list-subsys'
 ```
 nvme-subsys1 - NQN=nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789abc
 \
- +- nvme1 tcp traddr=10.42.68.1 trsvcid=4420 live
+ +- nvme1 tcp traddr=198.51.100.20 trsvcid=4420 live
 ```
 
 #### 6. Verify Transport Type
@@ -469,7 +469,7 @@ kubectl delete pvc test-hw-pvc-02
 - ✅ Connection parameters configured correctly
 
 **Troubleshooting:**
-- **No NVMe device found:** Check `dmesg | grep nvme` for connection errors, verify network connectivity to 10.42.68.1:4420
+- **No NVMe device found:** Check `dmesg | grep nvme` for connection errors, verify network connectivity to 198.51.100.20:4420
 - **Wrong transport type:** Verify nvme-cli version supports TCP transport, check kernel version (5.0+ required)
 - **Connection timeouts:** Check ctrl_loss_tmo, verify RDS is responding on port 4420, check network latency
 
@@ -621,7 +621,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 ```bash
 # Get volume ID from PV
 VOLUME_ID=$(kubectl get pvc test-hw-pvc-03 -o jsonpath='{.spec.volumeName}' | sed 's/pv-/pvc-/')
-ssh admin@10.42.241.3 "/disk print detail where slot=\"$VOLUME_ID\""
+ssh admin@192.0.2.10 "/disk print detail where slot=\"$VOLUME_ID\""
 ```
 
 **Expected:** File size shows 10GiB
@@ -1000,7 +1000,7 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --ta
 
 ```
 INFO    Connection manager started, polling every 5s
-INFO    Connected to RDS at 10.42.241.3:22
+INFO    Connected to RDS at 192.0.2.10:22
 INFO    Connection healthy
 ```
 
@@ -1067,7 +1067,7 @@ kubectl delete pvc test-hw-pvc-06
 - ✅ Expected reconnection behavior understood
 
 **Troubleshooting:**
-- **Probe unhealthy:** Check RDS SSH connectivity, verify controller can reach 10.42.241.3:22
+- **Probe unhealthy:** Check RDS SSH connectivity, verify controller can reach 192.0.2.10:22
 - **No connection logs:** Increase log verbosity with `--v=5` flag in controller deployment
 
 **Note:** To fully test RDS restart recovery, you would need to:
@@ -1242,7 +1242,7 @@ volume-c-data
 #### 7. Verify All Volumes on RDS
 
 ```bash
-ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-"' | grep -E "test-hw|pvc-aaaa|pvc-bbbb|pvc-cccc"
+ssh admin@192.0.2.10 '/disk print brief where slot~"pvc-"' | grep -E "test-hw|pvc-aaaa|pvc-bbbb|pvc-cccc"
 ```
 
 **Expected:** Three volumes visible on RDS
@@ -1263,7 +1263,7 @@ kubectl delete pvc test-hw-pvc-07a test-hw-pvc-07b test-hw-pvc-07c
 sleep 30
 
 # Verify all volumes deleted on RDS
-ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-aaaa|pvc-bbbb|pvc-cccc"'
+ssh admin@192.0.2.10 '/disk print brief where slot~"pvc-aaaa|pvc-bbbb|pvc-cccc"'
 ```
 
 **Expected:** No volumes found (all cleaned up)
@@ -1284,7 +1284,7 @@ ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-aaaa|pvc-bbbb|pvc-cccc"
 
 ### TC-08: Volume Snapshot Operations — Failed / Unsupported
 
-**Executed:** 2026-07-12 against an isolated `nvmet-rds-test.csi.whiskey.works`
+**Executed:** 2026-07-12 against an isolated `example-rds.invalid`
 deployment and RouterOS 7.23rc2.
 
 **Do not execute the historical `copy-from` procedure.** Live testing proved
@@ -1415,7 +1415,7 @@ SSH to the worker node and block NVMe/TCP traffic to RDS:
 ssh <node-ip>
 
 # Block NVMe/TCP outbound traffic to RDS storage IP
-iptables -A OUTPUT -d 10.42.68.1 -p tcp --dport 4420 -j DROP
+iptables -A OUTPUT -d 198.51.100.20 -p tcp --dport 4420 -j DROP
 ```
 
 #### 5. Wait 30 Seconds and Observe NVMe Errors
@@ -1446,7 +1446,7 @@ kubectl exec test-hw-pod-09 -- tail -5 /data/io-test.log
 
 ```bash
 # On the worker node
-iptables -D OUTPUT -d 10.42.68.1 -p tcp --dport 4420 -j DROP
+iptables -D OUTPUT -d 198.51.100.20 -p tcp --dport 4420 -j DROP
 ```
 
 #### 8. Wait for NVMe/TCP Reconnection
@@ -1499,7 +1499,7 @@ kubectl delete pod test-hw-pod-09
 kubectl delete pvc test-hw-pvc-09
 
 # Remove any lingering iptables rules (from the worker node)
-ssh <node-ip> 'iptables -D OUTPUT -d 10.42.68.1 -p tcp --dport 4420 -j DROP 2>/dev/null; true'
+ssh <node-ip> 'iptables -D OUTPUT -d 198.51.100.20 -p tcp --dport 4420 -j DROP 2>/dev/null; true'
 ```
 
 **Success Criteria:**
@@ -1523,7 +1523,7 @@ ssh <node-ip> 'iptables -D OUTPUT -d 10.42.68.1 -p tcp --dport 4420 -j DROP 2>/d
 
 **Prerequisites:**
 - TC-01 passed and environment validation complete
-- SSH access to RDS management IP (10.42.241.3)
+- SSH access to RDS management IP (192.0.2.10)
 - Understanding that RDS restart will affect ALL NVMe/TCP connections on ALL nodes
 
 > **DANGER:** Restarting RDS affects ALL NVMe/TCP connections on ALL cluster nodes. Only run this test during a maintenance window when no production workloads are running. Ensure you have physical access to the RDS hardware in case it doesn't come back online.
@@ -1599,13 +1599,13 @@ ssh <node-ip> 'nvme list-subsys'
 
 ```
 nvme-subsys1 - NQN=nqn.2000-02.com.mikrotik:pvc-<uuid>
- +- nvme1 tcp traddr=10.42.68.1 trsvcid=4420 live
+ +- nvme1 tcp traddr=198.51.100.20 trsvcid=4420 live
 ```
 
 #### 5. Restart RDS
 
 ```bash
-ssh admin@10.42.241.3 '/system/reboot'
+ssh admin@192.0.2.10 '/system/reboot'
 ```
 
 Confirm with `y` when prompted. The RDS will begin rebooting immediately.
@@ -1615,7 +1615,7 @@ Confirm with `y` when prompted. The RDS will begin rebooting immediately.
 Poll until the management interface responds (typically 60-120 seconds):
 
 ```bash
-until ssh admin@10.42.241.3 '/system/resource/print' 2>/dev/null | grep -q version; do
+until ssh admin@192.0.2.10 '/system/resource/print' 2>/dev/null | grep -q version; do
   echo "Waiting for RDS to come back online..."
   sleep 10
 done
@@ -1654,10 +1654,10 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --ta
 **Expected:** Connection manager logs showing SSH reconnection via exponential backoff
 
 ```
-INFO    ConnectionManager: RDS connection lost to 10.42.241.3:22, starting reconnection
-INFO    ConnectionManager: Reconnection attempt 1 to 10.42.241.3:22
-INFO    ConnectionManager: Reconnection attempt 5 to 10.42.241.3:22
-INFO    ConnectionManager: Successfully reconnected to 10.42.241.3:22 after 8 attempts (45.20s)
+INFO    ConnectionManager: RDS connection lost to 192.0.2.10:22, starting reconnection
+INFO    ConnectionManager: Reconnection attempt 1 to 192.0.2.10:22
+INFO    ConnectionManager: Reconnection attempt 5 to 192.0.2.10:22
+INFO    ConnectionManager: Successfully reconnected to 192.0.2.10:22 after 8 attempts (45.20s)
 ```
 
 #### 10. Verify Data Integrity After Restart
@@ -2047,7 +2047,7 @@ kubectl exec -n kube-system $CONTROLLER_POD -c nvmet-csi-plugin -- ls -la /etc/n
 
 **Test SSH connectivity manually:**
 ```bash
-ssh -i <path-to-key> admin@10.42.241.3 '/system/resource/print'
+ssh -i <path-to-key> admin@192.0.2.10 '/system/resource/print'
 ```
 
 **Common Fixes:**
@@ -2062,12 +2062,12 @@ ssh -i <path-to-key> admin@10.42.241.3 '/system/resource/print'
 
 **Check RDS capacity:**
 ```bash
-ssh admin@10.42.241.3 '/file print detail where name="/storage-pool"'
+ssh admin@192.0.2.10 '/file print detail where name="/storage-pool"'
 ```
 
 **List all volumes:**
 ```bash
-ssh admin@10.42.241.3 '/disk print brief'
+ssh admin@192.0.2.10 '/disk print brief'
 ```
 
 **Common Fixes:**
@@ -2083,7 +2083,7 @@ ssh admin@10.42.241.3 '/disk print brief'
 **Check NVMe/TCP connectivity from node:**
 ```bash
 # From worker node
-nvme discover -t tcp -a 10.42.68.1 -s 4420
+nvme discover -t tcp -a 198.51.100.20 -s 4420
 ```
 
 **Check kernel NVMe/TCP support:**
@@ -2095,13 +2095,13 @@ lsmod | grep nvme
 **Check firewall rules:**
 ```bash
 # Verify port 4420 is accessible
-telnet 10.42.68.1 4420
+telnet 198.51.100.20 4420
 ```
 
 **Common Fixes:**
 - Load nvme-tcp kernel module: `modprobe nvme-tcp`
 - Add firewall rule to allow port 4420
-- Verify network connectivity to storage IP (10.42.68.1)
+- Verify network connectivity to storage IP (198.51.100.20)
 - Check RDS NVMe/TCP service is running
 
 ---
@@ -2121,10 +2121,10 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --ta
 **Manual cleanup on RDS:**
 ```bash
 # List volumes
-ssh admin@10.42.241.3 '/disk print brief where slot~"pvc-"'
+ssh admin@192.0.2.10 '/disk print brief where slot~"pvc-"'
 
 # Delete specific volume
-ssh admin@10.42.241.3 '/disk remove [find slot="pvc-12345678-1234-1234-1234-123456789abc"]'
+ssh admin@192.0.2.10 '/disk remove [find slot="pvc-12345678-1234-1234-1234-123456789abc"]'
 ```
 
 **Common Fixes:**
@@ -2227,7 +2227,7 @@ kubectl delete pvc -l test=hardware-validation
 sleep 30
 
 # Verify all test volumes removed from RDS
-ssh admin@10.42.241.3 '/disk print brief where slot~"test-hw"'
+ssh admin@192.0.2.10 '/disk print brief where slot~"test-hw"'
 ```
 
 **Expected:** No output (all test volumes cleaned up)

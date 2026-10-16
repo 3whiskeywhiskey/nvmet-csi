@@ -550,14 +550,14 @@ func TestRebuildStateFromAnnotations_StillWorks(t *testing.T) {
 // TestAttachmentManager_DriverNameIsolation_Rebuild is the core regression test
 // for configurable CSI driver-name isolation in attachment state rebuild.
 // It constructs two attached VolumeAttachments + PVs using different driver names
-// (production "nvmet.csi.whiskey.works" vs custom "nvmet-rds-test.csi.whiskey.works").
+// (production "nvmet.csi.whiskey.works" vs custom "example-rds.invalid").
 // Using the desired explicit constructor NewAttachmentManager(k8sClient, driverName)
 // and calling Initialize (which calls RebuildStateFromVolumeAttachments), it asserts
 // that only the configured driver's volume appears in the manager state.
 // The assertions are written so that any cross-driver contamination would cause failure.
 func TestAttachmentManager_DriverNameIsolation_Rebuild(t *testing.T) {
 	prodDriver := "nvmet.csi.whiskey.works"
-	testDriver := "nvmet-rds-test.csi.whiskey.works"
+	testDriver := "example-rds.invalid"
 
 	prodVol := "pvc-prod-volume"
 	testVol := "pvc-test-volume"

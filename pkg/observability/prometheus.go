@@ -474,7 +474,8 @@ func (m *Metrics) SetAttachmentManager(countFunc func() int) {
 //
 // The diskMetricsFunc callback is invoked during Prometheus scrape to fetch disk performance
 // data via SSH (/disk monitor-traffic). The hardwareMetricsFunc callback fetches hardware health
-// via SNMP (temperature, fans, PSU, disk capacity).
+// via SNMP (temperature, fans, PSU, disk capacity). A nil hardwareMetricsFunc
+// leaves SNMP metrics unregistered while retaining SSH disk metrics.
 //
 // This must be called after the RDS client is connected. If not called (e.g., node plugin),
 // RDS metrics are not registered.
@@ -559,7 +560,7 @@ func (m *Metrics) SetRDSMonitoring(slot string, snmpHost string, snmpCommunity s
 	// Disk metrics use slot label
 	diskLabels := prometheus.Labels{"slot": slot}
 
-	// Register all 19 metrics (9 disk + 10 hardware)
+	// Register disk metrics independently of optional SNMP monitoring.
 	m.registry.MustRegister(
 		// === Disk Performance Metrics (9 metrics via SSH) ===
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
@@ -624,6 +625,13 @@ func (m *Metrics) SetRDSMonitoring(slot string, snmpHost string, snmpCommunity s
 			Help:        "Disk active/busy time in milliseconds from /disk monitor-traffic (SSH)",
 			ConstLabels: diskLabels,
 		}, func() float64 { return getDiskSnapshot().ActiveTimeMs }),
+	)
+
+	if hardwareMetricsFunc == nil {
+		return
+	}
+
+	m.registry.MustRegister(
 
 		// === Hardware Health Metrics (10 metrics via SNMP) ===
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{

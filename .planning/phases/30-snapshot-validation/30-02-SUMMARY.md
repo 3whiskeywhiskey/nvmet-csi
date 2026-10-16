@@ -151,7 +151,7 @@ None — no external service configuration required.
 ## Next Phase Readiness
 
 - CSI sanity test suite is fully green (70/70), confirming CSI spec compliance including all snapshot operations
-- TC-08 hardware validation is documented with correct SSH commands and expected output, ready for manual execution against real RDS hardware at 10.42.68.1
+- TC-08 hardware validation is documented with correct SSH commands and expected output, ready for manual execution against real RDS hardware at 198.51.100.20
 - Phase 31 (hardware validation execution) can proceed with confidence that the driver is correct per CSI spec
 - Remaining concern: pre-existing race condition in `pkg/rds` tests under `-race` flag (TestReconnection_WithBackoff) is unrelated to snapshot work and pre-dates this phase
 

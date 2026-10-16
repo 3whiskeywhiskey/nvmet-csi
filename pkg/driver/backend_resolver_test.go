@@ -18,7 +18,7 @@ import (
 
 func TestControllerBackendForParamsDefaultsRouterOS(t *testing.T) {
 	mockRDS := rds.NewMockClient()
-	mockRDS.SetAddress("10.42.68.1")
+	mockRDS.SetAddress("198.51.100.20")
 	driver := &Driver{}
 	driver.SetRDSClient(mockRDS)
 
@@ -36,7 +36,7 @@ func TestControllerBackendForParamsDefaultsRouterOS(t *testing.T) {
 
 func TestControllerBackendForParamsDoesNotLazyWrapRDSClient(t *testing.T) {
 	mockRDS := rds.NewMockClient()
-	mockRDS.SetAddress("10.42.68.1")
+	mockRDS.SetAddress("198.51.100.20")
 	driver := &Driver{rdsClient: mockRDS}
 
 	_, _, err := driver.controllerBackendForParams(map[string]string{})
@@ -54,7 +54,7 @@ func TestControllerBackendForParamsLinuxZOL(t *testing.T) {
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/nvmet",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 	}
 
 	got, selection, err := driver.controllerBackendForParams(params)
@@ -64,7 +64,7 @@ func TestControllerBackendForParamsLinuxZOL(t *testing.T) {
 	if got.Name() != storagebackend.TypeLinuxZOLNVMET {
 		t.Fatalf("expected Linux ZoL backend, got %s", got.Name())
 	}
-	if got.Address() != "10.42.0.10" {
+	if got.Address() != "203.0.113.10" {
 		t.Fatalf("expected backend address from targetAddress, got %q", got.Address())
 	}
 	if selection.ZFSPool != "tank/nvmet" {
@@ -84,7 +84,7 @@ func TestControllerBackendForVolumeUsesPersistentVolumeAttributes(t *testing.T) 
 						"backend":       storagebackend.TypeLinuxZOLNVMET,
 						"executor":      storagebackend.ExecutorSSH,
 						"zfsPool":       "tank/nvmet",
-						"targetAddress": "10.42.0.10",
+						"targetAddress": "203.0.113.10",
 						"sshTarget":     "storage@r740xd",
 					},
 				},
@@ -146,8 +146,8 @@ func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 			"backend":       storagebackend.TypeLinuxZOLNVMET,
 			"executor":      storagebackend.ExecutorHostNamespace,
 			"zfsPool":       "tank/nvmet",
-			"targetAddress": "10.42.0.10",
-			"nvmeAddress":   "10.42.0.20",
+			"targetAddress": "203.0.113.10",
+			"nvmeAddress":   "203.0.113.20",
 			"nvmePort":      "4421",
 		},
 	})
@@ -158,7 +158,7 @@ func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 	if observedSelection.Type != storagebackend.TypeLinuxZOLNVMET || observedSelection.Executor != storagebackend.ExecutorHostNamespace {
 		t.Fatalf("expected Linux host-namespace selection, got %+v", observedSelection)
 	}
-	if observedSelection.ZFSPool != "tank/nvmet" || observedSelection.TargetAddr != "10.42.0.20" {
+	if observedSelection.ZFSPool != "tank/nvmet" || observedSelection.TargetAddr != "203.0.113.20" {
 		t.Fatalf("expected Linux target selection, got %+v", observedSelection)
 	}
 	if observedCreate.ID != volumeID || observedCreate.NVMETCPPort != 4421 {
@@ -173,13 +173,13 @@ func TestCreateVolumeLinuxSelectionUsesResolvedBackend(t *testing.T) {
 	if ctx["backend"] != storagebackend.TypeLinuxZOLNVMET || ctx["executor"] != storagebackend.ExecutorHostNamespace {
 		t.Fatalf("expected Linux backend context, got %#v", ctx)
 	}
-	if ctx["zfsPool"] != "tank/nvmet" || ctx["targetAddress"] != "10.42.0.20" {
+	if ctx["zfsPool"] != "tank/nvmet" || ctx["targetAddress"] != "203.0.113.20" {
 		t.Fatalf("expected Linux target context, got %#v", ctx)
 	}
 	if ctx["volumePath"] != "/dev/zvol/tank/nvmet/"+volumeID {
 		t.Fatalf("expected normalized zvol volumePath, got %q", ctx["volumePath"])
 	}
-	if ctx["nvmeAddress"] != "10.42.0.20" || ctx["nvmePort"] != "4421" {
+	if ctx["nvmeAddress"] != "203.0.113.20" || ctx["nvmePort"] != "4421" {
 		t.Fatalf("expected explicit nvme endpoint in context, got %#v", ctx)
 	}
 }
@@ -194,13 +194,13 @@ func TestListVolumesAggregatesKnownBackends(t *testing.T) {
 				"backend":       storagebackend.TypeLinuxZOLNVMET,
 				"executor":      storagebackend.ExecutorLocal,
 				"zfsPool":       "tank/local",
-				"targetAddress": "10.42.0.10",
+				"targetAddress": "203.0.113.10",
 			}),
 			testPersistentVolume(sshVolumeID, map[string]string{
 				"backend":       storagebackend.TypeLinuxZOLNVMET,
 				"executor":      storagebackend.ExecutorSSH,
 				"zfsPool":       "tank/remote",
-				"targetAddress": "10.42.0.11",
+				"targetAddress": "203.0.113.11",
 				"sshTarget":     "storage@r740xd",
 			}),
 		),
@@ -223,8 +223,8 @@ func TestListVolumesAggregatesKnownBackends(t *testing.T) {
 	if got := len(resp.GetEntries()); got != 2 {
 		t.Fatalf("expected two volume entries across known backends, got %d", got)
 	}
-	if resp.GetEntries()[0].GetVolume().GetVolumeId() != "vol-10.42.0.10" ||
-		resp.GetEntries()[1].GetVolume().GetVolumeId() != "vol-10.42.0.11" {
+	if resp.GetEntries()[0].GetVolume().GetVolumeId() != "vol-203.0.113.10" ||
+		resp.GetEntries()[1].GetVolume().GetVolumeId() != "vol-203.0.113.11" {
 		t.Fatalf("unexpected aggregated entries: %#v", resp.GetEntries())
 	}
 }
@@ -233,7 +233,7 @@ func TestDeleteSnapshotResolvesBackendBeforeMutating(t *testing.T) {
 	snapshotID := "snap-11111111-1111-1111-1111-111111111111-at-abcdef"
 	targetBackend := &testBackend{
 		name:    storagebackend.TypeLinuxZOLNVMET,
-		address: "10.42.0.11",
+		address: "203.0.113.11",
 		snapshots: map[string]storagebackend.Snapshot{
 			snapshotID: {
 				ID:             snapshotID,
@@ -245,7 +245,7 @@ func TestDeleteSnapshotResolvesBackendBeforeMutating(t *testing.T) {
 	}
 	otherBackend := &testBackend{
 		name:      storagebackend.TypeLinuxZOLNVMET,
-		address:   "10.42.0.10",
+		address:   "203.0.113.10",
 		snapshots: map[string]storagebackend.Snapshot{},
 	}
 
@@ -256,18 +256,18 @@ func TestDeleteSnapshotResolvesBackendBeforeMutating(t *testing.T) {
 				"backend":       storagebackend.TypeLinuxZOLNVMET,
 				"executor":      storagebackend.ExecutorLocal,
 				"zfsPool":       "tank/local",
-				"targetAddress": "10.42.0.10",
+				"targetAddress": "203.0.113.10",
 			}),
 			testPersistentVolume("pvc-22222222-2222-2222-2222-222222222222", map[string]string{
 				"backend":       storagebackend.TypeLinuxZOLNVMET,
 				"executor":      storagebackend.ExecutorSSH,
 				"zfsPool":       "tank/remote",
-				"targetAddress": "10.42.0.11",
+				"targetAddress": "203.0.113.11",
 				"sshTarget":     "storage@r740xd",
 			}),
 		),
 		backendFactory: func(selection BackendSelection) (storagebackend.Backend, error) {
-			if selection.TargetAddr == "10.42.0.11" {
+			if selection.TargetAddr == "203.0.113.11" {
 				return targetBackend, nil
 			}
 			return otherBackend, nil
@@ -405,7 +405,7 @@ func TestBackendSelectionVolumeContext(t *testing.T) {
 		Type:       storagebackend.TypeLinuxZOLNVMET,
 		Executor:   storagebackend.ExecutorSSH,
 		ZFSPool:    "tank/nvmet",
-		TargetAddr: "10.42.0.10",
+		TargetAddr: "203.0.113.10",
 		SSHTarget:  "storage@r740xd",
 	}
 	ctx := selection.volumeContext()

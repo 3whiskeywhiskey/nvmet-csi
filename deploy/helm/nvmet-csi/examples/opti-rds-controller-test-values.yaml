@@ -3,7 +3,7 @@
 #
 # Purpose: exercise nvmet-csi's routeros-rds provisioning path (create,
 # expand, delete over SSH) on a cluster that can reach the RDS management
-# interface (10.42.241.3) but NOT the v68 storage VLAN. Volumes provision
+# interface (192.0.2.10) but NOT the v68 storage VLAN. Volumes provision
 # with Immediate binding and are verified on the RDS side; no pod ever
 # mounts them, so the missing NVMe/TCP data path is irrelevant.
 #
@@ -19,8 +19,8 @@ driverName: nvmet.csi.whiskey.works
 
 rds:
   enabled: true
-  managementIP: "10.42.241.3"
-  storageIP: "10.42.68.1"
+  managementIP: "192.0.2.10"
+  storageIP: "198.51.100.20"
   sshPort: 22
   nvmePort: 4420
   sshUser: "metal-csi"

@@ -11,8 +11,8 @@ parameters:
   executor: host-namespace
   nqnPrefix: nqn.2026-05.works.whiskey.nvmet-csi
   zfsPool: tank/nvmet
-  targetAddress: "10.42.0.10"
-  nvmeAddress: "10.42.0.10"
+  targetAddress: "203.0.113.10"
+  nvmeAddress: "203.0.113.10"
   nvmePort: "4420"
   csi.storage.k8s.io/fstype: ext4
 volumeBindingMode: WaitForFirstConsumer
@@ -31,8 +31,8 @@ parameters:
   nqnPrefix: nqn.2026-05.works.whiskey.nvmet-csi
   sshTarget: storage@r740xd
   zfsPool: tank/nvmet
-  targetAddress: "10.42.0.10"
-  nvmeAddress: "10.42.0.10"
+  targetAddress: "203.0.113.10"
+  nvmeAddress: "203.0.113.10"
   nvmePort: "4420"
   csi.storage.k8s.io/fstype: ext4
 volumeBindingMode: WaitForFirstConsumer

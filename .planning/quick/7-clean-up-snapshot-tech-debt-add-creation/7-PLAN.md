@@ -43,8 +43,8 @@ Output: Four files cleaned up, all tests passing, no dead code.
 </objective>
 
 <execution_context>
-@/Users/whiskey/.claude/get-shit-done/workflows/execute-plan.md
-@/Users/whiskey/.claude/get-shit-done/templates/summary.md
+@~/.claude/get-shit-done/workflows/execute-plan.md
+@~/.claude/get-shit-done/templates/summary.md
 </execution_context>
 
 <context>

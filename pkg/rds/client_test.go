@@ -23,7 +23,7 @@ func TestNewClient(t *testing.T) {
 			name: "empty protocol defaults to ssh",
 			config: ClientConfig{
 				Protocol:           "",
-				Address:            "10.42.68.1",
+				Address:            "198.51.100.20",
 				User:               "admin",
 				InsecureSkipVerify: true,
 			},
@@ -33,7 +33,7 @@ func TestNewClient(t *testing.T) {
 			name: "explicit ssh protocol creates SSH client",
 			config: ClientConfig{
 				Protocol:           "ssh",
-				Address:            "10.42.68.1",
+				Address:            "198.51.100.20",
 				User:               "admin",
 				InsecureSkipVerify: true,
 			},
@@ -43,7 +43,7 @@ func TestNewClient(t *testing.T) {
 			name: "api protocol returns not yet implemented error",
 			config: ClientConfig{
 				Protocol: "api",
-				Address:  "10.42.68.1",
+				Address:  "198.51.100.20",
 				User:     "admin",
 			},
 			expectErr: true,
@@ -53,7 +53,7 @@ func TestNewClient(t *testing.T) {
 			name: "unknown protocol returns unsupported protocol error",
 			config: ClientConfig{
 				Protocol: "telnet",
-				Address:  "10.42.68.1",
+				Address:  "198.51.100.20",
 				User:     "admin",
 			},
 			expectErr: true,
@@ -72,7 +72,7 @@ func TestNewClient(t *testing.T) {
 			name: "invalid SSH config missing user returns error",
 			config: ClientConfig{
 				Protocol: "ssh",
-				Address:  "10.42.68.1",
+				Address:  "198.51.100.20",
 			},
 			expectErr: true,
 			errMsg:    "user is required",
@@ -102,7 +102,7 @@ func TestNewClient(t *testing.T) {
 func TestNewClient_DefaultValues(t *testing.T) {
 	// Test that NewClient properly passes through to newSSHClient with defaults
 	client, err := NewClient(ClientConfig{
-		Address:            "10.42.68.1",
+		Address:            "198.51.100.20",
 		User:               "admin",
 		InsecureSkipVerify: true,
 	})
@@ -125,7 +125,7 @@ func TestNewClient_CustomValues(t *testing.T) {
 	customPort := 2222
 
 	client, err := NewClient(ClientConfig{
-		Address:            "10.42.68.1",
+		Address:            "198.51.100.20",
 		Port:               customPort,
 		User:               "admin",
 		Timeout:            customTimeout,

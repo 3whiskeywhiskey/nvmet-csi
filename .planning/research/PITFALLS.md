@@ -392,7 +392,7 @@ Things that appear complete but are missing critical pieces:
 
 ### Dual-IP Architecture Testing
 
-**Pitfall:** Controller uses SSH address (10.42.241.3), nodes use NVMe address (10.42.68.1). Tests that use single IP miss cross-network validation. VolumeContext may have wrong IP for nodes.
+**Pitfall:** Controller uses SSH address (192.0.2.10), nodes use NVMe address (198.51.100.20). Tests that use single IP miss cross-network validation. VolumeContext may have wrong IP for nodes.
 
 **Prevention:**
 1. E2E tests must use dual-IP configuration (matching production)

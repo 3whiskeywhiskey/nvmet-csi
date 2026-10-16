@@ -515,11 +515,11 @@ Things that couldn't be fully resolved:
 
 ### Codebase Analysis (HIGH confidence)
 
-- `/Users/whiskey/code/rds-csi/.planning/codebase/CONCERNS.md` - Code smell documentation (2026-02-04)
-- `/Users/whiskey/code/rds-csi/.planning/codebase/CONVENTIONS.md` - Error handling conventions (2026-02-04)
-- `/Users/whiskey/code/rds-csi/pkg/security/logger.go` - Table-driven pattern example (Phase 18 implementation)
-- `/Users/whiskey/code/rds-csi/pkg/utils/errors.go` - Error utilities (Phase 19 implementation)
-- `/Users/whiskey/code/rds-csi/.golangci.yml` - Current linter configuration
+- `/path/to/rds-csi/.planning/codebase/CONCERNS.md` - Code smell documentation (2026-02-04)
+- `/path/to/rds-csi/.planning/codebase/CONVENTIONS.md` - Error handling conventions (2026-02-04)
+- `/path/to/rds-csi/pkg/security/logger.go` - Table-driven pattern example (Phase 18 implementation)
+- `/path/to/rds-csi/pkg/utils/errors.go` - Error utilities (Phase 19 implementation)
+- `/path/to/rds-csi/.golangci.yml` - Current linter configuration
 
 ## Metadata
 

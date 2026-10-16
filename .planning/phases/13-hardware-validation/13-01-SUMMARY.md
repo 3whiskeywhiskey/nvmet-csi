@@ -85,7 +85,7 @@
 ## Issues Encountered
 
 ### Issue 1: API Server Timeout During Initial Test
-**Symptom:** ControllerPublishVolume failed with "dial tcp 10.143.0.1:443: i/o timeout"
+**Symptom:** ControllerPublishVolume failed with "dial tcp 203.0.113.143:443: i/o timeout"
 **Cause:** Transient network issue reaching Kubernetes API
 **Resolution:** Retry succeeded automatically (CSI external-attacher retry logic)
 **Impact:** None - volume eventually attached successfully

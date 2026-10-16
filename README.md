@@ -54,8 +54,8 @@ The nvmet-csi driver enables dynamic provisioning of persistent block storage vo
               ▼                  ▼                  ▼
    ┌────────────────────────────────────────────────────┐
    │  MikroTik RDS                                      │
-   │  - Management IP: 10.42.241.3 (1Gbit)             │
-   │  - Storage IP: 10.42.68.1 (25Gbit)                │
+   │  - Management IP: 192.0.2.10 (1Gbit)             │
+   │  - Storage IP: 198.51.100.20 (25Gbit)                │
    │  - Btrfs RAID Storage                             │
    │  - NVMe/TCP Export                                │
    │  - File-backed Volumes                            │
@@ -75,7 +75,8 @@ The nvmet-csi driver enables dynamic provisioning of persistent block storage vo
 
 ## Status
 
-**Current Version**: v0.8.0 (v0.9.0 in progress)
+This repository is under active development. Use the current chart and
+deployment guides for configuration; the roadmap records earlier milestones.
 
 **Completed:**
 - [x] Project setup and documentation
@@ -90,13 +91,12 @@ The nvmet-csi driver enables dynamic provisioning of persistent block storage vo
 - [x] Orphan reconciliation
 - [x] NVMe-oF reconnection resilience
 - [x] Attachment reconciliation
-- [ ] Helm chart (planned)
+- [x] Helm chart
 - [x] Prometheus metrics endpoint
 - [x] Comprehensive test coverage (65%+)
 
-**In Progress (v0.9.0):**
-- [ ] Volume snapshots (Phase 26)
-- [ ] Documentation & hardware validation (Phase 27)
+**Not yet supported:** CSI snapshots and scheduled snapshots. Neither backend
+currently provides a data-preserving snapshot path through this driver.
 
 See [ROADMAP.md](ROADMAP.md) for detailed milestone history and current progress.
 
@@ -124,13 +124,16 @@ See [ROADMAP.md](ROADMAP.md) for detailed milestone history and current progress
 ### Installation
 
 ```bash
-# Apply manifests
-kubectl apply -f deploy/kubernetes/
+# Create the namespace and an external Secret. Verify the host key fingerprint
+# against the RDS appliance through a trusted channel before using it here.
+kubectl create namespace nvmet-csi
+kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+  --from-file=rds-private-key=/path/to/rds-ssh-key \
+  --from-file=rds-host-key=/path/to/verified-rds-host-key.pub
 
-# Create SSH key secret
-kubectl create secret generic rds-ssh-key \
-  --from-file=id_rsa=/path/to/rds-ssh-key \
-  --namespace kube-system
+# Set your own RDS management address, user, volume path, and NQN prefix in
+# deploy/kubernetes/controller.yaml, then apply the manifests.
+kubectl apply -k deploy/kubernetes/
 ```
 
 ### Usage Example
@@ -145,7 +148,7 @@ metadata:
 provisioner: nvmet.csi.whiskey.works
 parameters:
   # RDS connection details
-  rdsAddress: "10.42.68.1"
+  rdsAddress: "198.51.100.20"
   nvmePort: "4420"
   sshPort: "22"
 
@@ -302,13 +305,13 @@ For detailed installation instructions, see [Kubernetes Setup Guide](docs/kubern
 
 ```bash
 # Controller pod
-kubectl get pods -n kube-system -l app=nvmet-csi-controller
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-controller
 
 # Node plugin pods
-kubectl get pods -n kube-system -l app=nvmet-csi-node
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node
 
 # Check logs
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c nvmet-csi-plugin
 ```
 
 ### Common Issues

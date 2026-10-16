@@ -39,7 +39,7 @@ func TestLinuxZOLPlanOptionsValidate(t *testing.T) {
 	base := linuxZOLPlanOptions{
 		Action:    "ensure",
 		ZFSPool:   "tank/nvmet",
-		Target:    "10.42.0.10",
+		Target:    "203.0.113.10",
 		Port:      4420,
 		VolumeID:  "pvc-11111111-1111-1111-1111-111111111111",
 		SizeBytes: 1 << 30,

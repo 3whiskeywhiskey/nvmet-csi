@@ -40,7 +40,7 @@ func TestListExportTargets_GroupsPVsBySelection(t *testing.T) {
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/a",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 		"nvmePort":      "4420",
 		"nqn":           "nqn.test:a1",
 	}
@@ -48,7 +48,7 @@ func TestListExportTargets_GroupsPVsBySelection(t *testing.T) {
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/b",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 		"nvmePort":      "4421",
 		"nqn":           "nqn.test:b1",
 	}
@@ -73,7 +73,7 @@ func TestListExportTargets_GroupsPVsBySelection(t *testing.T) {
 	}
 
 	// deterministic sort by key
-	if targets[0].Key != "linux-zol-nvmet/10.42.0.10/tank/a" || targets[1].Key != "linux-zol-nvmet/10.42.0.10/tank/b" {
+	if targets[0].Key != "linux-zol-nvmet/203.0.113.10/tank/a" || targets[1].Key != "linux-zol-nvmet/203.0.113.10/tank/b" {
 		t.Fatalf("targets not sorted by key: got keys %q, %q", targets[0].Key, targets[1].Key)
 	}
 
@@ -98,7 +98,7 @@ func TestListExportTargets_FiltersForeignRouterosDeletedUnparseable(t *testing.T
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/good",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 		"nvmePort":      "4420",
 		"nqn":           "nqn.test:good",
 	}
@@ -106,7 +106,7 @@ func TestListExportTargets_FiltersForeignRouterosDeletedUnparseable(t *testing.T
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/foreign",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 	}
 	routeros := map[string]string{
 		"backend": storagebackend.TypeRouterOSRDS,
@@ -115,7 +115,7 @@ func TestListExportTargets_FiltersForeignRouterosDeletedUnparseable(t *testing.T
 		"backend":  storagebackend.TypeLinuxZOLNVMET,
 		"executor": storagebackend.ExecutorLocal,
 		// missing required zfsPool -> parse error, must skip not fail
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 	}
 
 	pvGood := testPersistentVolume("vol-good", good)
@@ -156,7 +156,7 @@ func TestListExportTargets_MissingOrGarbagePortFallsToZero(t *testing.T) {
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/p",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 		"nqn":           "nqn.test:noport",
 		// nvmePort absent -> 0
 	}
@@ -164,7 +164,7 @@ func TestListExportTargets_MissingOrGarbagePortFallsToZero(t *testing.T) {
 		"backend":       storagebackend.TypeLinuxZOLNVMET,
 		"executor":      storagebackend.ExecutorLocal,
 		"zfsPool":       "tank/p",
-		"targetAddress": "10.42.0.10",
+		"targetAddress": "203.0.113.10",
 		"nvmePort":      "not-a-number",
 		"nqn":           "nqn.test:garbage",
 	}
