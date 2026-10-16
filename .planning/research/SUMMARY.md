@@ -94,7 +94,7 @@ Research identified six critical pitfalls from production CSI driver experiences
 **RDS-specific pitfalls:**
 - **SSH-based control plane:** Mock must parse /disk commands and reject shell metacharacters to catch injection vulnerabilities
 - **NVMe-oF disconnect cleanup:** nvme disconnect fails silently when device in use; check mounts before disconnect, retry with backoff
-- **Dual-IP architecture:** Controller uses SSH address (10.42.241.3), nodes use NVMe address (10.42.68.1); tests must use dual-IP config
+- **Dual-IP architecture:** Controller uses SSH address (192.0.2.10), nodes use NVMe address (198.51.100.20); tests must use dual-IP config
 - **RouterOS version compatibility:** CLI output varies between 7.1/7.10/7.16; parser must be order-independent, handle missing fields
 - **Orphan reconciler testing:** Must test with dry-run first, use test volume prefix, never run against production RDS
 
@@ -145,7 +145,7 @@ Based on research, v0.9.0 should focus on automated testing infrastructure to va
 **Delivers:** Hardware validation runbook, weekly test schedule, real RDS test suite
 **Addresses:** Mock-reality divergence pitfall, hardware timing pitfall
 **Avoids:** Works-on-my-machine anti-pattern, device timing pitfall
-**Stack:** Real RDS at 10.42.241.3, real cluster, manual test execution
+**Stack:** Real RDS at 192.0.2.10, real cluster, manual test execution
 **Effort:** LOW (1 day) — documentation + test plan
 **Priority:** P2 (validation, not blocking)
 

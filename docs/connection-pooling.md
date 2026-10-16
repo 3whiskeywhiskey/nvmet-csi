@@ -59,7 +59,7 @@ poolConfig := rds.PoolConfig{
     Factory: func() (rds.RDSClient, error) {
         return rds.NewClient(rds.ClientConfig{
             Protocol:   "ssh",
-            Address:    "10.42.68.1",
+            Address:    "198.51.100.20",
             Port:       22,
             User:       "admin",
             PrivateKey: privateKeyBytes,

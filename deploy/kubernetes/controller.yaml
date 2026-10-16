@@ -1,28 +1,4 @@
 ---
-# Secret for RDS SSH credentials
-# NOTE: Replace with your actual credentials before deploying
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nvmet-csi-secret
-  namespace: nvmet-csi
-type: Opaque
-stringData:
-  # RDS SSH private key (ed25519 format)
-  # Replace this with your actual private key
-  rds-private-key: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-    QyNTUxOQAAACAayjrDH/gC+zjfu4AdFUt4E4vltpCcgxVgySU9XLV35QAAAJCIqsYhiKrG
-    IQAAAAtzc2gtZWQyNTUxOQAAACAayjrDH/gC+zjfu4AdFUt4E4vltpCcgxVgySU9XLV35Q
-    AAAEBStGYSGwibjyFLTF5lgaVjKJNnuFuPN5PiVOmYIH3LoxrKOsMf+AL7ON+7gB0VS3gT
-    i+W2kJyDFWDJJT1ctXflAAAACW1ldGFsLWNzaQECAwQ=
-    -----END OPENSSH PRIVATE KEY-----
-  # RDS SSH host public key (for host key verification)
-  # Replace this with your RDS server's actual host public key
-  # Get it with: ssh-keyscan -t rsa <rds-ip> 2>/dev/null | cut -d' ' -f2-
-  rds-host-key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOtvaRLS0WYMhmf7HrF306T9uFioTMMSqyoNYhQSRVPo1TUQCafgc//auEWK9NOUxML9zkleFEYEBHkrCFimRh9L/gsfszN/FZLZdF94cA/uKhzdlZJoqOfo+hyn4lXcSwKjCXwYcXI1e2zY53RMZEyChoXVG7rryp615mYRABihwc3rJiIGIb4UZGlKc6Svw+AMGV6P3PhyRJfT4P1fxrJGLUyUvHVXrn0HpM8eoz9ExamZP1iSFk2z3MOqoWd8wqfE8A/KoWNYexhOJ5ywgsqOm84lTauhtHsF4QFqBcZ5taOthbOVcdQpv8iZJYN1DYSc3BXhPA7jjSE5PrHRhh"
----
 # ConfigMap for RDS connection settings
 apiVersion: v1
 kind: ConfigMap
@@ -31,7 +7,7 @@ metadata:
   namespace: nvmet-csi
 data:
   # RDS connection settings (SSH management interface)
-  rds-address: "10.42.241.3"  # RDS management IP for SSH
+  rds-address: "192.0.2.10"  # Documentation address; replace before deployment
   rds-port: "22"               # SSH port
   rds-user: "metal-csi"        # SSH user on RouterOS
   rds-volume-base-path: "/storage-pool/metal-csi"  # Base path for volumes

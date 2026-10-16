@@ -11,7 +11,7 @@ This runbook validates the Linux ZoL + kernel nvmet path beside the existing
   `kubernetes.io/hostname=r740xd`.
 - The selected pool or dataset exists, for example `tank/nvmet`.
 - The selected NVMe/TCP target address is reachable from consumer nodes on the
-  v68 jumbo-frame storage VLAN. The live r740xd address is `10.42.68.4`.
+  v68 jumbo-frame storage VLAN. The live r740xd address is `198.51.100.23`.
   Preflight requires the interface that owns this address to have MTU >= 9000.
 - Existing RDS-backed StorageClasses remain non-default or unchanged.
 - No RDS reboot, RouterOS disk cleanup, or node mount surgery is part of this
@@ -37,7 +37,7 @@ Before applying it, confirm these values match the live host:
 - `storageClasses[0].targetAddress`
 - `storageClasses[0].nvmeAddress`
 
-For the metal cluster, these target address fields should stay on `10.42.68.4`,
+For the metal cluster, these target address fields should stay on `198.51.100.23`,
 not the routed v67/control-plane addresses.
 
 Render locally first:

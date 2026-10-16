@@ -44,43 +44,25 @@ The driver requires a Kubernetes Secret containing SSH credentials and optionall
 - `rds-host-key`: SSH host public key for host verification
 - `snmp-community`: (optional) SNMP community string for hardware monitoring
 
-**Example Secret YAML:**
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nvmet-csi-secret
-  namespace: nvmet-csi
-type: Opaque
-data:
-  # Base64-encoded SSH private key (e.g., from ~/.ssh/id_rsa)
-  rds-private-key: LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K...
-
-  # Base64-encoded SSH host public key (from RDS /ip/ssh/print)
-  rds-host-key: c3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCZ1FD...
-
-  # Base64-encoded SNMP community string (optional)
-  snmp-community: cHVibGlj
-```
-
 **Create from files:**
 
 ```bash
 kubectl create secret generic nvmet-csi-secret \
   -n nvmet-csi \
   --from-file=rds-private-key=/path/to/ssh-key \
-  --from-file=rds-host-key=/path/to/host-key \
-  --from-file=snmp-community=<(echo -n "public")
+  --from-file=rds-host-key=/path/to/verified-host-key.pub
 ```
+
+Verify the host key fingerprint independently before creating the Secret. Keep
+the credential files outside this repository.
 
 ### 3. Install Chart
 
 ```bash
 helm install nvmet-csi ./deploy/helm/nvmet-csi \
   --namespace nvmet-csi \
-  --set rds.managementIP=10.42.241.3 \
-  --set rds.storageIP=10.42.68.1
+  --set rds.managementIP=192.0.2.10 \
+  --set rds.storageIP=198.51.100.20
 ```
 
 ### 4. Verify Installation
@@ -111,8 +93,8 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `rds.managementIP` | Management interface IP (SSH control plane) | `10.42.241.3` |
-| `rds.storageIP` | Storage interface IP (NVMe/TCP data plane) | `10.42.68.1` |
+| `rds.managementIP` | Management interface IP (SSH control plane) | `192.0.2.10` |
+| `rds.storageIP` | Storage interface IP (NVMe/TCP data plane) | `198.51.100.20` |
 | `rds.sshPort` | SSH port for RouterOS CLI | `22` |
 | `rds.nvmePort` | NVMe/TCP port for storage connections | `4420` |
 | `rds.sshUser` | SSH username on RouterOS | `metal-csi` |
@@ -223,7 +205,9 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 | `monitoring.serviceMonitor.forceEnable` | Force ServiceMonitor creation (skip CRD detection) | `false` |
 | `monitoring.serviceMonitor.interval` | Prometheus scrape interval | `30s` |
 | `monitoring.serviceMonitor.labels` | Additional labels for ServiceMonitor | `{}` |
-| `monitoring.rdsMonitoring.enabled` | Enable RDS disk and hardware metrics | `true` |
+| `monitoring.rdsMonitoring.enabled` | Enable RDS disk metrics over SSH | `true` |
+| `monitoring.rdsMonitoring.diskSlot` | Disk slot queried over SSH | `storage-pool` |
+| `monitoring.rdsMonitoring.snmp.host` | Optional SNMP target; requires `snmp-community` in the Secret | `""` (disabled) |
 
 ### StorageClass Settings
 
@@ -257,31 +241,17 @@ All configuration is done via the `values.yaml` file or `--set` flags during ins
 
 ## Secret Structure
 
-The driver requires a Kubernetes Secret with specific keys. Here's the complete structure:
+The driver requires a Kubernetes Secret with `rds-private-key` and
+`rds-host-key`. Add `snmp-community` only when setting
+`monitoring.rdsMonitoring.snmp.host`. Create the Secret from files outside the
+repository, as shown in the quick start. Do not commit a Secret manifest or
+base64-encoded credentials.
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nvmet-csi-secret
-  namespace: nvmet-csi
-type: Opaque
-data:
-  # SSH private key for RouterOS authentication
-  # Generate: ssh-keygen -t rsa -b 4096 -f nvmet-csi-key
-  # Encode: cat nvmet-csi-key | base64 -w 0
-  rds-private-key: LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K...
-
-  # SSH host public key from RouterOS
-  # Get from RDS: /ip/ssh/print
-  # Encode: echo "ssh-rsa AAAA..." | base64 -w 0
-  rds-host-key: c3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCZ1FD...
-
-  # SNMP community string for hardware monitoring (optional)
-  # Only needed if monitoring.rdsMonitoring.enabled=true
-  # Default RouterOS community is "public"
-  # Encode: echo -n "public" | base64
-  snmp-community: cHVibGlj
+```bash
+kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+  --from-file=rds-private-key=/path/to/nvmet-csi-key \
+  --from-file=rds-host-key=/path/to/verified-rds-host-key.pub \
+  --from-file=snmp-community=/path/to/snmp-community
 ```
 
 ## Storage Classes
@@ -336,7 +306,7 @@ The driver exposes Prometheus metrics on port 9809 (configurable).
 - `rds_disk_active_time_percent` - Active time percentage
 - `rds_disk_capacity_bytes` - Total disk capacity
 
-**RDS Hardware Metrics** (when `monitoring.rdsMonitoring.enabled=true`):
+**RDS Hardware Metrics** (when an SNMP host and community file are configured):
 - `rds_hardware_cpu_temperature_celsius` - CPU temperature
 - `rds_hardware_board_temperature_celsius` - Board temperature
 - `rds_hardware_fan1_speed_rpm` - Fan 1 speed

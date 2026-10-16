@@ -326,9 +326,9 @@ jobs:
 - [Go Testing Libraries Overview](https://softwarepatternslexicon.com/go/tools-and-libraries-for-go-design-patterns/testing-libraries/) — Testify, GoMock, Ginkgo comparison
 
 **Project Context (HIGH Confidence):**
-- `/Users/whiskey/code/rds-csi/.planning/codebase/TESTING.md` — Existing test patterns; 65% coverage baseline; testify usage confirmed
-- `/Users/whiskey/code/rds-csi/go.mod` — Current dependencies verified (Go 1.24, testify v1.11.1, crypto v0.41.0)
-- `/Users/whiskey/code/rds-csi/test/mock/rds_server.go` — Existing mock RDS implementation using golang.org/x/crypto/ssh
+- `/path/to/rds-csi/.planning/codebase/TESTING.md` — Existing test patterns; 65% coverage baseline; testify usage confirmed
+- `/path/to/rds-csi/go.mod` — Current dependencies verified (Go 1.24, testify v1.11.1, crypto v0.41.0)
+- `/path/to/rds-csi/test/mock/rds_server.go` — Existing mock RDS implementation using golang.org/x/crypto/ssh
 
 ---
 *Stack research for: Kubernetes CSI Driver Testing (v0.9.0 milestone)*

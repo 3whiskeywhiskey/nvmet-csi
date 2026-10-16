@@ -82,7 +82,7 @@ metadata:
 provisioner: rds.csi.mikrotik.com
 parameters:
   # Existing parameters
-  rds-address: "10.42.68.1"
+  rds-address: "198.51.100.20"
   rds-port: "22"
 
   # NEW: Migration timeout for KubeVirt live migration

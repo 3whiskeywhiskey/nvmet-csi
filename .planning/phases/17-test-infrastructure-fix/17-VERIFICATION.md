@@ -191,7 +191,7 @@ Results:
 
 **Level 1 - Existence:**
 ```bash
-$ ls -lh /Users/whiskey/code/rds-csi/pkg/driver/node_test.go
+$ ls -lh /path/to/rds-csi/pkg/driver/node_test.go
 -rw-r--r-- 1 whiskey staff 50K Feb  4 11:56 pkg/driver/node_test.go
 ```
 ✓ EXISTS

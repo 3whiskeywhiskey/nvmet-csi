@@ -114,7 +114,7 @@ kubectl -n kube-system patch deployment nvmet-csi-controller --type='json' -p='[
 4. **Manual cleanup** (if needed):
    ```bash
    # SSH to RDS and manually remove orphans
-   ssh admin@10.42.241.3
+   ssh admin@192.0.2.10
    /disk print detail where slot~"pvc-"
    /disk remove [find slot=pvc-xxxx-orphan-id]
    ```

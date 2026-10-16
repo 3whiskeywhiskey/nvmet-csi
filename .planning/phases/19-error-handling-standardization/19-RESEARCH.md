@@ -179,7 +179,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 // Source: Current codebase pkg/utils/errors.go (already implemented)
 
 // Internal error with full details (logged but not exposed)
-err := fmt.Errorf("failed to connect to RDS at 10.42.68.1:22: authentication failed")
+err := fmt.Errorf("failed to connect to RDS at 198.51.100.20:22: authentication failed")
 
 // Sanitized error for user
 sanitized := utils.NewInternalError(err, "RDS connection failed")
@@ -288,7 +288,7 @@ err := sshClient.RunCommand("/disk add ...")
 if err != nil {
     return fmt.Errorf("failed to create volume %s on RDS %s: %w", volumeID, rdsAddr, err)
 }
-// Error: "failed to create volume pvc-123 on RDS 10.42.68.1: connection refused"
+// Error: "failed to create volume pvc-123 on RDS 198.51.100.20: connection refused"
 ```
 
 ### Pitfall 3: Wrapping gRPC Status Errors
@@ -468,7 +468,7 @@ func (cs *ControllerServer) CSIMethod(ctx context.Context, req *Request) (*Respo
 if err := sshClient.Connect(); err != nil {
     sanitized := utils.NewInternalError(err, "RDS connection failed")
     // sanitized.Error() returns: "RDS connection failed"
-    // sanitized.Log() logs: "[INTERNAL ERROR] ... (internal: failed to connect to 10.42.68.1:22: ...)"
+    // sanitized.Log() logs: "[INTERNAL ERROR] ... (internal: failed to connect to 198.51.100.20:22: ...)"
     return sanitized
 }
 

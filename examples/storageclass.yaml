@@ -20,7 +20,7 @@ parameters:
   csi.storage.k8s.io/fstype: ext4
 
   # NVMe/TCP target address (high-speed storage interface)
-  nvmeAddress: "10.42.68.1"
+  nvmeAddress: "198.51.100.20"
 
   # NVMe/TCP port (default: 4420)
   nvmePort: "4420"

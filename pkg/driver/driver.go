@@ -145,6 +145,10 @@ type DriverConfig struct {
 	RDSHostKey            []byte // SSH host public key for verification
 	RDSInsecureSkipVerify bool   // Skip host key verification (INSECURE)
 	RDSVolumeBasePath     string // Base path for volumes on RDS (e.g., /storage-pool/metal-csi)
+	EnableRDSMonitoring   bool   // Enable RDS disk metrics; SNMP requires separate configuration
+	RDSMonitoringSlot     string // Disk slot to monitor over SSH; defaults to storage-pool
+	RDSSNMPHost           string // Optional SNMP target; empty disables SNMP metrics
+	RDSSNMPCommunity      string // Optional SNMP community loaded from a Secret
 
 	// RDS mutation guardrails
 	RDSMutationMinInterval time.Duration
@@ -318,15 +322,36 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	// Wire RDS monitoring (disk performance + hardware health) into Prometheus metrics.
 	// GaugeFunc callbacks poll via SSH (/disk monitor-traffic) and SNMP (MIKROTIK-MIB)
 	// during Prometheus scrape. Only registers in controller mode (node plugin has no RDS client).
-	if config.EnableController && config.Metrics != nil && driver.rdsClient != nil {
+	if config.EnableController && config.EnableRDSMonitoring && config.Metrics != nil && driver.rdsClient != nil {
 		// Monitor the storage pool disk (configurable via basePath extraction)
 		// Default: "storage-pool" - the primary Btrfs RAID6 pool
-		storageSlot := "storage-pool"
-
-		// SNMP target configuration (use storage VLAN IP, same as SSH operations)
-		// CSI controller runs in environment with access to storage network
-		snmpHost := "10.42.68.1"  // TODO: make configurable via helm values
-		snmpCommunity := "public" // TODO: make configurable via helm values
+		storageSlot := config.RDSMonitoringSlot
+		if storageSlot == "" {
+			storageSlot = "storage-pool"
+		}
+		snmpHost := config.RDSSNMPHost
+		snmpCommunity := config.RDSSNMPCommunity
+		var hardwareMetrics func() (*observability.HardwareHealthSnapshot, error)
+		if snmpHost != "" && snmpCommunity != "" {
+			hardwareMetrics = func() (*observability.HardwareHealthSnapshot, error) {
+				metrics, err := driver.rdsClient.GetHardwareHealth(snmpHost, snmpCommunity)
+				if err != nil {
+					return nil, err
+				}
+				return &observability.HardwareHealthSnapshot{
+					CPUTemperature:    metrics.CPUTemperature,
+					BoardTemperature:  metrics.BoardTemperature,
+					Fan1Speed:         metrics.Fan1Speed,
+					Fan2Speed:         metrics.Fan2Speed,
+					PSU1Power:         metrics.PSU1Power,
+					PSU2Power:         metrics.PSU2Power,
+					PSU1Temperature:   metrics.PSU1Temperature,
+					PSU2Temperature:   metrics.PSU2Temperature,
+					DiskPoolSizeBytes: metrics.DiskPoolSizeBytes,
+					DiskPoolUsedBytes: metrics.DiskPoolUsedBytes,
+				}, nil
+			}
+		}
 
 		config.Metrics.SetRDSMonitoring(
 			storageSlot,
@@ -350,27 +375,9 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 					ActiveTimeMs:      metrics.ActiveTimeMs,
 				}, nil
 			},
-			// Hardware health metrics callback (SNMP)
-			func() (*observability.HardwareHealthSnapshot, error) {
-				metrics, err := driver.rdsClient.GetHardwareHealth(snmpHost, snmpCommunity)
-				if err != nil {
-					return nil, err
-				}
-				return &observability.HardwareHealthSnapshot{
-					CPUTemperature:    metrics.CPUTemperature,
-					BoardTemperature:  metrics.BoardTemperature,
-					Fan1Speed:         metrics.Fan1Speed,
-					Fan2Speed:         metrics.Fan2Speed,
-					PSU1Power:         metrics.PSU1Power,
-					PSU2Power:         metrics.PSU2Power,
-					PSU1Temperature:   metrics.PSU1Temperature,
-					PSU2Temperature:   metrics.PSU2Temperature,
-					DiskPoolSizeBytes: metrics.DiskPoolSizeBytes,
-					DiskPoolUsedBytes: metrics.DiskPoolUsedBytes,
-				}, nil
-			},
+			hardwareMetrics,
 		)
-		klog.Infof("RDS monitoring enabled (disk slot=%s, snmp=%s)", storageSlot, snmpHost)
+		klog.Infof("RDS disk monitoring enabled (slot=%s, SNMP enabled=%t)", storageSlot, hardwareMetrics != nil)
 	}
 
 	// Initialize informer factory if we have k8s client (needed for attachment reconciler caching)

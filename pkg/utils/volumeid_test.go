@@ -468,7 +468,7 @@ func TestValidateIPAddress(t *testing.T) {
 		},
 		{
 			name:      "valid IPv4 10.x",
-			address:   "10.42.68.1",
+			address:   "198.51.100.20",
 			expectErr: false,
 		},
 		// Valid IPv6
@@ -661,7 +661,7 @@ func TestValidateNVMEAddress(t *testing.T) {
 	}{
 		{
 			name:      "valid NVMe address",
-			address:   "10.42.68.1",
+			address:   "198.51.100.20",
 			port:      4420,
 			expectErr: false,
 		},
@@ -679,7 +679,7 @@ func TestValidateNVMEAddress(t *testing.T) {
 		},
 		{
 			name:      "invalid port",
-			address:   "10.42.68.1",
+			address:   "198.51.100.20",
 			port:      0,
 			expectErr: true,
 		},
@@ -707,7 +707,7 @@ func TestValidateNVMETargetContext(t *testing.T) {
 		{
 			name:            "valid without expected address",
 			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
-			address:         "10.42.68.1",
+			address:         "198.51.100.20",
 			port:            4420,
 			expectedAddress: "",
 			expectErr:       false,
@@ -715,23 +715,23 @@ func TestValidateNVMETargetContext(t *testing.T) {
 		{
 			name:            "valid with matching expected address",
 			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
-			address:         "10.42.68.1",
+			address:         "198.51.100.20",
 			port:            4420,
-			expectedAddress: "10.42.68.1",
+			expectedAddress: "198.51.100.20",
 			expectErr:       false,
 		},
 		{
 			name:            "mismatched expected address",
 			nqn:             "nqn.2026-05.works.whiskey.nvmet-csi:pvc-123",
-			address:         "10.42.68.1",
+			address:         "198.51.100.20",
 			port:            4420,
-			expectedAddress: "10.42.68.2",
+			expectedAddress: "198.51.100.21",
 			expectErr:       true,
 		},
 		{
 			name:            "empty NQN",
 			nqn:             "",
-			address:         "10.42.68.1",
+			address:         "198.51.100.20",
 			port:            4420,
 			expectedAddress: "",
 			expectErr:       true,
@@ -773,7 +773,7 @@ func BenchmarkValidateNQNMalicious(b *testing.B) {
 
 func BenchmarkValidateIPAddress(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = ValidateIPAddress("10.42.68.1")
+		_ = ValidateIPAddress("198.51.100.20")
 	}
 }
 
@@ -785,6 +785,6 @@ func BenchmarkValidatePort(b *testing.B) {
 
 func BenchmarkValidateNVMETargetContext(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = ValidateNVMETargetContext("nqn.2026-05.works.whiskey.nvmet-csi:pvc-123", "10.42.68.1", 4420, "")
+		_ = ValidateNVMETargetContext("nqn.2026-05.works.whiskey.nvmet-csi:pvc-123", "198.51.100.20", 4420, "")
 	}
 }

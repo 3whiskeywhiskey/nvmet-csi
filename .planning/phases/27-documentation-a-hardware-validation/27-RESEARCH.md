@@ -413,7 +413,7 @@ Problems that look simple but have existing solutions:
 **Objective:** Verify end-to-end volume provisioning, mounting, and cleanup
 
 **Prerequisites:**
-- RDS accessible at 10.42.68.1 (management) and 10.42.68.1 (storage)
+- RDS accessible at 198.51.100.20 (management) and 198.51.100.20 (storage)
 - Kubernetes cluster with RDS CSI driver deployed
 - SSH access to worker node for verification
 - At least 10GB free space on RDS
@@ -461,7 +461,7 @@ Problems that look simple but have existing solutions:
 
 3. Verify volume on RDS
    ```bash
-   ssh admin@10.42.241.3 '/disk print detail where slot~"pvc-"'
+   ssh admin@192.0.2.10 '/disk print detail where slot~"pvc-"'
    ```
 
    **Expected:** Volume exists with NVMe/TCP export enabled
@@ -518,7 +518,7 @@ Problems that look simple but have existing solutions:
 kubectl delete pod test-validation-pod
 kubectl delete pvc test-validation-pvc
 # Wait 30s for cleanup
-ssh admin@10.42.241.3 '/disk print detail where slot~"pvc-abc123"'
+ssh admin@192.0.2.10 '/disk print detail where slot~"pvc-abc123"'
 # Expected: No results (volume deleted)
 ```
 
@@ -603,12 +603,12 @@ ssh admin@10.42.241.3 '/disk print detail where slot~"pvc-abc123"'
 - Deployment plan templates - Validation checklist ideas
 
 ### Existing Project Documentation
-- `/Users/whiskey/code/rds-csi/README.md` - Entry point, good structure
-- `/Users/whiskey/code/rds-csi/docs/TESTING.md` - Comprehensive test guide, missing hardware validation
-- `/Users/whiskey/code/rds-csi/docs/architecture.md` - Excellent technical depth
-- `/Users/whiskey/code/rds-csi/docs/ci-cd.md` - Good CI workflow documentation
-- `/Users/whiskey/code/rds-csi/test/integration/hardware_integration_test.go` - Existing hardware test pattern
-- `/Users/whiskey/code/rds-csi/test/e2e/lifecycle_test.go` - E2E test structure to adapt
+- `/path/to/rds-csi/README.md` - Entry point, good structure
+- `/path/to/rds-csi/docs/TESTING.md` - Comprehensive test guide, missing hardware validation
+- `/path/to/rds-csi/docs/architecture.md` - Excellent technical depth
+- `/path/to/rds-csi/docs/ci-cd.md` - Good CI workflow documentation
+- `/path/to/rds-csi/test/integration/hardware_integration_test.go` - Existing hardware test pattern
+- `/path/to/rds-csi/test/e2e/lifecycle_test.go` - E2E test structure to adapt
 
 ## Metadata
 

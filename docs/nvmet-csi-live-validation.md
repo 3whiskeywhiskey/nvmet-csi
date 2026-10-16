@@ -46,7 +46,7 @@ Validated live state:
 - Flux source commit for that image: `0bcfa0d` in `~/code/flux-repo`;
 - controller and node image `pullPolicy` remains `IfNotPresent`;
 - controller is pinned to the r740xd storage host;
-- ZoL target address is `10.42.68.4` on the v68 jumbo-frame storage VLAN;
+- ZoL target address is `198.51.100.23` on the v68 jumbo-frame storage VLAN;
 - no RDS reboot, RouterOS mutation, or Kubernetes node mount surgery was used
   during ZoL validation;
 - no `nvmet.csi.whiskey.works` `VolumeAttachment` objects remained after each

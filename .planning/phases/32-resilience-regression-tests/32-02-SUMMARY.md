@@ -84,7 +84,7 @@ Each task was committed atomically:
 
 ## Decisions Made
 
-- TC-09 uses `iptables -A OUTPUT -d 10.42.68.1 -p tcp --dport 4420 -j DROP` on the worker node (OUTPUT chain intercepts outbound NVMe/TCP from node to RDS)
+- TC-09 uses `iptables -A OUTPUT -d 198.51.100.20 -p tcp --dport 4420 -j DROP` on the worker node (OUTPUT chain intercepts outbound NVMe/TCP from node to RDS)
 - TC-10 includes a DANGER warning documenting that RDS restart affects ALL NVMe/TCP connections on ALL cluster nodes — not just the test pod
 - TC-11 documents restarting the controller pod as a way to trigger immediate reconciliation rather than waiting the full 5-minute interval
 - TESTING.md explicitly separates what mock tests validate (RESIL-01/02/03 logic) from what hardware tests validate (kernel NVMe reconnect, Btrfs persistence, real node crash)

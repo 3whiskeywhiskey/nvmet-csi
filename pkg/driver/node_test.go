@@ -732,7 +732,7 @@ func TestNodeStageVolume_BlockVolume(t *testing.T) {
 		VolumeCapability:  createBlockVolumeCapability(),
 		VolumeContext: map[string]string{
 			"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-			"nvmeAddress": "10.42.68.1",
+			"nvmeAddress": "198.51.100.20",
 			"nvmePort":    "4420",
 		},
 	}
@@ -798,7 +798,7 @@ func TestNodeStageVolume_FilesystemVolume_Unchanged(t *testing.T) {
 		VolumeCapability:  createFilesystemVolumeCapability(),
 		VolumeContext: map[string]string{
 			"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-			"nvmeAddress": "10.42.68.1",
+			"nvmeAddress": "198.51.100.20",
 			"nvmePort":    "4420",
 		},
 	}
@@ -1310,7 +1310,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1329,7 +1329,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1348,7 +1348,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "not-a-port",
 				},
 			},
@@ -1368,7 +1368,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1388,7 +1388,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1407,7 +1407,7 @@ func TestNodeStageVolume_ErrorScenarios(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					// Missing nqn
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1532,7 +1532,7 @@ func TestNodeStageVolume_IsFormattedRetry(t *testing.T) {
 		VolumeCapability:  createFilesystemVolumeCapability(),
 		VolumeContext: map[string]string{
 			"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-			"nvmeAddress": "10.42.68.1",
+			"nvmeAddress": "198.51.100.20",
 			"nvmePort":    "4420",
 		},
 	}
@@ -1723,7 +1723,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:test",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1740,7 +1740,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:test",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1757,7 +1757,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 				VolumeCapability:  nil, // Missing required field
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:test",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},
@@ -1774,7 +1774,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:test",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "not-a-number", // Invalid
 				},
 			},
@@ -1814,7 +1814,7 @@ func TestCSI_NegativeScenarios_Node(t *testing.T) {
 				VolumeCapability:  createFilesystemVolumeCapability(),
 				VolumeContext: map[string]string{
 					"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
-					"nvmeAddress": "10.42.68.1",
+					"nvmeAddress": "198.51.100.20",
 					"nvmePort":    "4420",
 				},
 			},

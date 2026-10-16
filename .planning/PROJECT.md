@@ -161,7 +161,7 @@ A Kubernetes CSI driver for MikroTik ROSE Data Server (RDS) that provides dynami
 - **Compatibility**: Must work with existing volumes and mounts (no breaking changes)
 - **Dependencies**: Uses nvme-cli binary; solutions must work within that constraint
 - **Data Safety**: Postgres consolidation makes snapshot reliability critical — data loss is unacceptable
-- **Hardware Validation**: TC-08 through TC-11 require maintenance window for execution against real RDS at 10.42.68.1
+- **Hardware Validation**: TC-08 through TC-11 require maintenance window for execution against real RDS at 198.51.100.20
 
 ---
 *Last updated: 2026-02-18 after v0.11.0 milestone completion*

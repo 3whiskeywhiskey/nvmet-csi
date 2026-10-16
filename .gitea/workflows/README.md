@@ -70,7 +70,7 @@ Update the registry settings in all workflows:
 ```yaml
 env:
   REGISTRY: git.whiskey.works          # Your Gitea instance
-  IMAGE_NAME: whiskey/rds-csi          # Your repository
+  IMAGE_NAME: whiskey-works/nvmet-csi          # Your repository
 ```
 
 **Options:**
@@ -240,7 +240,7 @@ tea runs list
 tea runs view <run-id>
 
 # Via Gitea UI
-https://git.whiskey.works/whiskey/rds-csi/actions
+https://git.whiskey.works/whiskey-works/nvmet-csi/actions
 ```
 
 ### View logs

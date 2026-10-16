@@ -50,5 +50,7 @@ coverage.html
 *.key
 id_rsa
 id_ed25519
+deploy/kubernetes/rds-private-key
+deploy/kubernetes/rds-host-key.pub
 
 *ed25519*

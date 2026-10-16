@@ -58,29 +58,33 @@ which mkfs.ext4 mkfs.xfs blkid findmnt
 
 ## Quick Start
 
-For a quick deployment using default settings:
+Set your own management address, volume path, and NQN prefix before deploying.
+The example address in the repository is reserved for documentation and will not
+reach a storage server.
 
 ```bash
 # Clone the repository
-git clone https://gitea.whiskey.works/whiskey-works/nvmet-csi.git
+git clone https://github.com/3whiskeywhiskey/nvmet-csi.git
 cd nvmet-csi
 
-# Edit RDS credentials and address
+# Set your RDS address and other site-specific settings in the ConfigMap
 vi deploy/kubernetes/controller.yaml
-# Update the Secret and ConfigMap sections
+
+# Create the credentials from files kept outside this repository
+kubectl create namespace nvmet-csi
+kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+  --from-file=rds-private-key=/path/to/nvmet-csi-key \
+  --from-file=rds-host-key=/path/to/verified-rds-host-key.pub
 
 # Deploy the driver
-kubectl apply -f deploy/kubernetes/rbac.yaml
-kubectl apply -f deploy/kubernetes/csidriver.yaml
-kubectl apply -f deploy/kubernetes/controller.yaml
-kubectl apply -f deploy/kubernetes/node.yaml
+kubectl apply -k deploy/kubernetes/
 
 # Create StorageClass
 kubectl apply -f examples/storageclass.yaml
 
 # Verify deployment
-kubectl get pods -n kube-system -l app=nvmet-csi-controller
-kubectl get pods -n kube-system -l app=nvmet-csi-node
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-controller
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node
 kubectl get csidrivers
 kubectl get storageclass rds-nvme
 ```
@@ -105,8 +109,8 @@ ssh-keygen -t ed25519 -f nvmet-csi-key -C "nvmet-csi"
 **SECURITY:** The CSI driver requires the RDS SSH host key for verification to prevent man-in-the-middle attacks.
 
 ```bash
-# Get the RDS host public key (replace 10.42.241.3 with your RDS IP)
-ssh-keyscan -t ed25519 10.42.241.3 2>/dev/null | cut -d' ' -f2- > rds-host-key.pub
+# Get the RDS host public key (replace 192.0.2.10 with your RDS IP)
+ssh-keyscan -t ed25519 192.0.2.10 2>/dev/null | cut -d' ' -f2- > rds-host-key.pub
 
 # Verify the fingerprint matches your RDS server
 # On your RDS (RouterOS), run:
@@ -115,7 +119,7 @@ ssh-keyscan -t ed25519 10.42.241.3 2>/dev/null | cut -d' ' -f2- > rds-host-key.p
 ssh-keygen -lf rds-host-key.pub
 
 # The fingerprint should match what you see when you first SSH to the RDS:
-ssh 10.42.241.3
+ssh 192.0.2.10
 # It will show: "ED25519 key fingerprint is SHA256:xxxx..."
 ```
 
@@ -123,7 +127,7 @@ ssh 10.42.241.3
 
 ```bash
 # If you've already connected to the RDS, get the key from known_hosts
-ssh-keygen -H -F 10.42.241.3 | grep "^[^#]" | cut -d' ' -f2- > rds-host-key.pub
+ssh-keygen -H -F 192.0.2.10 | grep "^[^#]" | cut -d' ' -f2- > rds-host-key.pub
 ```
 
 **IMPORTANT:** Verify the host key fingerprint before deployment to ensure you have the correct key!
@@ -145,31 +149,24 @@ On your MikroTik RouterOS device:
 
 ### Step 3: Update Kubernetes Manifests
 
-Edit `deploy/kubernetes/controller.yaml`:
+Create the Secret separately; never paste a private key into the tracked
+deployment manifest. Confirm the host key fingerprint through a trusted channel.
+
+```bash
+kubectl -n nvmet-csi create secret generic nvmet-csi-secret \
+  --from-file=rds-private-key=/path/to/nvmet-csi-key \
+  --from-file=rds-host-key=/path/to/verified-rds-host-key.pub
+```
+
+Edit the ConfigMap in `deploy/kubernetes/controller.yaml`:
 
 ```yaml
-# Update Secret with your private key AND host key
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nvmet-csi-secret
-stringData:
-  rds-private-key: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    # Paste your private key here (from nvmet-csi-key)
-    -----END OPENSSH PRIVATE KEY-----
-  rds-host-key: |
-    # Paste your RDS host public key here (from rds-host-key.pub)
-    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIxxx...
-
----
-# Update ConfigMap with your RDS settings
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nvmet-csi-config
 data:
-  rds-address: "10.42.241.3"  # Your RDS IP
+  rds-address: "192.0.2.10"  # Your RDS IP
   rds-port: "22"
   rds-user: "metal-csi"
   rds-volume-base-path: "/storage-pool/metal-csi/volumes"
@@ -184,7 +181,7 @@ data:
 ### Step 4: Deploy RBAC
 
 ```bash
-kubectl apply -f deploy/kubernetes/rbac.yaml
+kubectl apply -k deploy/kubernetes/
 ```
 
 This creates:
@@ -203,7 +200,7 @@ This registers the `nvmet.csi.whiskey.works` driver with Kubernetes.
 ### Step 6: Deploy Controller
 
 ```bash
-kubectl apply -f deploy/kubernetes/controller.yaml
+kubectl apply -k deploy/kubernetes/
 ```
 
 This deploys:
@@ -213,8 +210,8 @@ This deploys:
 Verify:
 
 ```bash
-kubectl get pods -n kube-system -l app=nvmet-csi-controller
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-controller
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c nvmet-csi-plugin
 ```
 
 ### Step 7: Deploy Node DaemonSet
@@ -230,7 +227,7 @@ This deploys:
 Verify:
 
 ```bash
-kubectl get pods -n kube-system -l app=nvmet-csi-node
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node
 kubectl get csinodes  # Should show all nodes with nvmet.csi.whiskey.works driver
 ```
 
@@ -402,12 +399,12 @@ spec:
 
 ```bash
 # Check controller pod
-kubectl get pods -n kube-system -l app=nvmet-csi-controller
-kubectl describe pod -n kube-system -l app=nvmet-csi-controller
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-controller
+kubectl describe pod -n nvmet-csi -l app=nvmet-csi-controller
 
 # Check node pods
-kubectl get pods -n kube-system -l app=nvmet-csi-node -o wide
-kubectl describe pod -n kube-system -l app=nvmet-csi-node
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node -o wide
+kubectl describe pod -n nvmet-csi -l app=nvmet-csi-node
 
 # Check CSI driver registration
 kubectl get csidrivers
@@ -439,13 +436,13 @@ kubectl describe pv <pv-name>
 
 ```bash
 # Controller logs
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=100 -f
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c nvmet-csi-plugin --tail=100 -f
 
 # Node logs
-kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=100 -f
+kubectl logs -n nvmet-csi -l app=nvmet-csi-node -c nvmet-csi-plugin --tail=100 -f
 
 # Provisioner logs
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c csi-provisioner --tail=100 -f
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c csi-provisioner --tail=100 -f
 ```
 
 ## Troubleshooting
@@ -456,7 +453,7 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c csi-provisioner --tai
 
 **Check**:
 ```bash
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c nvmet-csi-plugin
 ```
 
 **Common Causes**:
@@ -474,7 +471,7 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi-plugin
 **Check**:
 ```bash
 kubectl describe pvc <pvc-name>
-kubectl logs -n kube-system -l app=nvmet-csi-controller -c csi-provisioner
+kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c csi-provisioner
 ```
 
 **Common Causes**:
@@ -492,7 +489,7 @@ kubectl logs -n kube-system -l app=nvmet-csi-controller -c csi-provisioner
 **Check**:
 ```bash
 kubectl describe pod <pod-name>
-kubectl logs -n kube-system -l app=nvmet-csi-node -c nvmet-csi-plugin
+kubectl logs -n nvmet-csi -l app=nvmet-csi-node -c nvmet-csi-plugin
 ```
 
 **Common Causes**:
@@ -526,11 +523,11 @@ Enable debug logging:
 
 ```bash
 # Edit controller deployment
-kubectl edit deployment -n kube-system nvmet-csi-controller
+kubectl edit deployment -n nvmet-csi nvmet-csi-controller
 # Change --v=5 to --v=9
 
 # Edit node daemonset
-kubectl edit daemonset -n kube-system nvmet-csi-node
+kubectl edit daemonset -n nvmet-csi nvmet-csi-node
 # Change --v=5 to --v=9
 ```
 
@@ -554,7 +551,7 @@ kubectl get pv
 kubectl delete -f deploy/kubernetes/node.yaml
 
 # Wait for all node pods to terminate
-kubectl get pods -n kube-system -l app=nvmet-csi-node -w
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node -w
 
 # Delete controller
 kubectl delete -f deploy/kubernetes/controller.yaml
@@ -593,4 +590,4 @@ SSH to RDS and remove orphaned volumes:
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://gitea.whiskey.works/whiskey-works/nvmet-csi/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/3whiskeywhiskey/nvmet-csi/issues).

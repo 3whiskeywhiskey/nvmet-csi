@@ -38,7 +38,7 @@ func TestMockClient_GetHardwareHealth(t *testing.T) {
 	client := NewMockClient()
 
 	// Test default response
-	health, err := client.GetHardwareHealth("10.42.67.1", "public")
+	health, err := client.GetHardwareHealth("203.0.113.1", "public")
 	if err != nil {
 		t.Fatalf("GetHardwareHealth() error = %v", err)
 	}
@@ -58,7 +58,7 @@ func TestMockClient_GetHardwareHealth(t *testing.T) {
 	}
 	client.SetHardwareHealth(custom)
 
-	health, err = client.GetHardwareHealth("10.42.67.1", "public")
+	health, err = client.GetHardwareHealth("203.0.113.1", "public")
 	if err != nil {
 		t.Fatalf("GetHardwareHealth() error = %v", err)
 	}
@@ -71,7 +71,7 @@ func TestMockClient_GetHardwareHealth(t *testing.T) {
 
 	// Test error injection
 	client.SetError(fmt.Errorf("SNMP timeout"))
-	_, err = client.GetHardwareHealth("10.42.67.1", "public")
+	_, err = client.GetHardwareHealth("203.0.113.1", "public")
 	if err == nil || err.Error() != "SNMP timeout" {
 		t.Errorf("Expected SNMP timeout error, got %v", err)
 	}

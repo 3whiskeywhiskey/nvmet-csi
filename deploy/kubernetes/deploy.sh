@@ -37,12 +37,18 @@ if [ ! -f "deploy/kubernetes/controller.yaml" ]; then
     exit 1
 fi
 
+# Require an external credential Secret before deploying
+if ! kubectl -n nvmet-csi get secret nvmet-csi-secret &> /dev/null; then
+    echo -e "${RED}Error: nvmet-csi-secret is missing in namespace nvmet-csi${NC}"
+    echo "Create it from your private key and verified RDS host key as documented in README.md"
+    exit 1
+fi
+
 # Warn about configuration
 echo ""
 echo -e "${YELLOW}⚠ Important:${NC} Make sure you have updated the following in controller.yaml:"
-echo "  1. RDS SSH private key in the Secret"
-echo "  2. RDS address in the ConfigMap"
-echo "  3. RDS user and volume base path"
+echo "  1. RDS address in the ConfigMap"
+echo "  2. RDS user and volume base path"
 echo ""
 read -p "Have you updated the configuration? (yes/no): " confirm
 
@@ -56,38 +62,22 @@ echo ""
 echo -e "${GREEN}Deploying nvmet-csi driver components...${NC}"
 echo ""
 
-echo "1. Creating RBAC resources..."
-kubectl apply -f deploy/kubernetes/rbac.yaml
-echo -e "${GREEN}✓${NC} RBAC deployed"
+kubectl apply -k deploy/kubernetes/
+echo -e "${GREEN}✓${NC} Driver resources deployed"
 
 echo ""
-echo "2. Registering CSI Driver..."
-kubectl apply -f deploy/kubernetes/csidriver.yaml
-echo -e "${GREEN}✓${NC} CSI Driver registered"
-
-echo ""
-echo "3. Deploying Controller..."
-kubectl apply -f deploy/kubernetes/controller.yaml
-echo -e "${GREEN}✓${NC} Controller deployed"
-
-echo ""
-echo "4. Deploying Node DaemonSet..."
-kubectl apply -f deploy/kubernetes/node.yaml
-echo -e "${GREEN}✓${NC} Node DaemonSet deployed"
-
-echo ""
-echo "5. Creating StorageClass..."
+echo "Creating StorageClass..."
 kubectl apply -f examples/storageclass.yaml
 echo -e "${GREEN}✓${NC} StorageClass created"
 
 # Wait for controller to be ready
 echo ""
 echo "Waiting for controller to be ready..."
-kubectl wait --for=condition=Ready pod -l app=nvmet-csi-controller -n kube-system --timeout=60s || true
+kubectl wait --for=condition=Ready pod -l app=nvmet-csi-controller -n nvmet-csi --timeout=60s || true
 
 # Wait for at least one node pod to be ready
 echo "Waiting for node pods to be ready..."
-kubectl wait --for=condition=Ready pod -l app=nvmet-csi-node -n kube-system --timeout=60s || true
+kubectl wait --for=condition=Ready pod -l app=nvmet-csi-node -n nvmet-csi --timeout=60s || true
 
 # Show deployment status
 echo ""
@@ -97,11 +87,11 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 
 echo "Controller Pods:"
-kubectl get pods -n kube-system -l app=nvmet-csi-controller
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-controller
 echo ""
 
 echo "Node Pods:"
-kubectl get pods -n kube-system -l app=nvmet-csi-node
+kubectl get pods -n nvmet-csi -l app=nvmet-csi-node
 echo ""
 
 echo "CSI Driver:"
@@ -123,6 +113,6 @@ echo ""
 echo "Next steps:"
 echo "  1. Create a PVC: kubectl apply -f examples/pvc.yaml"
 echo "  2. Create a Pod: kubectl apply -f examples/pod.yaml"
-echo "  3. Check logs: kubectl logs -n kube-system -l app=nvmet-csi-controller -c nvmet-csi"
+echo "  3. Check logs: kubectl logs -n nvmet-csi -l app=nvmet-csi-controller -c nvmet-csi-plugin"
 echo ""
 echo "For detailed documentation, see: docs/kubernetes-setup.md"

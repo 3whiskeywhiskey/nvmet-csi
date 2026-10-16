@@ -455,10 +455,10 @@ func (am *AttachmentManager) clearAttachment(ctx context.Context, volumeID strin
 - [k8s.io/client-go/util/retry documentation](https://pkg.go.dev/k8s.io/client-go/util/retry) - Official retry patterns
 - [Go sync package documentation](https://pkg.go.dev/sync) - RWMutex and Mutex primitives
 - Existing codebase patterns:
-  - `/Users/whiskey/code/rds-csi/pkg/nvme/nvme.go` - RWMutex for Metrics struct
-  - `/Users/whiskey/code/rds-csi/pkg/rds/pool.go` - Multiple mutex patterns for connection pooling
-  - `/Users/whiskey/code/rds-csi/pkg/reconciler/orphan_reconciler.go` - PV List operation pattern
-  - `/Users/whiskey/code/rds-csi/pkg/driver/events.go` - PV Update/Patch operations
+  - `/path/to/rds-csi/pkg/nvme/nvme.go` - RWMutex for Metrics struct
+  - `/path/to/rds-csi/pkg/rds/pool.go` - Multiple mutex patterns for connection pooling
+  - `/path/to/rds-csi/pkg/reconciler/orphan_reconciler.go` - PV List operation pattern
+  - `/path/to/rds-csi/pkg/driver/events.go` - PV Update/Patch operations
 
 ### Secondary (MEDIUM confidence)
 - [Building Resilient Kubernetes Controllers: A Practical Guide to Retry Mechanisms](https://medium.com/@vamshitejanizam/building-resilient-kubernetes-controllers-a-practical-guide-to-retry-mechanisms-0d689160fa51) - Verified retry patterns

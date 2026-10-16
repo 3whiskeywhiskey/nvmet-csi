@@ -81,7 +81,7 @@ func (m *mockRDSClient) Close() error {
 }
 
 func (m *mockRDSClient) GetAddress() string {
-	return "10.42.241.3"
+	return "192.0.2.10"
 }
 
 func (m *mockRDSClient) IsConnected() bool {

@@ -5,9 +5,9 @@ status: passed
 score: 12/12 must-haves verified
 gaps: []
 human_verification:
-  - test: "Execute TC-08 manually against real RDS hardware at 10.42.241.3"
+  - test: "Execute TC-08 manually against real RDS hardware at 192.0.2.10"
     expected: "VolumeSnapshot lifecycle (create, restore, delete) succeeds; /disk print detail shows file-backed disk entry with no nvme-tcp-export fields; backing .img file is removed on snapshot delete"
-    why_human: "Real RDS hardware validation cannot be automated — requires physical infrastructure at 10.42.241.3 with credentials and a running Kubernetes cluster"
+    why_human: "Real RDS hardware validation cannot be automated — requires physical infrastructure at 192.0.2.10 with credentials and a running Kubernetes cluster"
 ---
 
 # Phase 30: Snapshot Validation Verification Report
@@ -74,7 +74,7 @@ Scanned all 6 modified files for TODO/FIXME/placeholder/stub patterns. None dete
 
 #### 1. TC-08 Manual Hardware Execution Against Real RDS
 
-**Test:** Execute TC-08 steps from `docs/HARDWARE_VALIDATION.md` against real RDS hardware at 10.42.241.3:
+**Test:** Execute TC-08 steps from `docs/HARDWARE_VALIDATION.md` against real RDS hardware at 192.0.2.10:
 1. Create a PVC and a VolumeSnapshot via kubectl
 2. SSH to RDS and run `/disk print detail where slot~"snap-"` — confirm snapshot disk entry appears with no NVMe export fields
 3. Restore snapshot to new PVC; confirm restored volume is accessible from a pod
@@ -82,7 +82,7 @@ Scanned all 6 modified files for TODO/FIXME/placeholder/stub patterns. None dete
 
 **Expected:** All 4 steps succeed; snapshot appears as `type="file"` with no `nvme-tcp-export` field on RDS; restored volume is writable; snapshot disk and .img file are both gone after delete
 
-**Why human:** Real RDS hardware at 10.42.241.3 is required. Cannot be automated without access to the physical MikroTik RouterOS appliance and a running Kubernetes cluster with KubeVirt. TC-08 documentation explicitly marks this as a manual execution step.
+**Why human:** Real RDS hardware at 192.0.2.10 is required. Cannot be automated without access to the physical MikroTik RouterOS appliance and a running Kubernetes cluster with KubeVirt. TC-08 documentation explicitly marks this as a manual execution step.
 
 ### Gaps Summary
 

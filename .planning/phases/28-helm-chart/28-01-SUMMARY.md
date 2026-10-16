@@ -199,7 +199,7 @@ $ grep -c "define \"rds-csi" deploy/helm/rds-csi-driver/templates/_helpers.tpl
 Values structure verification:
 ```bash
 $ grep "managementIP:" deploy/helm/rds-csi-driver/values.yaml
-  managementIP: "10.42.241.3"
+  managementIP: "192.0.2.10"
 
 $ grep -A2 "rds-private-key" deploy/helm/rds-csi-driver/values.yaml
   #   - rds-private-key: SSH private key for RouterOS authentication
@@ -210,7 +210,7 @@ $ grep -A2 "rds-private-key" deploy/helm/rds-csi-driver/values.yaml
 ## Decisions Made
 
 ### Flat Values Structure
-Used flat structure at top level (rds.*, controller.*, node.*) instead of deeply nested hierarchy. This makes CLI overrides simpler: `--set rds.managementIP=10.42.241.3` vs `--set config.rds.connection.managementIP=10.42.241.3`.
+Used flat structure at top level (rds.*, controller.*, node.*) instead of deeply nested hierarchy. This makes CLI overrides simpler: `--set rds.managementIP=192.0.2.10` vs `--set config.rds.connection.managementIP=192.0.2.10`.
 
 ### Secret Key Documentation
 Documented Secret key names in values.yaml comments (rds-private-key, rds-host-key) to match deployed manifest convention in deploy/kubernetes/controller.yaml. This guides users on Secret creation and avoids confusion with main.go defaults.

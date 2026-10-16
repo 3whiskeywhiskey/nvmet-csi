@@ -234,7 +234,7 @@ func TestBuildEnsureVolumePlanHandlesPartialOwnedExports(t *testing.T) {
 			mut: func(state *VolumeState) {
 				state.NamespaceReady = true
 				state.ExportDevice = spec.DevicePath
-				state.PortAddress = "10.42.0.10"
+				state.PortAddress = "203.0.113.10"
 				state.PortServiceID = "4420"
 				state.PortTransport = "tcp"
 				state.PortAddressFam = "ipv4"
@@ -352,7 +352,7 @@ func TestBuildEnsureVolumePlanConflictsOnWrongPortAddress(t *testing.T) {
 		Port:           spec.Port,
 		ExportDevice:   spec.DevicePath,
 		PortLinkTarget: defaultConfigFSRoot + "/subsystems/" + spec.NQN,
-		PortAddress:    "10.42.0.99",
+		PortAddress:    "203.0.113.99",
 	}
 
 	plan, err := storageBackend.BuildEnsureVolumePlan(context.Background(), desired)
@@ -395,7 +395,7 @@ func TestCommandHostPlansReportCommands(t *testing.T) {
 			"zfs get -H -p -o property,value " + zfsObservedProperties + " tank/nvmet/pvc-test-volume": errors.New("cannot open 'tank/nvmet/pvc-test-volume': dataset does not exist"),
 		},
 	}
-	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
+	commandHost, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -482,7 +482,7 @@ func TestCommandHostPlansReportRepairResizeAndDeleteCommands(t *testing.T) {
 		ExportDevice:    state.DevicePath,
 		PortEntryExists: true,
 		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + state.NQN,
-		PortAddress:     "10.42.0.10",
+		PortAddress:     "203.0.113.10",
 		PortServiceID:   "4420",
 		PortTransport:   "tcp",
 		PortAddressFam:  "ipv4",
@@ -685,7 +685,7 @@ func TestBuildDeleteVolumePlanAcceptsRelativeConfigFSPortLink(t *testing.T) {
 
 func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	recorder := &recordingExecutor{outputs: map[string]string{}}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -704,7 +704,7 @@ func TestCommandHostCreateVolumeCommands(t *testing.T) {
 	}
 
 	got := commandStrings(recorder.commands)
-	want := expectedPortCommands("/config/nvmet", 4420, "10.42.0.10")
+	want := expectedPortCommands("/config/nvmet", 4420, "203.0.113.10")
 	want = append(want,
 		"zfs create -V 10737418240 -o volmode=dev -o org.nvmet-csi:volume-id=pvc-test-volume -o org.nvmet-csi:nqn=nqn.2014-08.org.nvmexpress:uuid:pvc-test-volume -o org.nvmet-csi:port=4420 tank/nvmet/pvc-test-volume",
 		waitForPathCommand("/dev/zvol/tank/nvmet/pvc-test-volume", "zvol device").String(),
@@ -737,7 +737,7 @@ func TestCommandHostCreateVolumeRollsBackOwnedPartialState(t *testing.T) {
 		Port:       4420,
 	}
 	recorder := &recordingExecutor{outputs: map[string]string{}}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -768,7 +768,7 @@ func TestCommandHostCreateVolumeRollsBackOwnedPartialState(t *testing.T) {
 }
 
 func TestCommandHostDryRunCommandPlanning(t *testing.T) {
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}, &recordingExecutor{})
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}, &recordingExecutor{})
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -811,7 +811,7 @@ func TestCommandHostDryRunCommandPlanning(t *testing.T) {
 }
 
 func TestCommandHostValidateDeleteStateRequiresExpectedOwnerAndPaths(t *testing.T) {
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -869,7 +869,7 @@ func TestCommandHostValidateDeleteStateRequiresExpectedOwnerAndPaths(t *testing.
 }
 
 func TestCommandHostValidateDeleteStateAcceptsRelativeConfigFSPortLink(t *testing.T) {
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -894,7 +894,7 @@ func TestCommandHostGetVolumeMapsNotFound(t *testing.T) {
 			"zfs get -H -p -o property,value " + zfsObservedProperties + " tank/nvmet/pvc-missing": errors.New("cannot open 'tank/nvmet/pvc-missing': dataset does not exist"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -980,7 +980,7 @@ func TestNewCommandBackendValidatesExecutor(t *testing.T) {
 	}
 
 	_, err = NewCommandBackend(CommandBackendOptions{
-		Config:   Config{Pool: "tank/nvmet", Address: "10.42.0.10"},
+		Config:   Config{Pool: "tank/nvmet", Address: "203.0.113.10"},
 		Executor: backend.ExecutorHostNamespace,
 	})
 	if err != nil {
@@ -992,13 +992,13 @@ func TestCommandHostPreflightAllowsAbsentPort(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
-			"ip -j addr show":                `[{"ifname":"v68","addr_info":[{"local":"10.42.0.10"}]}]`,
+			"ip -j addr show":                `[{"ifname":"v68","addr_info":[{"local":"203.0.113.10"}]}]`,
 		},
 		errs: map[string]error{
 			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -1016,14 +1016,14 @@ func TestCommandHostPreflightFailsMismatchedPortAttribute(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet":                       "tank/nvmet\n",
-			"ip -j addr show":                                      `[{"ifname":"v68","addr_info":[{"local":"10.42.0.10"}]}]`,
+			"ip -j addr show":                                      `[{"ifname":"v68","addr_info":[{"local":"203.0.113.10"}]}]`,
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_trtype":  "tcp\n",
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_adrfam":  "ipv4\n",
-			"cat /sys/kernel/config/nvmet/ports/4420/addr_traddr":  "10.42.0.99\n",
+			"cat /sys/kernel/config/nvmet/ports/4420/addr_traddr":  "203.0.113.99\n",
 			"cat /sys/kernel/config/nvmet/ports/4420/addr_trsvcid": "4420\n",
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -1036,7 +1036,7 @@ func TestCommandHostPreflightFailsMismatchedPortAttribute(t *testing.T) {
 	for _, check := range checks {
 		if check.Name == "nvmet port addr_traddr" {
 			found = true
-			if check.OK || !strings.Contains(check.Detail, "10.42.0.99") {
+			if check.OK || !strings.Contains(check.Detail, "203.0.113.99") {
 				t.Fatalf("unexpected addr_traddr check: %+v", check)
 			}
 		}
@@ -1050,13 +1050,13 @@ func TestCommandHostPreflightFailsMissingTargetAddress(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
-			"ip -j addr show":                `[{"ifname":"v67","addr_info":[{"local":"10.42.67.4"}]}]`,
+			"ip -j addr show":                `[{"ifname":"v67","addr_info":[{"local":"203.0.113.4"}]}]`,
 		},
 		errs: map[string]error{
 			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.68.4"}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "198.51.100.23"}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -1069,7 +1069,7 @@ func TestCommandHostPreflightFailsMissingTargetAddress(t *testing.T) {
 	for _, check := range checks {
 		if check.Name == "target address" {
 			found = true
-			if check.OK || !strings.Contains(check.Detail, "10.42.68.4 is not assigned") {
+			if check.OK || !strings.Contains(check.Detail, "198.51.100.23 is not assigned") {
 				t.Fatalf("unexpected target address check: %+v", check)
 			}
 		}
@@ -1083,13 +1083,13 @@ func TestCommandHostPreflightFailsTargetAddressMTUTooSmall(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
-			"ip -j addr show":                `[{"ifname":"v68","mtu":1500,"addr_info":[{"local":"10.42.68.4"}]}]`,
+			"ip -j addr show":                `[{"ifname":"v68","mtu":1500,"addr_info":[{"local":"198.51.100.23"}]}]`,
 		},
 		errs: map[string]error{
 			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.68.4", MinMTU: 9000}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "198.51.100.23", MinMTU: 9000}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -1116,13 +1116,13 @@ func TestCommandHostPreflightAcceptsTargetAddressMTU(t *testing.T) {
 	recorder := &recordingExecutor{
 		outputs: map[string]string{
 			"zfs list -H -o name tank/nvmet": "tank/nvmet\n",
-			"ip -j addr show":                `[{"ifname":"v68","mtu":9000,"addr_info":[{"local":"10.42.68.4"}]}]`,
+			"ip -j addr show":                `[{"ifname":"v68","mtu":9000,"addr_info":[{"local":"198.51.100.23"}]}]`,
 		},
 		errs: map[string]error{
 			"test -d /sys/kernel/config/nvmet/ports/4420": errors.New("missing"),
 		},
 	}
-	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.68.4", MinMTU: 9000}, recorder)
+	host, err := NewCommandHost(Config{Pool: "tank/nvmet", Address: "198.51.100.23", MinMTU: 9000}, recorder)
 	if err != nil {
 		t.Fatalf("NewCommandHost() error = %v", err)
 	}
@@ -1159,7 +1159,7 @@ func TestGetSnapshotReturnsTypedNotFound(t *testing.T) {
 
 func newTestBackend(t *testing.T, host Host) *Backend {
 	t.Helper()
-	storageBackend, err := New(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, host)
+	storageBackend, err := New(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, host)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -1219,7 +1219,7 @@ func readyVolumeState(spec VolumeSpec) VolumeState {
 		ExportDevice:    spec.DevicePath,
 		PortEntryExists: true,
 		PortLinkTarget:  defaultConfigFSRoot + "/subsystems/" + spec.NQN,
-		PortAddress:     "10.42.0.10",
+		PortAddress:     "203.0.113.10",
 		PortServiceID:   "4420",
 		PortTransport:   "tcp",
 		PortAddressFam:  "ipv4",
@@ -1257,7 +1257,7 @@ func (h *partialCreateHost) CreateVolume(_ context.Context, spec VolumeSpec) err
 		SizeBytes:      spec.SizeBytes,
 		NQN:            spec.NQN,
 		Port:           spec.Port,
-		PortAddress:    "10.42.0.10",
+		PortAddress:    "203.0.113.10",
 		PortServiceID:  "4420",
 		PortTransport:  "tcp",
 		PortAddressFam: "ipv4",
@@ -1283,7 +1283,7 @@ func (h *memoryHost) RepairVolume(_ context.Context, spec VolumeSpec) error {
 	volume.ExportDevice = spec.DevicePath
 	volume.PortEntryExists = true
 	volume.PortLinkTarget = defaultConfigFSRoot + "/subsystems/" + spec.NQN
-	volume.PortAddress = "10.42.0.10"
+	volume.PortAddress = "203.0.113.10"
 	volume.PortServiceID = "4420"
 	volume.PortTransport = "tcp"
 	volume.PortAddressFam = "ipv4"
@@ -1312,22 +1312,22 @@ func (h *memoryHost) GetCapacity(context.Context) (*backend.Capacity, error) {
 }
 
 func (h *planningMemoryHost) CreateVolumeCommands(spec VolumeSpec) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	return commandHost.CreateVolumeCommands(spec)
 }
 
 func (h *planningMemoryHost) RepairVolumeCommands(spec VolumeSpec) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	return commandHost.RepairVolumeCommands(spec)
 }
 
 func (h *planningMemoryHost) DeleteVolumeCommands(state VolumeState) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	return commandHost.DeleteVolumeCommands(state)
 }
 
 func (h *planningMemoryHost) ResizeVolumeCommands(volumeID string, sizeBytes int64) []Command {
-	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "10.42.0.10"}, &recordingExecutor{})
+	commandHost, _ := NewCommandHost(Config{Pool: "tank/nvmet", Address: "203.0.113.10"}, &recordingExecutor{})
 	return commandHost.ResizeVolumeCommands(volumeID, sizeBytes)
 }
 
@@ -1439,7 +1439,7 @@ func TestEnableNamespaceCommand_Idempotent(t *testing.T) {
 }
 
 func TestProbeExportStateCommand_ParseExportProbe_RoundTrip(t *testing.T) {
-	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	cfg := Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}
 	_, err := NewCommandHost(cfg, &recordingExecutor{})
 	if err != nil {
 		t.Fatalf("NewCommandHost error: %v", err)
@@ -1448,7 +1448,7 @@ func TestProbeExportStateCommand_ParseExportProbe_RoundTrip(t *testing.T) {
 	// (a) fully exported state a real script would emit
 	full := "ns_enable=1\n" +
 		"ns_device_path=/dev/zvol/tank/nvmet/vol1\n" +
-		"addr_traddr=10.42.0.10\n" +
+		"addr_traddr=203.0.113.10\n" +
 		"addr_trsvcid=4420\n" +
 		"addr_trtype=tcp\n" +
 		"addr_adrfam=ipv4\n" +
@@ -1486,7 +1486,7 @@ func TestProbeExportStateCommand_ParseExportProbe_RoundTrip(t *testing.T) {
 }
 
 func TestCommandHostGetVolume_AssemblesVolumeStateFromBatched(t *testing.T) {
-	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	cfg := Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}
 	cfg = cfg.withDefaults()
 	rec := &recordingExecutor{}
 	host, err := NewCommandHost(cfg, rec)
@@ -1510,7 +1510,7 @@ func TestCommandHostGetVolume_AssemblesVolumeStateFromBatched(t *testing.T) {
 	// probe output for matching fully exported
 	probeOutMatch := "ns_enable=1\n" +
 		"ns_device_path=" + devPath + "\n" +
-		"addr_traddr=10.42.0.10\n" +
+		"addr_traddr=203.0.113.10\n" +
 		"addr_trsvcid=4420\n" +
 		"addr_trtype=tcp\n" +
 		"addr_adrfam=ipv4\n" +
@@ -1561,7 +1561,7 @@ func TestCommandHostGetVolume_AssemblesVolumeStateFromBatched(t *testing.T) {
 }
 
 func TestCommandHostListVolumes_ParsesMultiDatasetAndIssuesProbes(t *testing.T) {
-	cfg := Config{Pool: "tank/nvmet", Address: "10.42.0.10", ConfigFSRoot: "/config/nvmet"}
+	cfg := Config{Pool: "tank/nvmet", Address: "203.0.113.10", ConfigFSRoot: "/config/nvmet"}
 	rec := &recordingExecutor{}
 	host, err := NewCommandHost(cfg, rec)
 	if err != nil {
@@ -1586,7 +1586,7 @@ func TestCommandHostListVolumes_ParsesMultiDatasetAndIssuesProbes(t *testing.T) 
 	probe2 := host.probeExportStateCommand("nqn.test:vol2", 4421)
 
 	// minimal matching probes so no err
-	probeOut := "ns_enable=1\nns_device_path=/dev/zvol/tank/nvmet/volX\naddr_traddr=10.42.0.10\naddr_trsvcid=4420\naddr_trtype=tcp\naddr_adrfam=ipv4\nport_entry=1\nport_link=/config/nvmet/subsystems/nqn.test:volX\n"
+	probeOut := "ns_enable=1\nns_device_path=/dev/zvol/tank/nvmet/volX\naddr_traddr=203.0.113.10\naddr_trsvcid=4420\naddr_trtype=tcp\naddr_adrfam=ipv4\nport_entry=1\nport_link=/config/nvmet/subsystems/nqn.test:volX\n"
 	// adjust per vol not critical for count/parse
 	rec.outputs = map[string]string{
 		zfsListKey:      zfsListOut,

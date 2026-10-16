@@ -5,7 +5,7 @@
 ## Directory Layout
 
 ```
-/Users/whiskey/code/rds-csi/
+/path/to/rds-csi/
 ├── cmd/                           # Entry points
 │   └── rds-csi-plugin/
 │       └── main.go               # Single binary for both controller and node modes

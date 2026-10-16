@@ -61,7 +61,7 @@ Created HARDWARE_VALIDATION.md with 7 executable test cases (1565 lines) coverin
 ✅ Performance baselines with expected timing for common operations
 ✅ Troubleshooting decision tree for common failure modes
 ✅ Added documentation link to README.md
-✅ All commands reference real cluster IPs (10.42.241.3, 10.42.68.1)
+✅ All commands reference real cluster IPs (192.0.2.10, 198.51.100.20)
 ✅ Cleanup procedures are idempotent (work even if tests fail mid-way)
 
 ## What Was Built
@@ -220,8 +220,8 @@ Created HARDWARE_VALIDATION.md with 7 executable test cases (1565 lines) coverin
 ### Decision 4: Production IP Addresses
 
 **Choice:** Use actual production IPs in examples:
-- Management: 10.42.241.3 (SSH port 22)
-- Storage: 10.42.68.1 (NVMe/TCP port 4420)
+- Management: 192.0.2.10 (SSH port 22)
+- Storage: 198.51.100.20 (NVMe/TCP port 4420)
 
 **Rationale:**
 - User's production cluster has these specific IPs
@@ -373,7 +373,7 @@ None - plan executed exactly as written.
 - ✅ README.md link: Added to Documentation section as first entry
 
 **Manual verification:**
-- Commands reference production IPs (10.42.241.3, 10.42.68.1)
+- Commands reference production IPs (192.0.2.10, 198.51.100.20)
 - Each test case has objective, prerequisites, steps, cleanup, success criteria
 - Troubleshooting decision tree covers common failure modes
 - Performance baselines section with timing expectations
@@ -432,7 +432,7 @@ None - plan executed exactly as written.
 **Blockers:** None
 
 **Dependencies resolved:**
-- Production cluster IPs documented (10.42.241.3, 10.42.68.1)
+- Production cluster IPs documented (192.0.2.10, 198.51.100.20)
 - Expected timings captured from v0.6-v0.9 production experience
 - NVMe/TCP validation procedures documented from real hardware
 
