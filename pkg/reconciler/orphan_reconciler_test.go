@@ -559,6 +559,19 @@ func TestOrphanReconciler_FileCleanupGuardrails(t *testing.T) {
 			wantInventoryOrphan: true,
 		},
 		{
+			name: "old CSI image with RouterOS file type planned and deleted",
+			file: rds.FileInfo{
+				Name:      "pvc-routeros-type.img",
+				Path:      "/storage-pool/metal-csi/pvc-routeros-type.img",
+				SizeBytes: 5 << 30,
+				Type:      ".img",
+				CreatedAt: oldEnough,
+			},
+			wantInventoryOrphan: true,
+			wantPlannedMutation: true,
+			wantDeleted:         true,
+		},
+		{
 			name: "old CSI image planned and deleted",
 			file: rds.FileInfo{
 				Name:      "pvc-old.img",

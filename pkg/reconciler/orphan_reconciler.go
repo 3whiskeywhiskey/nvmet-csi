@@ -430,7 +430,9 @@ func (r *OrphanReconciler) findOrphanedFiles(rdsVolumes []rds.VolumeInfo, refere
 	// Filter for .img files only
 	orphans := []OrphanedFile{}
 	for _, file := range files {
-		if file.Type != "" && file.Type != "file" {
+		// RouterOS /file print reports image files as "type=.img file", which
+		// the parser records as ".img"; only directories need skipping here.
+		if file.Type == "directory" {
 			continue
 		}
 
