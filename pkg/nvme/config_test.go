@@ -49,7 +49,7 @@ func TestBuildConnectArgs(t *testing.T) {
 				"-l", "-1", // ctrl_loss_tmo=-1
 				"-c", "5", // reconnect_delay=5
 			},
-			unexpectedArgs: []string{"-k"}, // KeepAliveTmo=0 means don't set
+			unexpectedArgs: []string{"-k", "-i", "-Q"}, // zero values mean don't set
 		},
 		{
 			name: "with host NQN",
@@ -147,6 +147,23 @@ func TestBuildConnectArgs(t *testing.T) {
 			expectedArgs:   []string{"connect", "-l", "-1"},
 			unexpectedArgs: []string{"-c"}, // ReconnectDelay=0 means don't set
 		},
+		{
+			name: "queue limits NrIOQueues=8 QueueSize=32",
+			target: Target{
+				Transport:     "tcp",
+				NQN:           "nqn.2000-02.com.mikrotik:pvc-test-123",
+				TargetAddress: "10.0.0.1",
+				TargetPort:    4420,
+			},
+			config: ConnectionConfig{
+				CtrlLossTmo:    -1,
+				ReconnectDelay: 5,
+				NrIOQueues:     8,
+				QueueSize:      32,
+			},
+			expectedArgs:   []string{"-i", "8", "-Q", "32"},
+			unexpectedArgs: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -196,5 +213,30 @@ func TestBuildConnectArgs_FirstArg(t *testing.T) {
 	}
 	if args[0] != "connect" {
 		t.Errorf("Expected first arg to be 'connect', got %q", args[0])
+	}
+}
+
+func TestValidateQueueLimits(t *testing.T) {
+	tests := []struct {
+		name       string
+		nrIOQueues int
+		queueSize  int
+		wantErr    bool
+	}{
+		{"kernel defaults", 0, 0, false},
+		{"limited", 8, 32, false},
+		{"min queue size", 1, MinQueueSize, false},
+		{"max queue size", 1, MaxQueueSize, false},
+		{"negative queues", -1, 0, true},
+		{"queue size too small", 0, MinQueueSize - 1, true},
+		{"queue size too large", 0, MaxQueueSize + 1, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateQueueLimits(tt.nrIOQueues, tt.queueSize)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateQueueLimits(%d, %d) error = %v, wantErr %v", tt.nrIOQueues, tt.queueSize, err, tt.wantErr)
+			}
+		})
 	}
 }

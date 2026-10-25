@@ -583,6 +583,7 @@ type mockNVMEConnector struct {
 	connectErr       error
 	disconnectErr    error
 	getDevicePathErr error
+	lastConfig       nvme.ConnectionConfig
 }
 
 func (m *mockNVMEConnector) Connect(target nvme.Target) (string, error) {
@@ -611,6 +612,7 @@ func (m *mockNVMEConnector) ConnectWithConfig(ctx context.Context, target nvme.T
 
 func (m *mockNVMEConnector) ConnectWithRetry(ctx context.Context, target nvme.Target, config nvme.ConnectionConfig) (string, error) {
 	m.connectCalled = true
+	m.lastConfig = config
 	if m.connectErr != nil {
 		return "", m.connectErr
 	}
@@ -757,6 +759,60 @@ func TestNodeStageVolume_BlockVolume(t *testing.T) {
 	// Verify: Mount was NOT called for block volumes
 	if mounter.mountCalled {
 		t.Error("Mount should not be called for block volumes")
+	}
+}
+
+// TestNodeStageVolume_QueueLimits tests that node-level NVMe queue limits reach the connect call
+func TestNodeStageVolume_QueueLimits(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "node-test-queue-limits-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	connector := &mockNVMEConnector{
+		devicePath: "/dev/nvme0n1",
+	}
+
+	driver := &Driver{
+		name:           "nvmet.csi.whiskey.works",
+		version:        "test",
+		metrics:        observability.NewMetrics(),
+		nvmeNrIOQueues: 8,
+		nvmeQueueSize:  32,
+	}
+
+	ns := &NodeServer{
+		driver:         driver,
+		mounter:        &mockMounter{},
+		nvmeConn:       connector,
+		nodeID:         "test-node",
+		circuitBreaker: circuitbreaker.NewVolumeCircuitBreaker(),
+	}
+
+	req := &csi.NodeStageVolumeRequest{
+		VolumeId:          "pvc-12345678-1234-1234-1234-123456789012",
+		StagingTargetPath: filepath.Join(tmpDir, "staging"),
+		VolumeCapability:  createBlockVolumeCapability(),
+		VolumeContext: map[string]string{
+			"nqn":         "nqn.2000-02.com.mikrotik:pvc-12345678-1234-1234-1234-123456789012",
+			"nvmeAddress": "198.51.100.20",
+			"nvmePort":    "4420",
+		},
+	}
+
+	if _, err := ns.NodeStageVolume(context.Background(), req); err != nil {
+		t.Fatalf("NodeStageVolume failed: %v", err)
+	}
+
+	if connector.lastConfig.NrIOQueues != 8 {
+		t.Errorf("expected NrIOQueues=8, got %d", connector.lastConfig.NrIOQueues)
+	}
+	if connector.lastConfig.QueueSize != 32 {
+		t.Errorf("expected QueueSize=32, got %d", connector.lastConfig.QueueSize)
+	}
+	if connector.lastConfig.CtrlLossTmo != -1 {
+		t.Errorf("expected default CtrlLossTmo=-1 to be kept, got %d", connector.lastConfig.CtrlLossTmo)
 	}
 }
 

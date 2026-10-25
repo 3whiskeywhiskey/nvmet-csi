@@ -225,6 +225,8 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 
 	// Extract connection parameters from VolumeContext
 	connConfig := nvme.DefaultConnectionConfig()
+	connConfig.NrIOQueues = ns.driver.nvmeNrIOQueues
+	connConfig.QueueSize = ns.driver.nvmeQueueSize
 
 	if val, ok := volumeContext["ctrlLossTmo"]; ok {
 		if parsed, err := strconv.Atoi(val); err == nil {
@@ -265,8 +267,8 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 		TargetPort:    port,
 	}
 
-	klog.V(2).Infof("Connecting with config: ctrl_loss_tmo=%d, reconnect_delay=%d (with retry)",
-		connConfig.CtrlLossTmo, connConfig.ReconnectDelay)
+	klog.V(2).Infof("Connecting with config: ctrl_loss_tmo=%d, reconnect_delay=%d, nr_io_queues=%d, queue_size=%d (with retry)",
+		connConfig.CtrlLossTmo, connConfig.ReconnectDelay, connConfig.NrIOQueues, connConfig.QueueSize)
 
 	devicePath, err := ns.nvmeConn.ConnectWithRetry(ctx, target, connConfig)
 	if err != nil {
