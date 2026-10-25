@@ -66,6 +66,8 @@ var (
 	// Node cleanup flags
 	nodeOrphanCleanup               = flag.Bool("node-orphan-cleanup", false, "Run startup cleanup for managed orphaned NVMe connections")
 	nodeOrphanCleanupDryRun         = flag.Bool("node-orphan-cleanup-dry-run", true, "Dry-run mode for startup orphan NVMe cleanup (log only, do not disconnect)")
+	nodeNVMeNrIOQueues              = flag.Int("nvme-nr-io-queues", 0, "NVMe/TCP I/O queues to request per connect (0 = kernel default, one per CPU)")
+	nodeNVMeQueueSize               = flag.Int("nvme-queue-size", 0, "NVMe/TCP I/O queue depth per connect (0 = kernel default 128; otherwise 16-1024)")
 	nodeOrphanCleanupMaxDisconnects = flag.Int("node-orphan-cleanup-max-disconnects", nvme.DefaultOrphanCleanupMaxDisconnects, "Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass (<=0 allows all)")
 
 	// Orphan reconciler flags
@@ -245,6 +247,10 @@ func main() {
 	// Read managed NQN prefix for node plugin
 	managedNQNPrefix := os.Getenv(nvme.EnvManagedNQNPrefix)
 
+	if err := nvme.ValidateQueueLimits(*nodeNVMeNrIOQueues, *nodeNVMeQueueSize); err != nil {
+		klog.Fatalf("Invalid NVMe queue limits: %v", err)
+	}
+
 	// Create driver configuration
 	config := driver.DriverConfig{
 		DriverName:                    *driverName,
@@ -284,6 +290,8 @@ func main() {
 		EnableVMISerialization:        *enableVMISerialization,
 		VMICacheTTL:                   *vmiCacheTTL,
 		ManagedNQNPrefix:              managedNQNPrefix,
+		NVMeNrIOQueues:                *nodeNVMeNrIOQueues,
+		NVMeQueueSize:                 *nodeNVMeQueueSize,
 		EnableController:              *controllerMode,
 		EnableNode:                    *nodeMode,
 	}

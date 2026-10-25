@@ -214,6 +214,14 @@ node:
   # Log verbosity level (0-10, higher is more verbose)
   logLevel: 5
 
+  # NVMe/TCP queue limits for every connect (0 = kernel default: one I/O
+  # queue per host CPU, depth 128). Each queue makes the target allocate a
+  # command array sized by the depth; RouterOS targets can fail those
+  # allocations under memory fragmentation and panic in nvmet_tcp.
+  nvme:
+    nrIoQueues: 0
+    queueSize: 0  # 0, or 16-1024
+
   # Startup cleanup for managed orphaned NVMe sessions.
   # Disabled by default; enable only for explicit remediation/audit windows.
   orphanCleanup:

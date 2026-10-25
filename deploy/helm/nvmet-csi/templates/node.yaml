@@ -63,6 +63,14 @@ spec:
             - "-driver-name={{ include "nvmet-csi.driverName" . }}"
             - "-node"
             - "-v={{ .Values.node.logLevel }}"
+            {{- with .Values.node.nvme }}
+            {{- if .nrIoQueues }}
+            - "-nvme-nr-io-queues={{ .nrIoQueues }}"
+            {{- end }}
+            {{- if .queueSize }}
+            - "-nvme-queue-size={{ .queueSize }}"
+            {{- end }}
+            {{- end }}
             {{- if .Values.node.orphanCleanup.enabled }}
             - "-node-orphan-cleanup"
             - "-node-orphan-cleanup-dry-run={{ .Values.node.orphanCleanup.dryRun }}"

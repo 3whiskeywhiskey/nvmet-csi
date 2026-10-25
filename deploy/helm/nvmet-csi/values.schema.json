@@ -392,6 +392,25 @@
           "type": "string",
           "description": "Priority class for node plugin pods"
         },
+        "nvme": {
+          "type": "object",
+          "description": "NVMe/TCP queue limits applied to every node connect (0 = kernel default)",
+          "properties": {
+            "nrIoQueues": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "I/O queues to request per connect (0 = one per host CPU)"
+            },
+            "queueSize": {
+              "type": "integer",
+              "description": "I/O queue depth per connect (0 = kernel default 128)",
+              "anyOf": [
+                {"const": 0},
+                {"minimum": 16, "maximum": 1024}
+              ]
+            }
+          }
+        },
         "orphanCleanup": {
           "type": "object",
           "description": "Startup cleanup for managed orphaned NVMe sessions",

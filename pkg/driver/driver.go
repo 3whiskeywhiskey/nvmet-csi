@@ -120,6 +120,10 @@ type Driver struct {
 	// Managed NQN prefix for orphan cleaner filtering
 	managedNQNPrefix string
 
+	// NVMe/TCP queue limits applied to every node connect (0 = kernel default)
+	nvmeNrIOQueues int
+	nvmeQueueSize  int
+
 	// Enabled CSI service modes. Controller mode can be valid without a default
 	// RDS backend because backends may be selected per StorageClass/volume.
 	enableController bool
@@ -190,6 +194,10 @@ type DriverConfig struct {
 	// NQN prefix for orphan cleaner filtering (required for node mode)
 	ManagedNQNPrefix string
 
+	// NVMe/TCP queue limits applied to every node connect (0 = kernel default)
+	NVMeNrIOQueues int
+	NVMeQueueSize  int
+
 	// Mode flags
 	EnableController bool
 	EnableNode       bool
@@ -257,6 +265,8 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		k8sClient:                 config.K8sClient,
 		metrics:                   config.Metrics,
 		managedNQNPrefix:          config.ManagedNQNPrefix,
+		nvmeNrIOQueues:            config.NVMeNrIOQueues,
+		nvmeQueueSize:             config.NVMeQueueSize,
 		backends:                  map[string]storagebackend.Backend{},
 		volumeBackendSelections:   map[string]BackendSelection{},
 		snapshotBackendSelections: map[string]BackendSelection{},
