@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/driver"
+	"gitea.whiskey.works/whiskey-works/nvmet-csi/pkg/utils"
 	"gitea.whiskey.works/whiskey-works/nvmet-csi/test/mock"
 )
 
@@ -89,7 +90,7 @@ func TestCSISanity(t *testing.T) {
 		RDSPrivateKey:         key,  // Generated for this test run
 		RDSInsecureSkipVerify: true, // Skip host key verification for mock
 		RDSVolumeBasePath:     testVolumeBasePath,
-		ManagedNQNPrefix:      "nqn.2000-02.com.mikrotik:", // Required for node service (NVMe format requires colon)
+		ManagedNQNPrefix:      utils.NQNPrefix + ":", // Must match the controller's default NQN prefix (NVMe format requires colon)
 		EnableController:      true,
 		EnableNode:            true, // Enable node service with mock NVMe connector
 		K8sClient:             nil,  // Not needed for basic sanity tests

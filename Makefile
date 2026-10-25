@@ -209,7 +209,7 @@ test:
 	@echo "Test packages:"
 	@go list -f '{{.ImportPath}}: {{.TestGoFiles}}' ./pkg/... | grep -v '\[\]'
 	@echo ""
-	go test -v -race -timeout 5m -json ./pkg/... 2>&1 | tee /tmp/test-output.json || (echo "=== Test output ===" && cat /tmp/test-output.json && exit 1)
+	bash -o pipefail -c 'go test -v -race -timeout 5m -json ./pkg/... 2>&1 | tee /tmp/test-output.json' || (echo "=== Test output ===" && cat /tmp/test-output.json && exit 1)
 
 .PHONY: test-coverage
 test-coverage:

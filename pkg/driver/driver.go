@@ -196,6 +196,46 @@ type DriverConfig struct {
 }
 
 // NewDriver creates a new nvmet-csi driver
+// applyDriverConfigChecks validates mode-dependent DriverConfig settings and
+// registers the configured volume base path.
+func applyDriverConfigChecks(config DriverConfig) error {
+	// Set configured base path as the allowed path for volume validation
+	if config.RDSVolumeBasePath != "" {
+		if err := utils.SetAllowedBasePath(config.RDSVolumeBasePath); err != nil {
+			return fmt.Errorf("failed to set allowed base path: %w", err)
+		}
+		klog.Infof("Volume base path configured: %s", config.RDSVolumeBasePath)
+	}
+
+	// Validate NQN prefix for node plugin (required for orphan cleaner safety)
+	if config.EnableNode {
+		if config.ManagedNQNPrefix == "" {
+			return fmt.Errorf("managed NQN prefix is required for node plugin (set %s)", nvme.EnvManagedNQNPrefix)
+		}
+		if err := nvme.ValidateNQNPrefix(config.ManagedNQNPrefix); err != nil {
+			return fmt.Errorf("invalid NQN prefix: %w", err)
+		}
+		klog.Infof("Driver managing volumes with NQN prefix: %s", config.ManagedNQNPrefix)
+	}
+
+	if config.EnableOrphanReconciler {
+		if !config.EnableController {
+			return fmt.Errorf("orphan reconciler requires controller mode")
+		}
+		if config.K8sClient == nil {
+			return fmt.Errorf("orphan reconciler requires Kubernetes client")
+		}
+		if config.RDSAddress == "" {
+			return fmt.Errorf("orphan reconciler requires RouterOS/RDS backend configuration; set RDS address or disable orphan reconciler")
+		}
+		if !config.OrphanDryRun && config.OrphanMinConfirmations < 2 {
+			return fmt.Errorf("active orphan cleanup requires orphan min confirmations >= 2")
+		}
+	}
+
+	return nil
+}
+
 func NewDriver(config DriverConfig) (*Driver, error) {
 	if config.DriverName == "" {
 		config.DriverName = DriverName
@@ -206,38 +246,8 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 
 	klog.Infof("Driver: %s Version: %s GitCommit: %s BuildDate: %s", config.DriverName, config.Version, gitCommit, buildDate)
 
-	// Set configured base path as the allowed path for volume validation
-	if config.RDSVolumeBasePath != "" {
-		if err := utils.SetAllowedBasePath(config.RDSVolumeBasePath); err != nil {
-			return nil, fmt.Errorf("failed to set allowed base path: %w", err)
-		}
-		klog.Infof("Volume base path configured: %s", config.RDSVolumeBasePath)
-	}
-
-	// Validate NQN prefix for node plugin (required for orphan cleaner safety)
-	if config.EnableNode {
-		if config.ManagedNQNPrefix == "" {
-			return nil, fmt.Errorf("managed NQN prefix is required for node plugin (set %s)", nvme.EnvManagedNQNPrefix)
-		}
-		if err := nvme.ValidateNQNPrefix(config.ManagedNQNPrefix); err != nil {
-			return nil, fmt.Errorf("invalid NQN prefix: %w", err)
-		}
-		klog.Infof("Driver managing volumes with NQN prefix: %s", config.ManagedNQNPrefix)
-	}
-
-	if config.EnableOrphanReconciler {
-		if !config.EnableController {
-			return nil, fmt.Errorf("orphan reconciler requires controller mode")
-		}
-		if config.K8sClient == nil {
-			return nil, fmt.Errorf("orphan reconciler requires Kubernetes client")
-		}
-		if config.RDSAddress == "" {
-			return nil, fmt.Errorf("orphan reconciler requires RouterOS/RDS backend configuration; set RDS address or disable orphan reconciler")
-		}
-		if !config.OrphanDryRun && config.OrphanMinConfirmations < 2 {
-			return nil, fmt.Errorf("active orphan cleanup requires orphan min confirmations >= 2")
-		}
+	if err := applyDriverConfigChecks(config); err != nil {
+		return nil, err
 	}
 
 	driver := &Driver{

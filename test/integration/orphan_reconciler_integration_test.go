@@ -95,7 +95,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		}
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -140,8 +140,17 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		// Wait for grace period
 		time.Sleep(2 * time.Second)
 
-		// Run reconciliation
+		// A single inventory pass only records the orphan; cleanup needs
+		// consecutive confirmations.
 		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+			t.Fatalf("Reconciliation failed: %v", err)
+		}
+		if _, exists := mockRDS.GetVolume("pvc-orphan-disk"); !exists {
+			t.Fatal("Orphaned volume should survive the first unconfirmed pass")
+		}
+
+		// Run the remaining confirmation passes
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -180,7 +189,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		}
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -218,7 +227,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -281,7 +290,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -330,7 +339,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		}
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -376,7 +385,7 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 		}
 
 		// Run reconciliation
-		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+		if err := runConfirmedReconciliation(rec); err != nil {
 			t.Fatalf("Reconciliation failed: %v", err)
 		}
 
@@ -390,4 +399,15 @@ func TestOrphanReconciler_WithMockRDS(t *testing.T) {
 
 		t.Log("✅ Non-CSI volumes ignored by reconciler")
 	})
+}
+
+// runConfirmedReconciliation runs enough consecutive inventory passes for the
+// reconciler's default confirmation threshold to plan cleanup.
+func runConfirmedReconciliation(rec *reconciler.OrphanReconciler) error {
+	for i := 0; i < reconciler.DefaultOrphanMinimumConfirmations; i++ {
+		if err := rec.TriggerReconciliation(context.Background()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
