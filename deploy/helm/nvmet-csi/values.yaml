@@ -221,6 +221,10 @@ node:
   nvme:
     nrIoQueues: 0
     queueSize: 0  # 0, or 16-1024
+    # Largest single I/O, in KiB, to each staged device (queue/max_sectors_kb;
+    # 0 = kernel default). A target that advertises no MDTS lets hosts send up
+    # to 32 MiB; a Linux 6.18 nvmet-tcp target refuses data over 4 MiB.
+    maxSectorsKB: 0
 
   # Startup cleanup for managed orphaned NVMe sessions.
   # Disabled by default; enable only for explicit remediation/audit windows.
