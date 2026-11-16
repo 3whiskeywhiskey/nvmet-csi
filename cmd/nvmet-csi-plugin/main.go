@@ -68,6 +68,7 @@ var (
 	nodeOrphanCleanupDryRun         = flag.Bool("node-orphan-cleanup-dry-run", true, "Dry-run mode for startup orphan NVMe cleanup (log only, do not disconnect)")
 	nodeNVMeNrIOQueues              = flag.Int("nvme-nr-io-queues", 0, "NVMe/TCP I/O queues to request per connect (0 = kernel default, one per CPU)")
 	nodeNVMeQueueSize               = flag.Int("nvme-queue-size", 0, "NVMe/TCP I/O queue depth per connect (0 = kernel default 128; otherwise 16-1024)")
+	nodeNVMeMaxSectorsKB            = flag.Int("nvme-max-sectors-kb", 0, "Largest single I/O, in KiB, to each staged NVMe device (queue/max_sectors_kb; 0 = kernel default)")
 	nodeOrphanCleanupMaxDisconnects = flag.Int("node-orphan-cleanup-max-disconnects", nvme.DefaultOrphanCleanupMaxDisconnects, "Maximum orphaned NVMe sessions to disconnect in one startup cleanup pass (<=0 allows all)")
 
 	// Orphan reconciler flags
@@ -250,6 +251,9 @@ func main() {
 	if err := nvme.ValidateQueueLimits(*nodeNVMeNrIOQueues, *nodeNVMeQueueSize); err != nil {
 		klog.Fatalf("Invalid NVMe queue limits: %v", err)
 	}
+	if *nodeNVMeMaxSectorsKB < 0 {
+		klog.Fatalf("Invalid -nvme-max-sectors-kb %d: must be 0 or positive", *nodeNVMeMaxSectorsKB)
+	}
 
 	// Create driver configuration
 	config := driver.DriverConfig{
@@ -292,6 +296,7 @@ func main() {
 		ManagedNQNPrefix:              managedNQNPrefix,
 		NVMeNrIOQueues:                *nodeNVMeNrIOQueues,
 		NVMeQueueSize:                 *nodeNVMeQueueSize,
+		NVMeMaxSectorsKB:              *nodeNVMeMaxSectorsKB,
 		EnableController:              *controllerMode,
 		EnableNode:                    *nodeMode,
 	}

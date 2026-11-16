@@ -408,6 +408,11 @@
                 {"const": 0},
                 {"minimum": 16, "maximum": 1024}
               ]
+            },
+            "maxSectorsKB": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Largest single I/O in KiB to each staged device (queue/max_sectors_kb; 0 = kernel default)"
             }
           }
         },

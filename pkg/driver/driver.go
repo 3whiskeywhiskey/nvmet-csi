@@ -123,6 +123,8 @@ type Driver struct {
 	// NVMe/TCP queue limits applied to every node connect (0 = kernel default)
 	nvmeNrIOQueues int
 	nvmeQueueSize  int
+	// Largest single I/O to a staged device, in KiB (queue/max_sectors_kb; 0 = kernel default)
+	nvmeMaxSectorsKB int
 
 	// Enabled CSI service modes. Controller mode can be valid without a default
 	// RDS backend because backends may be selected per StorageClass/volume.
@@ -197,6 +199,8 @@ type DriverConfig struct {
 	// NVMe/TCP queue limits applied to every node connect (0 = kernel default)
 	NVMeNrIOQueues int
 	NVMeQueueSize  int
+	// Largest single I/O to a staged device, in KiB (queue/max_sectors_kb; 0 = kernel default)
+	NVMeMaxSectorsKB int
 
 	// Mode flags
 	EnableController bool
@@ -267,6 +271,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		managedNQNPrefix:          config.ManagedNQNPrefix,
 		nvmeNrIOQueues:            config.NVMeNrIOQueues,
 		nvmeQueueSize:             config.NVMeQueueSize,
+		nvmeMaxSectorsKB:          config.NVMeMaxSectorsKB,
 		backends:                  map[string]storagebackend.Backend{},
 		volumeBackendSelections:   map[string]BackendSelection{},
 		snapshotBackendSelections: map[string]BackendSelection{},

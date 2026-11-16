@@ -70,6 +70,9 @@ spec:
             {{- if .queueSize }}
             - "-nvme-queue-size={{ .queueSize }}"
             {{- end }}
+            {{- if .maxSectorsKB }}
+            - "-nvme-max-sectors-kb={{ .maxSectorsKB }}"
+            {{- end }}
             {{- end }}
             {{- if .Values.node.orphanCleanup.enabled }}
             - "-node-orphan-cleanup"

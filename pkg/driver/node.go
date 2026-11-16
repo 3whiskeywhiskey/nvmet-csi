@@ -284,6 +284,16 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 
 	klog.V(2).Infof("Connected to NVMe target, device: %s", devicePath)
 
+	// Cap the I/O size before anything reads or formats the device: a target that
+	// refuses large transfers fails mkfs and fsck otherwise.
+	if ns.driver.nvmeMaxSectorsKB > 0 {
+		if err := nvme.SetMaxSectorsKB(nvme.DefaultSysfsRoot, devicePath, ns.driver.nvmeMaxSectorsKB); err != nil {
+			secLogger.LogVolumeStage(volumeID, ns.nodeID, nqn, nvmeAddress, security.OutcomeFailure, err, time.Since(startTime))
+			return nil, status.Errorf(codes.Internal, "failed to set max_sectors_kb on %s: %v", devicePath, err)
+		}
+		klog.V(2).Infof("Set max_sectors_kb=%d on %s", ns.driver.nvmeMaxSectorsKB, devicePath)
+	}
+
 	if isBlockVolume {
 		// Block volume: device is connected above via nvme-tcp
 		// Per CSI spec and AWS EBS CSI driver pattern, NodeStageVolume for block volumes
