@@ -217,3 +217,18 @@ Stop after the first failure and preserve logs if any of these occur:
 Default remediation is Kubernetes-level only: clear stuck test
 `VolumeAttachment` objects and respin the disposable pod. Do not manually edit
 node mounts or RouterOS state without explicit approval.
+
+## Gotcha: I/O errors on transfers over 4 MiB (2026-11-15)
+
+**Symptom.** mkfs fails at "Writing superblocks", or staging fails its fsck
+("filesystem may be corrupted", exit 4) and the circuit breaker opens. The host
+logs `I/O Cmd(0x1|0x2) … I/O Error (sct 0x0 / sc 0xf) DNR` on commands larger
+than 8192 blocks; r740xd logs `nvmet_tcp: queue N: failed to map data`.
+
+**Cause.** r740xd's nvmet-tcp target (kernel 6.18) refuses data transfers over
+4 MiB while advertising MDTS 0 (no limit), so hosts send up to 32 MiB.
+
+**Fix.** Cap the host's I/O size: set `node.nvme.maxSectorsKB: 4096` on the
+linux-zol release (the node plugin writes `queue/max_sectors_kb` after connect,
+before blkid/mkfs/fsck). Then reset a tripped volume's circuit breaker
+(`nvmet.csi.whiskey.works/reset-circuit-breaker=true` on its PV, delete the pod).
