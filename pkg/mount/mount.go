@@ -21,6 +21,12 @@ var dangerousMountOptions = map[string]bool{
 	"exec": true, // Permit execution of binaries
 }
 
+// AllowExecOption is a driver-internal marker, never passed to mount(8): a bind mount that carries
+// it is published without the noexec default (nosuid and nodev stay). The node server adds it only
+// for a volume whose StorageClass sets allowExec: "true" (VolumeContextAllowExec); it is the one
+// way to get exec, since "exec" itself stays a dangerous option.
+const AllowExecOption = "x-nvmet-csi.allow-exec"
+
 // Default secure mount options enforced for bind mounts
 var defaultSecureMountOptions = []string{
 	"nosuid", // Ignore set-user-ID/set-group-ID bits
@@ -159,6 +165,18 @@ func ValidateMountOptions(options []string) error {
 // SanitizeMountOptions adds default secure options and validates user-provided options
 // For bind mounts, always enforces nosuid, nodev, noexec unless explicitly overridden
 func SanitizeMountOptions(options []string, isBindMount bool) ([]string, error) {
+	// The allow-exec marker is the driver's own, not an option for mount(8): take it out first.
+	allowExec := false
+	kept := make([]string, 0, len(options))
+	for _, opt := range options {
+		if opt == AllowExecOption {
+			allowExec = true
+			continue
+		}
+		kept = append(kept, opt)
+	}
+	options = kept
+
 	// Validate provided options first
 	if err := ValidateMountOptions(options); err != nil {
 		return nil, err
@@ -176,6 +194,9 @@ func SanitizeMountOptions(options []string, isBindMount bool) ([]string, error) 
 		// Add secure defaults if not already present
 		secureOpts := make([]string, 0, len(options)+len(defaultSecureMountOptions))
 		for _, secureOpt := range defaultSecureMountOptions {
+			if secureOpt == "noexec" && allowExec {
+				continue
+			}
 			// Don't add if user explicitly specified the opposite
 			opposite := ""
 			switch secureOpt {

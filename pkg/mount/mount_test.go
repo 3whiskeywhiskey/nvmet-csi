@@ -579,6 +579,26 @@ func TestSanitizeMountOptions(t *testing.T) {
 			expectErr:   false,
 			expectOpts:  []string{"nosuid", "nodev", "noexec", "bind", "ro"},
 		},
+		{
+			name:        "bind mount allowed exec - no noexec, marker removed",
+			options:     []string{"bind", AllowExecOption},
+			isBindMount: true,
+			expectErr:   false,
+			expectOpts:  []string{"nosuid", "nodev", "bind"},
+		},
+		{
+			name:        "regular mount - marker removed",
+			options:     []string{AllowExecOption},
+			isBindMount: false,
+			expectErr:   false,
+			expectOpts:  []string{},
+		},
+		{
+			name:        "exec itself still rejected",
+			options:     []string{"bind", "exec"},
+			isBindMount: true,
+			expectErr:   true,
+		},
 	}
 
 	for _, tt := range tests {

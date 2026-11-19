@@ -34,10 +34,12 @@ type mockMounter struct {
 	isLikelyErr     error
 	stats           *mount.DeviceStats
 	statsErr        error
+	mountOptions    []string
 }
 
 func (m *mockMounter) Mount(source, target, fsType string, options []string) error {
 	m.mountCalled = true
+	m.mountOptions = options
 	return m.mountErr
 }
 
@@ -1230,6 +1232,58 @@ func TestNodePublishVolume_FilesystemVolume(t *testing.T) {
 	// Verify: Mount WAS called for filesystem bind mount
 	if !mounter.mountCalled {
 		t.Error("Mount should be called for filesystem volume bind mount")
+	}
+}
+
+// TestNodePublishVolume_AllowExec: the allow-exec marker reaches the mounter only when the volume
+// context (the StorageClass's allowExec parameter) says so, never from the capability's flags.
+func TestNodePublishVolume_AllowExec(t *testing.T) {
+	tests := []struct {
+		name       string
+		volCtx     map[string]string
+		flags      []string
+		wantMarker bool
+	}{
+		{name: "default", wantMarker: false},
+		{name: "allowExec true", volCtx: map[string]string{VolumeContextAllowExec: "true"}, wantMarker: true},
+		{name: "allowExec other value", volCtx: map[string]string{VolumeContextAllowExec: "yes"}, wantMarker: false},
+		{name: "marker in mount flags ignored", flags: []string{mount.AllowExecOption}, wantMarker: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			stagingPath := filepath.Join(tmpDir, "staging")
+			if err := os.MkdirAll(stagingPath, 0750); err != nil {
+				t.Fatalf("failed to create staging dir: %v", err)
+			}
+			mounter := &mockMounter{isLikelyMounted: true}
+			ns := &NodeServer{
+				driver:  &Driver{name: "nvmet.csi.whiskey.works", version: "test", metrics: observability.NewMetrics()},
+				mounter: mounter,
+				nodeID:  "test-node",
+			}
+			volCap := createFilesystemVolumeCapability()
+			volCap.GetMount().MountFlags = tt.flags
+			_, err := ns.NodePublishVolume(context.Background(), &csi.NodePublishVolumeRequest{
+				VolumeId:          "test-volume-no-nqn",
+				StagingTargetPath: stagingPath,
+				TargetPath:        filepath.Join(tmpDir, "target"),
+				VolumeCapability:  volCap,
+				VolumeContext:     tt.volCtx,
+			})
+			if err != nil {
+				t.Fatalf("NodePublishVolume failed: %v", err)
+			}
+			got := false
+			for _, o := range mounter.mountOptions {
+				if o == mount.AllowExecOption {
+					got = true
+				}
+			}
+			if got != tt.wantMarker {
+				t.Errorf("allow-exec marker passed = %v, want %v (options %v)", got, tt.wantMarker, mounter.mountOptions)
+			}
+		})
 	}
 }
 
