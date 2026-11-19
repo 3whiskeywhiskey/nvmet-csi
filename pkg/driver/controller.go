@@ -245,6 +245,9 @@ func (cs *ControllerServer) createVolumeResponse(volumeID string, capacityBytes 
 	for key, value := range selection.volumeContext() {
 		volumeContext[key] = value
 	}
+	if params[VolumeContextAllowExec] == "true" {
+		volumeContext[VolumeContextAllowExec] = "true"
+	}
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{

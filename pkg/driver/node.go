@@ -37,6 +37,11 @@ const (
 	volumeContextNVMEAddress = "nvmeAddress"
 	volumeContextPort        = "nvmePort"
 	volumeContextFSType      = "fsType"
+
+	// VolumeContextAllowExec is the StorageClass parameter (copied into the volume context) that
+	// publishes a filesystem volume without noexec, for workloads that run what they keep on it
+	// (a nix store, a build directory). Off unless set to "true"; nosuid and nodev always stay.
+	VolumeContextAllowExec = "allowExec"
 )
 
 // NodeServer implements the CSI Node service
@@ -741,9 +746,17 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		mountOptions = append(mountOptions, "ro")
 	}
 
-	// Add any additional mount flags from capability
+	// Add any additional mount flags from capability (never the allow-exec marker: only the
+	// StorageClass parameter, through the volume context, grants exec)
 	if mnt := req.GetVolumeCapability().GetMount(); mnt != nil {
-		mountOptions = append(mountOptions, mnt.MountFlags...)
+		for _, flag := range mnt.MountFlags {
+			if flag != mount.AllowExecOption {
+				mountOptions = append(mountOptions, flag)
+			}
+		}
+	}
+	if req.GetVolumeContext()[VolumeContextAllowExec] == "true" {
+		mountOptions = append(mountOptions, mount.AllowExecOption)
 	}
 
 	// Log volume publish request
