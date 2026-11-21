@@ -513,6 +513,26 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	} else {
 		// Filesystem volume: existing unmount logic
 
+		// Step 0: refuse while the filesystem is still mounted outside kubelet (held.go: a
+		// KubeVirt hotplug disk image). Unstaging now would disconnect the device under its user.
+		// Nothing is unmounted, so kubelet's retry finds the same state and unstages once the
+		// holder lets go.
+		if nqn != "" {
+			if devicePath, devErr := ns.nvmeConn.GetDevicePath(nqn); devErr == nil {
+				held, heldErr := ns.filesystemHeldElsewhere(ctx, devicePath, stagingPath, volumeID)
+				if heldErr != nil {
+					klog.Warningf("Could not tell whether %s is mounted elsewhere: %v (proceeding)", devicePath, heldErr)
+				} else if len(held) > 0 {
+					klog.Errorf("Volume %s: filesystem on %s is still mounted at %v; not unstaging", volumeID, devicePath, held)
+					secLogger.LogVolumeUnstage(volumeID, ns.nodeID, nqn, security.OutcomeFailure,
+						fmt.Errorf("filesystem mounted elsewhere"), time.Since(startTime))
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"filesystem on %s is still mounted outside kubelet at %v (e.g. a KubeVirt hotplug disk image); "+
+							"disconnecting would fail its I/O", devicePath, held)
+				}
+			}
+		}
+
 		// Step 1: Unmount from staging path
 		if err := ns.mounter.Unmount(stagingPath); err != nil {
 			// Log volume unstage failure
